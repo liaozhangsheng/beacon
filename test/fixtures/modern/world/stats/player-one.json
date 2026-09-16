@@ -1,0 +1,12 @@
+{
+  "DataVersion": 4189,
+  "stats": {
+    "minecraft:custom": {
+      "minecraft:play_time": 120,
+      "minecraft:jump": 7
+    },
+    "minecraft:mined": {
+      "minecraft:stone": 3
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "DataVersion": 4189,
+  "minecraft:story/mine_stone": {
+    "criteria": {
+      "get_stone": "2026-08-10 00:00:00 +0000"
+    },
+    "done": true
+  },
+  "minecraft:recipes/building_blocks/oak_planks": {
+    "criteria": {
+      "has_planks": "2026-08-10 00:00:01 +0000"
+    },
+    "done": true
+  }
+}

@@ -1,0 +1,19 @@
+--- a/cinatra/coro_http_client.hpp
++++ b/cinatra/coro_http_client.hpp
+@@ -192 +192 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
+-    if (socket_ == nullptr || socket_->has_closed_)
++    if (socket_ == nullptr)
+@@ -235 +235 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
+-        ssl_ctx_->set_verify_callback(
++        socket_->ssl_stream_->set_verify_callback(
+@@ -1668 +1668 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
+-    if (parser_.body_len() > max_http_body_len_ || parser_.body_len() < 0)
++    if (parser_.is_multipart() || parser_.body_len() > max_http_body_len_ || parser_.body_len() < 0)
+@@ -1976,2 +1976,5 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
+-      if (chunk_size < 0) {
+-        CINATRA_LOG_DEBUG << "bad chunked size";
++      if (chunk_size < 0 || max_http_body_len_ < 0 ||
++          resp_chunk_str_.size() > static_cast<size_t>(max_http_body_len_) ||
++          static_cast<uint64_t>(chunk_size) >
++              static_cast<uint64_t>(max_http_body_len_) - resp_chunk_str_.size()) {
++        CINATRA_LOG_DEBUG << "invalid or oversized chunked body";

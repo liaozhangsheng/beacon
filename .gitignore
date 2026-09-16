@@ -1,0 +1,40 @@
+# Build outputs
+/bin/
+build/
+build-*/
+cmake-build-*/
+out/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+CTestTestfile.cmake
+Testing/
+
+# Binaries and libraries
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.lib
+*.obj
+*.o
+*.pdb
+
+# Editor and OS files
+.cache/
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Runtime data
+/config/
+/cache/
+assets/avatars/*
+!assets/avatars/steve.png

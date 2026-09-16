@@ -1,0 +1,19 @@
+# Resolve and relocate non-system libraries into the installed executable directory.
+include(BundleUtilities)
+function(gp_item_default_embedded_path_override item path)
+    set(${path} "@executable_path" PARENT_SCOPE)
+endfunction()
+set(BU_CHMOD_BUNDLE_ITEMS ON)
+set(BEACON_INSTALL_ROOT "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}")
+set(BEACON_EXECUTABLE "${BEACON_INSTALL_ROOT}/beacon@CMAKE_EXECUTABLE_SUFFIX@")
+fixup_bundle("${BEACON_EXECUTABLE}"
+    "" "@BEACON_RUNTIME_SEARCH_DIRS@")
+
+if(APPLE)
+    file(GLOB libraries "${BEACON_INSTALL_ROOT}/*.dylib")
+    foreach(binary IN LISTS libraries)
+        execute_process(COMMAND codesign --force --sign - "${binary}" COMMAND_ERROR_IS_FATAL ANY)
+    endforeach()
+    execute_process(COMMAND codesign --force --sign -
+        "${BEACON_EXECUTABLE}" COMMAND_ERROR_IS_FATAL ANY)
+endif()

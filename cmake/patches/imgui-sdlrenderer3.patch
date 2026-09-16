@@ -1,0 +1,44 @@
+diff --git a/imgui_impl_sdlrenderer3.cpp b/imgui_impl_sdlrenderer3.cpp
+index bf0250401..35a90e62c 100644
+--- a/imgui_impl_sdlrenderer3.cpp
++++ b/imgui_impl_sdlrenderer3.cpp
+@@ -94 +94 @@ void ImGui_ImplSDLRenderer3_NewFrame()
+-static int SDL_RenderGeometryRaw8BitColor(SDL_Renderer* renderer, ImVector<SDL_FColor>& colors_out, SDL_Texture* texture, const float* xy, int xy_stride, const SDL_Color* color, int color_stride, const float* uv, int uv_stride, int num_vertices, const void* indices, int num_indices, int size_indices)
++static void ImGui_ImplSDLRenderer3_ConvertVertexColors(ImVector<SDL_FColor>& colors_out, const ImDrawVert* vertices, int num_vertices)
+@@ -96 +95,0 @@ static int SDL_RenderGeometryRaw8BitColor(SDL_Renderer* renderer, ImVector<SDL_F
+-    const Uint8* color2 = (const Uint8*)color;
+@@ -98 +96,0 @@ static int SDL_RenderGeometryRaw8BitColor(SDL_Renderer* renderer, ImVector<SDL_F
+-    SDL_FColor* color3 = colors_out.Data;
+@@ -101,6 +99,5 @@ static int SDL_RenderGeometryRaw8BitColor(SDL_Renderer* renderer, ImVector<SDL_F
+-        color3[i].r = color->r / 255.0f;
+-        color3[i].g = color->g / 255.0f;
+-        color3[i].b = color->b / 255.0f;
+-        color3[i].a = color->a / 255.0f;
+-        color2 += color_stride;
+-        color = (const SDL_Color*)color2;
++        const SDL_Color* color = (const SDL_Color*)(const void*)&vertices[i].col;
++        colors_out[i].r = color->r / 255.0f;
++        colors_out[i].g = color->g / 255.0f;
++        colors_out[i].b = color->b / 255.0f;
++        colors_out[i].a = color->a / 255.0f;
+@@ -108 +104,0 @@ static int SDL_RenderGeometryRaw8BitColor(SDL_Renderer* renderer, ImVector<SDL_F
+-    return SDL_RenderGeometryRaw(renderer, texture, xy, xy_stride, color3, sizeof(*color3), uv, uv_stride, num_vertices, indices, num_indices, size_indices);
+@@ -174,0 +171 @@ void ImGui_ImplSDLRenderer3_RenderDrawData(ImDrawData* draw_data, SDL_Renderer*
++        ImGui_ImplSDLRenderer3_ConvertVertexColors(bd->ColorBuffer, vtx_buffer, draw_list->VtxBuffer.Size);
+@@ -204 +201,6 @@ void ImGui_ImplSDLRenderer3_RenderDrawData(ImDrawData* draw_data, SDL_Renderer*
+-                const SDL_Color* color = (const SDL_Color*)(const void*)((const char*)(vtx_buffer + pcmd->VtxOffset) + offsetof(ImDrawVert, col)); // SDL 2.0.19+
++                const SDL_FColor* color = bd->ColorBuffer.Data + pcmd->VtxOffset;
++
++                int num_vertices = 0;
++                for (unsigned int index = 0; index < pcmd->ElemCount; index++)
++                    if (const int required = idx_buffer[pcmd->IdxOffset + index] + 1; required > num_vertices)
++                        num_vertices = required;
+@@ -209 +211 @@ void ImGui_ImplSDLRenderer3_RenderDrawData(ImDrawData* draw_data, SDL_Renderer*
+-                SDL_RenderGeometryRaw8BitColor(renderer, bd->ColorBuffer, tex,
++                SDL_RenderGeometryRaw(renderer, tex,
+@@ -211 +213 @@ void ImGui_ImplSDLRenderer3_RenderDrawData(ImDrawData* draw_data, SDL_Renderer*
+-                    color, (int)sizeof(ImDrawVert),
++                    color, (int)sizeof(SDL_FColor),
+@@ -213 +215 @@ void ImGui_ImplSDLRenderer3_RenderDrawData(ImDrawData* draw_data, SDL_Renderer*
+-                    draw_list->VtxBuffer.Size - pcmd->VtxOffset,
++                    num_vertices,

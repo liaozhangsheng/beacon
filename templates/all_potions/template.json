@@ -1,0 +1,81 @@
+{
+  "name_key": "template.all_potions",
+  "minecraft": {
+    "min_version": 0,
+    "max_version": 99999999
+  },
+  "goals": [
+    {"id":"goal/material_glass_bottle", "fact":"stat/minecraft:estimated/minecraft:glass_bottle", "target":12, "view":{"name_key":"material.glass_bottle", "type": "task", "icon":"minecraft/item/glass_bottle.png"}},
+    {"id":"goal/material_blaze_rod", "fact":"stat/minecraft:estimated/minecraft:blaze_rod", "target":2, "view":{"name_key":"material.blaze_rod", "type": "task", "icon":"minecraft/item/blaze_rod.png"}},
+    {"id":"goal/material_nether_wart", "fact":"stat/minecraft:estimated/minecraft:nether_wart", "target":4, "view":{"name_key":"material.nether_wart", "type": "task", "icon":"minecraft/item/nether_wart.png"}},
+    {"id":"goal/material_brown_mushroom", "fact":"stat/minecraft:estimated/minecraft:brown_mushroom", "target":2, "view":{"name_key":"material.brown_mushroom", "type": "task", "icon":"minecraft/item/brown_mushroom.png"}},
+    {"id":"goal/material_red_mushroom", "fact":"stat/minecraft:estimated/minecraft:red_mushroom", "target":2, "view":{"name_key":"material.red_mushroom", "type": "task", "icon":"minecraft/item/red_mushroom.png"}},
+    {"id":"goal/material_spider_eye", "fact":"stat/minecraft:estimated/minecraft:spider_eye", "target":2, "view":{"name_key":"material.spider_eye", "type": "task", "icon":"minecraft/item/spider_eye.png"}},
+    {"id":"goal/material_sugar", "fact":"stat/minecraft:estimated/minecraft:sugar", "target":2, "view":{"name_key":"material.sugar", "type": "task", "icon":"minecraft/item/sugar.png"}},
+    {"id":"goal/material_golden_carrot", "fact":"stat/minecraft:estimated/minecraft:golden_carrot", "target":1, "view":{"name_key":"material.golden_carrot", "type": "task", "icon":"minecraft/item/golden_carrot.png"}},
+    {"id":"goal/material_phantom_membrane", "fact":"stat/minecraft:estimated/minecraft:phantom_membrane", "target":1, "view":{"name_key":"material.phantom_membrane", "type": "task", "icon":"minecraft/item/phantom_membrane.png"}},
+    {"id":"goal/material_pufferfish", "fact":"stat/minecraft:estimated/minecraft:pufferfish", "target":1, "view":{"name_key":"material.pufferfish", "type": "task", "icon":"minecraft/item/pufferfish.png"}},
+    {"id":"goal/material_cornflower", "fact":"stat/minecraft:estimated/minecraft:cornflower", "target":1, "view":{"name_key":"material.cornflower", "type": "task", "icon":"minecraft/item/cornflower.png"}},
+    {"id":"goal/material_breeze_rod", "fact":"stat/minecraft:estimated/minecraft:breeze_rod", "target":1, "view":{"name_key":"material.breeze_rod", "type": "task", "icon":"minecraft/item/breeze_rod.png"}},
+    {"id":"goal/material_stone", "fact":"stat/minecraft:estimated/minecraft:stone", "target":1, "view":{"name_key":"material.stone", "type": "task", "icon":"minecraft/item/stone.png"}},
+    {"id":"goal/material_cobweb", "fact":"stat/minecraft:estimated/minecraft:cobweb", "target":1, "view":{"name_key":"material.cobweb", "type": "task", "icon":"minecraft/item/cobweb.png"}},
+    {"id":"goal/material_slime_ball", "fact":"stat/minecraft:estimated/minecraft:slime_ball", "target":9, "view":{"name_key":"material.slime_ball", "type": "task", "icon":"minecraft/item/slime_ball.png"}},
+    {"id":"goal/material_enchanted_golden_apple", "fact":"stat/minecraft:estimated/minecraft:enchanted_golden_apple", "target":1, "view":{"name_key":"material.enchanted_golden_apple", "type": "task", "icon":"minecraft/item/enchanted_golden_apple.png"}},
+    {"id": "completion/all_potions",
+      "all": [
+        {
+          "ref": "goal/material_glass_bottle"
+        },
+        {
+          "ref": "goal/material_blaze_rod"
+        },
+        {
+          "ref": "goal/material_nether_wart"
+        },
+        {
+          "ref": "goal/material_brown_mushroom"
+        },
+        {
+          "ref": "goal/material_red_mushroom"
+        },
+        {
+          "ref": "goal/material_spider_eye"
+        },
+        {
+          "ref": "goal/material_sugar"
+        },
+        {
+          "ref": "goal/material_golden_carrot"
+        },
+        {
+          "ref": "goal/material_phantom_membrane"
+        },
+        {
+          "ref": "goal/material_pufferfish"
+        },
+        {
+          "ref": "goal/material_cornflower"
+        },
+        {
+          "ref": "goal/material_breeze_rod"
+        },
+        {
+          "ref": "goal/material_stone"
+        },
+        {
+          "ref": "goal/material_cobweb"
+        },
+        {
+          "ref": "goal/material_slime_ball"
+        },
+        {
+          "ref": "goal/material_enchanted_golden_apple"
+        },
+        {
+          "fact": "adv/minecraft:nether/all_potions"
+        }
+      ]
+    }
+  ],
+  "completion_rule": "completion/all_potions"
+}

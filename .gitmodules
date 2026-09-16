@@ -1,0 +1,12 @@
+[submodule "3rdparty/yalantinglibs"]
+	path = 3rdparty/yalantinglibs
+	url = https://github.com/alibaba/yalantinglibs.git
+[submodule "3rdparty/imgui"]
+	path = 3rdparty/imgui
+	url = https://github.com/ocornut/imgui.git
+[submodule "3rdparty/jsoncpp"]
+	path = 3rdparty/jsoncpp
+	url = https://github.com/open-source-parsers/jsoncpp.git
+[submodule "3rdparty/SDL_image"]
+	path = 3rdparty/SDL_image
+	url = https://github.com/libsdl-org/SDL_image.git

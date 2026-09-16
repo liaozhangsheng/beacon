@@ -1,0 +1,64 @@
+{
+  "main": [
+    {
+      "id": "Materials",
+      "source": "nodes",
+      "nodes": [
+        "goal/material_glass_bottle",
+        "goal/material_blaze_rod",
+        "goal/material_nether_wart",
+        "goal/material_brown_mushroom",
+        "goal/material_red_mushroom",
+        "goal/material_spider_eye",
+        "goal/material_sugar",
+        "goal/material_golden_carrot",
+        "goal/material_phantom_membrane",
+        "goal/material_pufferfish",
+        "goal/material_cornflower",
+        "goal/material_breeze_rod",
+        "goal/material_stone",
+        "goal/material_cobweb",
+        "goal/material_slime_ball",
+        "goal/material_enchanted_golden_apple"
+      ],
+      "exclude": [],
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1,
+      "margin": 0,
+      "padding": 32
+    }
+  ],
+  "overlay": [
+    {
+      "id": "Materials",
+      "source": "nodes",
+      "nodes": [
+        "goal/material_glass_bottle",
+        "goal/material_blaze_rod",
+        "goal/material_nether_wart",
+        "goal/material_brown_mushroom",
+        "goal/material_red_mushroom",
+        "goal/material_spider_eye",
+        "goal/material_sugar",
+        "goal/material_golden_carrot",
+        "goal/material_phantom_membrane",
+        "goal/material_pufferfish",
+        "goal/material_cornflower",
+        "goal/material_breeze_rod",
+        "goal/material_stone",
+        "goal/material_cobweb",
+        "goal/material_slime_ball",
+        "goal/material_enchanted_golden_apple"
+      ],
+      "exclude": [],
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1,
+      "margin": 0,
+      "padding": 0
+    }
+  ]
+}

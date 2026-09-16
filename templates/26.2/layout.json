@@ -1,0 +1,316 @@
+{
+  "main": [
+    {
+      "id": "Minecraft",
+      "source": "children",
+      "nodes": [],
+      "exclude": [],
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1,
+      "margin": 0,
+      "padding": 0,
+      "children": [
+        {
+          "id": "Progress",
+          "source": "nodes",
+          "nodes": [],
+          "exclude": [],
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 5,
+          "margin": 0,
+          "padding": 0,
+          "children": [
+            {
+              "id": "Overworld",
+              "source": "prefix",
+              "nodes": [
+                "goal/story_"
+              ],
+              "exclude": [],
+              "x": 0,
+              "y": 0,
+              "width": 6,
+              "height": 1,
+              "margin": 0,
+              "padding": 16
+            },
+            {
+              "id": "Nether",
+              "source": "prefix",
+              "nodes": [
+                "goal/nether_"
+              ],
+              "exclude": [
+                "goal/nether_explore_nether"
+              ],
+              "x": 6,
+              "y": 0,
+              "width": 8,
+              "height": 1,
+              "margin": 0,
+              "padding": 16
+            },
+            {
+              "id": "The End",
+              "source": "prefix",
+              "nodes": [
+                "goal/end_"
+              ],
+              "exclude": [],
+              "x": 14,
+              "y": 0,
+              "width": 5,
+              "height": 1,
+              "margin": 0,
+              "padding": 16
+            },
+            {
+              "id": "Adventure",
+              "source": "prefix",
+              "nodes": [
+                "goal/adventure_"
+              ],
+              "exclude": [
+                "goal/adventure_kill_all_mobs",
+                "goal/adventure_trim_with_all_exclusive_armor_patterns",
+                "goal/adventure_adventuring_time"
+              ],
+              "x": 19,
+              "y": 0,
+              "width": 14,
+              "height": 1,
+              "margin": 0,
+              "padding": 16
+            },
+            {
+              "id": "Husbandry",
+              "source": "prefix",
+              "nodes": [
+                "goal/husbandry_"
+              ],
+              "exclude": [
+                "goal/husbandry_bred_all_animals",
+                "goal/husbandry_complete_catalogue",
+                "goal/husbandry_balanced_diet",
+                "goal/husbandry_whole_pack"
+              ],
+              "x": 33,
+              "y": 0,
+              "width": 10,
+              "height": 1,
+              "margin": 0,
+              "padding": 16
+            }
+          ]
+        },
+        {
+          "id": "Collections",
+          "source": "nodes",
+          "nodes": [],
+          "exclude": [],
+          "x": 0,
+          "y": 5,
+          "width": 1,
+          "height": 4,
+          "margin": 0,
+          "padding": 0,
+          "children": [
+            {
+              "id": "Explore Nether",
+              "source": "children",
+              "nodes": [
+                "goal/nether_explore_nether"
+              ],
+              "exclude": [],
+              "x": 0,
+              "y": 0,
+              "width": 2,
+              "height": 1,
+              "margin": 0,
+              "padding": 8
+            },
+            {
+              "id": "Kill All Mobs",
+              "source": "children",
+              "nodes": [
+                "goal/adventure_kill_all_mobs"
+              ],
+              "exclude": [],
+              "x": 2,
+              "y": 0,
+              "width": 5,
+              "height": 1,
+              "margin": 0,
+              "padding": 8
+            },
+            {
+              "id": "Trim With All Exclusive Armor Patterns",
+              "source": "children",
+              "nodes": [
+                "goal/adventure_trim_with_all_exclusive_armor_patterns"
+              ],
+              "exclude": [],
+              "x": 7,
+              "y": 0,
+              "width": 2,
+              "height": 1,
+              "margin": 0,
+              "padding": 8
+            },
+            {
+              "id": "Adventuring Time",
+              "source": "children",
+              "nodes": [
+                "goal/adventure_adventuring_time"
+              ],
+              "exclude": [],
+              "x": 9,
+              "y": 0,
+              "width": 8,
+              "height": 1,
+              "margin": 0,
+              "padding": 8
+            },
+            {
+              "id": "Breed All Animals",
+              "source": "children",
+              "nodes": [
+                "goal/husbandry_bred_all_animals"
+              ],
+              "exclude": [],
+              "x": 17,
+              "y": 0,
+              "width": 3,
+              "height": 1,
+              "margin": 0,
+              "padding": 8
+            },
+            {
+              "id": "Complete Catalogue",
+              "source": "children",
+              "nodes": [
+                "goal/husbandry_complete_catalogue"
+              ],
+              "exclude": [],
+              "x": 20,
+              "y": 0,
+              "width": 2,
+              "height": 1,
+              "margin": 0,
+              "padding": 8
+            },
+            {
+              "id": "Balanced Diet",
+              "source": "children",
+              "nodes": [
+                "goal/husbandry_balanced_diet"
+              ],
+              "exclude": [],
+              "x": 22,
+              "y": 0,
+              "width": 5,
+              "height": 1,
+              "margin": 0,
+              "padding": 8
+            },
+            {
+              "id": "Whole Pack",
+              "source": "children",
+              "nodes": [
+                "goal/husbandry_whole_pack"
+              ],
+              "exclude": [],
+              "x": 27,
+              "y": 0,
+              "width": 2,
+              "height": 1,
+              "margin": 0,
+              "padding": 8
+            },
+            {
+              "id": "Stats",
+              "source": "nodes",
+              "nodes": [
+                "counter/gold_blocks",
+                "counter/ancient_debris",
+                "counter/beehives",
+                "counter/wither_skeleton_skulls",
+                "counter/nautilus_shells",
+                "counter/trident",
+                "counter/enchanted_golden_apples"
+              ],
+              "exclude": [],
+              "x": 29,
+              "y": 0,
+              "width": 3,
+              "height": 1,
+              "margin": 0,
+              "padding": 16
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "overlay": [
+    {
+      "id": "Collections",
+      "source": "children",
+      "nodes": [
+        "goal/nether_explore_nether",
+        "goal/adventure_kill_all_mobs",
+        "goal/adventure_trim_with_all_exclusive_armor_patterns",
+        "goal/adventure_adventuring_time",
+        "goal/husbandry_bred_all_animals",
+        "goal/husbandry_complete_catalogue",
+        "goal/husbandry_balanced_diet",
+        "goal/husbandry_whole_pack"
+      ],
+      "exclude": [],
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 2,
+      "margin": 0,
+      "padding": 0
+    },
+    {
+      "id": "Advancements",
+      "source": "prefix",
+      "nodes": [
+        "goal/"
+      ],
+      "exclude": [],
+      "x": 0,
+      "y": 2,
+      "width": 1,
+      "height": 4,
+      "margin": 0,
+      "padding": 0
+    },
+    {
+      "id": "Stats",
+      "source": "nodes",
+      "nodes": [
+        "counter/gold_blocks",
+        "counter/ancient_debris",
+        "counter/beehives",
+        "counter/wither_skeleton_skulls",
+        "counter/nautilus_shells",
+        "counter/trident",
+        "counter/enchanted_golden_apples"
+      ],
+      "exclude": [],
+      "x": 0,
+      "y": 6,
+      "width": 1,
+      "height": 6,
+      "margin": 0,
+      "padding": 0
+    }
+  ]
+}

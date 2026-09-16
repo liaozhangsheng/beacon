@@ -1,0 +1,22 @@
+/* XPM */
+static char * missingno[] = {
+"16 16 2 1",
+"a c #000000",
+"b c #FF00FF",
+"aaaabbbbaaaabbbb",
+"aaaabbbbaaaabbbb",
+"aaaabbbbaaaabbbb",
+"aaaabbbbaaaabbbb",
+"bbbbaaaabbbbaaaa",
+"bbbbaaaabbbbaaaa",
+"bbbbaaaabbbbaaaa",
+"bbbbaaaabbbbaaaa",
+"aaaabbbbaaaabbbb",
+"aaaabbbbaaaabbbb",
+"aaaabbbbaaaabbbb",
+"aaaabbbbaaaabbbb",
+"bbbbaaaabbbbaaaa",
+"bbbbaaaabbbbaaaa",
+"bbbbaaaabbbbaaaa",
+"bbbbaaaabbbbaaaa"
+};

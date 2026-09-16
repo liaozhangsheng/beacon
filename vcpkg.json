@@ -1,0 +1,16 @@
+{
+  "name": "beacon",
+  "version-string": "0.1.0",
+  "dependencies": [
+    "openssl",
+    "sdl3"
+  ],
+  "features": {
+    "tests": {
+      "description": "Build the regression checks",
+      "dependencies": [
+        "catch2"
+      ]
+    }
+  }
+}
