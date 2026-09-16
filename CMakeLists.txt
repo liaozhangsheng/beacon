@@ -221,6 +221,12 @@ if(BEACON_BUILD_DESKTOP)
             DESTINATION ${CMAKE_INSTALL_BINDIR}
         )
     else()
+        set(BEACON_RUNTIME_POST_EXCLUDE_REGEXES)
+        if(UNIX AND NOT APPLE)
+            # CPack's ZIP generator turns SDL3's SONAME symlink into an empty
+            # file. Install the real library below under the SONAME instead.
+            list(APPEND BEACON_RUNTIME_POST_EXCLUDE_REGEXES "libSDL3\\.so\\.0")
+        endif()
         install(TARGETS beacon
             RUNTIME_DEPENDENCY_SET beacon_runtime_dependencies
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -231,6 +237,7 @@ if(BEACON_BUILD_DESKTOP)
                 "^/usr/lib/.*"
                 ".*[/\\]Windows[/\\].*"
                 ".*[/\\]System32[/\\].*"
+                ${BEACON_RUNTIME_POST_EXCLUDE_REGEXES}
             DIRECTORIES
                 "$<TARGET_FILE_DIR:SDL3::SDL3>"
                 "$<TARGET_FILE_DIR:OpenSSL::SSL>"
@@ -238,6 +245,12 @@ if(BEACON_BUILD_DESKTOP)
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
             LIBRARY DESTINATION ${CMAKE_INSTALL_BINDIR}
         )
+        if(UNIX AND NOT APPLE)
+            install(FILES "$<TARGET_FILE:SDL3::SDL3>"
+                DESTINATION ${CMAKE_INSTALL_BINDIR}
+                RENAME "libSDL3.so.0"
+            )
+        endif()
     endif()
     install(DIRECTORY "${PROJECT_SOURCE_DIR}/assets/"
         DESTINATION "${CMAKE_INSTALL_BINDIR}/assets"
