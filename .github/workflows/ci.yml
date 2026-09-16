@@ -22,7 +22,7 @@ jobs:
             os: windows-2022
             triplet: x64-windows
           - name: macOS
-            os: macos-14
+            os: macos-15
             triplet: arm64-osx
 
     steps:
@@ -49,15 +49,15 @@ jobs:
           fi
           echo "VCPKG_ROOT=$vcpkg_cmake_root" >> "$GITHUB_ENV"
 
+      - name: Install Linux build tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes autoconf autoconf-archive automake clang-format libtool
+
       - name: Install dependencies
         shell: bash
         run: >-
           "$RUNNER_TEMP/vcpkg/vcpkg${{ runner.os == 'Windows' && '.exe' || '' }}"
           install --x-feature=tests --triplet "${{ matrix.triplet }}"
-
-      - name: Install clang-format
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install --yes clang-format
 
       - name: Add runtime libraries to PATH
         shell: bash

@@ -1,39 +1,158 @@
-# Beacon
+<div align="center">
+  <img src="assets/beacon.png" alt="Beacon" width="96">
+  <h1>Beacon</h1>
+  <p><strong>A focused progress tracker for Minecraft speedruns.</strong></p>
+  <p>
+    <a href="https://github.com/liaozhangsheng/beacon/actions/workflows/ci.yml"><img src="https://github.com/liaozhangsheng/beacon/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2ea44f.svg" alt="MIT License"></a>
+  </p>
+  <p><a href="#beacon">English</a> · <a href="README_zh.md">中文</a></p>
+</div>
 
-Minecraft 速通进度追踪器。读取本地存档的统计和进度文件，在主窗口和悬浮窗中显示模板定义的目标。
+Beacon reads Minecraft save data and turns advancements, statistics, and custom rules into a live speedrun checklist. It provides a main window, an optional overlay, bundled templates, and a small template system for runs that do not fit the defaults.
 
-## 从源码构建
+## Highlights
 
-需要 C++20 编译器、CMake 3.21+、Git；初始化子模块后安装 SDL3 和 OpenSSL（可使用仓库的 vcpkg manifest）。
+- **Live progress tracking** — discovers worlds and players, then refreshes the active save while you play.
+- **Advancements and statistics** — reads the standard `stats/<uuid>.json` and `advancements/<uuid>.json` files without modifying the save.
+- **Main window and overlay** — use the full tracker or a compact, configurable overlay during a run.
+- **Version-aware templates** — the bundled templates are selected by Minecraft `DataVersion`.
+- **Resilient refresh** — keeps the last successful state visible when a file is temporarily unavailable or still being written.
+- **Customizable runs** — define goals, rules, languages, layouts, and icons in a template package.
+- **Cross-platform desktop app** — designed for Windows, macOS, and Linux.
+
+## For users
+
+### Getting started
+
+1. Build or download Beacon for your platform.
+2. Launch `beacon`.
+3. Open settings and choose your Minecraft game directory and template.
+4. Select a world and player, then start playing. Beacon updates the checklist as the save changes.
+
+The default Minecraft directories are detected automatically:
+
+| Platform | Default game directory |
+| --- | --- |
+| Windows | `%APPDATA%/.minecraft` |
+| macOS | `~/Library/Application Support/minecraft` |
+| Linux | `~/.minecraft` |
+
+The bundled templates currently include:
+
+| Template | Purpose |
+| --- | --- |
+| `1.16` | Minecraft 1.16 speedrun advancements |
+| `26.1` | Minecraft 26.1 speedrun advancements |
+| `26.2` | Minecraft 26.2 speedrun advancements |
+| `26.3` | Minecraft 26.3 speedrun advancements |
+| `all_potions` | A version-independent all-potions checklist |
+
+### Data and recovery behavior
+
+Beacon only reads the selected Minecraft save. Settings and avatar cache are stored in the platform-specific application data directory, under `config/settings.json` and `cache/avatars/`.
+
+The active world is checked frequently; other worlds are scanned periodically for changes. If Minecraft is still writing a file, Beacon keeps the last valid progress, reports the stale data state, and retries. A damaged or inaccessible unrelated world is reported without stopping the active tracker.
+
+## For developers
+
+### Requirements
+
+- A C++20 compiler
+- CMake 3.21 or newer
+- Git with submodule support
+- vcpkg
+
+SDL3, SDL3_image, OpenSSL, and the optional Catch2 test dependency are declared in [`vcpkg.json`](vcpkg.json). The desktop application uses SDL3 and OpenSSL; the core libraries can be built without them.
+
+### Build from source
+
+Clone the repository with its submodules, then configure it with vcpkg manifest mode:
 
 ```sh
-git submodule update --init --recursive
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+git clone --recurse-submodules https://github.com/liaozhangsheng/beacon.git
+cd beacon
+
+cmake -S . -B build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 cmake --build build --parallel
+```
+
+Run the application:
+
+```sh
 ./build/beacon
 ```
 
-使用 vcpkg 时，在配置命令中增加 `-DCMAKE_TOOLCHAIN_FILE=<vcpkg>/scripts/buildsystems/vcpkg.cmake`。
-资源随可执行文件复制；设置和头像缓存保存在各平台的用户数据目录中（分别位于 `config/settings.json` 和 `cache/avatars/`）。
-配置只接受当前完整格式；旧配置需要重新设置游戏目录、模板和外观。
+On Windows, run `build/beacon.exe` instead. If the submodules were cloned without `--recurse-submodules`, initialize them manually:
 
-[自定义模板 Skill](.agents/skills/beacon-custom-template/SKILL.md)
+```sh
+git submodule update --init --recursive
+```
 
-## 第三方资源与声明
+To build only the non-desktop libraries:
 
-`assets/fonts/Unifont.ttf` 使用 GNU Unifont，按 SIL Open Font License 1.1
-分发；完整许可证见
-[`assets/fonts/Unifont-LICENSE.txt`](assets/fonts/Unifont-LICENSE.txt)。
+```sh
+cmake -S . -B build-core -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBEACON_BUILD_DESKTOP=OFF
+cmake --build build-core --parallel
+```
 
-`assets/vender/minecraft/` 中的图标来自 Minecraft 原版资源，仅用于本项目的
-非官方进度追踪功能。Minecraft 是 Microsoft Corporation 的商标。本项目不是
-Mojang Studios 或 Microsoft 的官方产品，也未获其批准、关联或认可。
+### Tests and formatting
 
-存档发现、文件变化检测和规则求值在后台执行。当前存档每 250 毫秒检查一次，其他世界每秒扫描一次；新增世界会触发提前扫描。统计和进度文件分别缓存，未变化的版本判定也会复用。
-读取失败时界面标明数据过期，显示错误和上次读取时间，保留上次成功的进度并重试；恢复前暂停手动操作及完成动画。无关损坏世界会单独提示，不阻断正常世界。
-切换语言或更新相同规则的展示资源会保留本轮手动进度；切换游戏目录、世界、玩家或规则时开始新一轮。同路径替换世界目录或游戏时间回退也会重开一轮；也可点击主窗口的“重开本轮”清除手动进度并重新读取存档。
-切换语言只加载文本，复用规则、布局和图片；编辑模板或图片后，点击设置中的“保存”重新加载。
-设置先验证资源并保存，成功后才切换运行配置。
+Configure with the test feature enabled, build, and run the regression suite:
 
-头像下载在后台线程上执行，切换玩家或退出时取消正在进行的网络请求。
-不需要桌面界面时可使用 `-DBEACON_BUILD_DESKTOP=OFF` 构建核心库；核心库不依赖 SDL 或 OpenSSL。回归测试通过 `-DBUILD_TESTING=ON` 启用，需要 Catch2 3，然后运行 `ctest --test-dir build --output-on-failure`。
+```sh
+cmake -S . -B build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DBUILD_TESTING=ON \
+  -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+```
+
+On Linux, formatting can be checked with:
+
+```sh
+cmake --build build --target format-check
+```
+
+The continuous integration workflow covers Linux, Windows, and macOS: [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
+### Project layout
+
+| Path | Responsibility |
+| --- | --- |
+| `src/core` | Template compilation, rule evaluation, and shared data models |
+| `src/io` | Safe filesystem and file-change handling |
+| `src/minecraft` | Save discovery plus stats and advancement parsing |
+| `src/app` | Runtime refresh, persistence, and manual progress |
+| `src/ui` | Presentation, layout, rendering, and desktop interaction |
+| `templates` | Bundled template packages |
+| `assets` | Fonts, UI assets, and Minecraft icons |
+| `test` | Core, filesystem, presentation, UI, and package checks |
+
+### Custom templates
+
+Templates are self-contained directories under `templates/`. Each template must contain:
+
+```text
+templates/<name>/
+├── template.json   # goals, facts, rules, and Minecraft compatibility
+├── lang.json       # localized text
+└── layout.json     # main-window and overlay layout
+```
+
+Use the bundled [`beacon-custom-template` skill](.agents/skills/beacon-custom-template/SKILL.md) for the complete schema, validation rules, and examples. A template may reference icons from the bundled asset directory or include its own language and image resources.
+
+## Minecraft resources and trademarks
+
+The icons under [`assets/vender/minecraft/`](assets/vender/minecraft/) are derived from the **vanilla Minecraft Java Edition 26.1 resource assets**. They are bundled only to identify goals in Beacon's unofficial progress tracker; they are not a replacement for the Minecraft game or its resource pack.
+
+Minecraft is a trademark of Microsoft Corporation. Beacon is an independent, unofficial project and is not affiliated with, endorsed by, or sponsored by Mojang Studios or Microsoft.
+
+## License
+
+Beacon is released under the [MIT License](LICENSE). Third-party components and resources retain their own licenses and notices, including [GNU Unifont's SIL Open Font License](assets/fonts/Unifont-LICENSE.txt).

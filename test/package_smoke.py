@@ -22,7 +22,11 @@ with tempfile.TemporaryDirectory(prefix='beacon-package-') as directory:
     environment = dict(os.environ, SDL_VIDEODRIVER='dummy')
     for key in ('LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH', 'DYLD_FALLBACK_LIBRARY_PATH'):
         environment.pop(key, None)
-    environment['PATH'] = (str(Path(environment['SystemRoot']) / 'System32')
-                           if os.name == 'nt' else '/usr/bin:/bin')
+    if os.name == 'nt':
+        system_root = next(value for key, value in environment.items()
+                           if key.lower() == 'systemroot')
+        environment['PATH'] = str(Path(system_root) / 'System32')
+    else:
+        environment['PATH'] = '/usr/bin:/bin'
     subprocess.run([str(executable), '--smoke-test'], cwd=directory,
                    env=environment, check=True, timeout=30)
