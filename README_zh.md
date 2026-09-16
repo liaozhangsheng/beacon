@@ -57,22 +57,31 @@ Beacon 只读取选中的 Minecraft 存档。设置和头像缓存保存在各�
 - C++20 编译器
 - CMake 3.21 或更高版本
 - 支持子模块的 Git
-- vcpkg
+- 由平台原生包管理器提供的 OpenSSL 和 Catch2；SDL3 可以由原生包管理器提供，
+  也可以通过上游 CMake 构建
 
-SDL3、SDL3_image、OpenSSL 和可选的 Catch2 测试依赖均声明在 [`vcpkg.json`](vcpkg.json) 中。桌面程序使用 SDL3 和 OpenSSL；核心库可以在不启用桌面程序的情况下构建。
+桌面程序使用 SDL3 和 OpenSSL；核心库可以在不启用桌面程序的情况下构建。Windows CI 使用 [`vcpkg.json`](vcpkg.json) 中的 manifest，Linux 和 macOS 则使用原生依赖。Ubuntu 24.04 镜像没有 SDL3 开发包，因此 CI 会使用 SDL 官方 CMake 项目构建 SDL3 3.2.6。
 
 ### 从源码构建
 
-先克隆仓库及其子模块，再使用 vcpkg manifest 模式配置：
+先克隆仓库及其子模块，再使用 CMake 配置：
 
 ```sh
 git clone --recurse-submodules https://github.com/liaozhangsheng/beacon.git
 cd beacon
 
 cmake -S . -B build -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+  -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
+```
+
+Windows 下还需要在配置时加入 vcpkg 工具链：
+
+```sh
+cmake -S . -B build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+  -DVCPKG_TARGET_TRIPLET=x64-windows
 ```
 
 运行程序：
@@ -103,11 +112,12 @@ cmake --build build-core --parallel
 ```sh
 cmake -S . -B build -G Ninja \
   -DCMAKE_BUILD_TYPE=Debug \
-  -DBUILD_TESTING=ON \
-  -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+  -DBUILD_TESTING=ON
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
+
+Windows 下请在配置命令中同时加入 vcpkg 工具链和 `-DVCPKG_TARGET_TRIPLET=x64-windows`。
 
 Linux 下可以检查代码格式：
 

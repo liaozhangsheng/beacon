@@ -17,6 +17,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-fexperimental-library>")
+    add_link_options("$<$<LINK_LANGUAGE:CXX>:-fexperimental-library>")
+endif()
+
 if(MSVC)
     set(BEACON_WARNING_OPTIONS /W4 /utf-8)
 else()

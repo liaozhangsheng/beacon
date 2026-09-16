@@ -17,13 +17,11 @@ jobs:
         include:
           - name: Linux
             os: ubuntu-24.04
-            triplet: x64-linux
           - name: Windows
             os: windows-2022
             triplet: x64-windows
           - name: macOS
             os: macos-15
-            triplet: arm64-osx
 
     steps:
       - name: Check out repository
@@ -36,46 +34,96 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Bootstrap vcpkg
+        if: runner.os == 'Windows'
         shell: bash
         run: |
           vcpkg_root="$RUNNER_TEMP/vcpkg"
           git clone --depth 1 https://github.com/microsoft/vcpkg.git "$vcpkg_root"
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            "$vcpkg_root/bootstrap-vcpkg.bat" -disableMetrics
-            vcpkg_cmake_root="$(cygpath -m "$vcpkg_root")"
-          else
-            "$vcpkg_root/bootstrap-vcpkg.sh" -disableMetrics
-            vcpkg_cmake_root="$vcpkg_root"
-          fi
+          "$vcpkg_root/bootstrap-vcpkg.bat" -disableMetrics
+          vcpkg_cmake_root="$(cygpath -m "$vcpkg_root")"
           echo "VCPKG_ROOT=$vcpkg_cmake_root" >> "$GITHUB_ENV"
 
-      - name: Install Linux build tools
+      - name: Install Linux dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install --yes autoconf autoconf-archive automake clang-format libtool
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            catch2 clang-format libssl-dev ninja-build pkg-config \
+            libasound2-dev libpulse-dev libfribidi-dev libjack-dev libsndio-dev \
+            libaudio-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
+            libxi-dev libxss-dev libxtst-dev libxkbcommon-dev libdrm-dev \
+            libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev \
+            libdbus-1-dev libibus-1.0-dev libudev-dev libthai-dev libusb-1.0-0-dev \
+            libpipewire-0.3-dev libwayland-dev libdecor-0-dev
 
-      - name: Install dependencies
+      - name: Build SDL3
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sdl_source="$RUNNER_TEMP/SDL"
+          sdl_build="$RUNNER_TEMP/SDL-build"
+          sdl_prefix="$RUNNER_TEMP/SDL-prefix"
+          git clone --depth 1 --branch release-3.2.6 https://github.com/libsdl-org/SDL.git "$sdl_source"
+          cmake -S "$sdl_source" -B "$sdl_build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_LIBDIR=lib \
+            -DSDL_SHARED=ON \
+            -DSDL_STATIC=OFF \
+            -DSDL_TEST_LIBRARY=OFF \
+            -DSDL_TESTS=OFF \
+            -DSDL_DISABLE_INSTALL_DOCS=ON
+          cmake --build "$sdl_build" --parallel
+          cmake --install "$sdl_build" --prefix "$sdl_prefix"
+          echo "CMAKE_PREFIX_PATH=$sdl_prefix${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$sdl_prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          brew install catch2 llvm@18 openssl@3 sdl3
+          brew_prefix="$(brew --prefix)"
+          llvm_root="$(brew --prefix llvm@18)"
+          openssl_root="$(brew --prefix openssl@3)"
+          echo "$llvm_root/bin" >> "$GITHUB_PATH"
+          echo "CC=$llvm_root/bin/clang" >> "$GITHUB_ENV"
+          echo "CXX=$llvm_root/bin/clang++" >> "$GITHUB_ENV"
+          echo "CMAKE_PREFIX_PATH=$brew_prefix${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}" >> "$GITHUB_ENV"
+          echo "OPENSSL_ROOT_DIR=$openssl_root" >> "$GITHUB_ENV"
+
+      - name: Install Windows dependencies
+        if: runner.os == 'Windows'
         shell: bash
         run: >-
           "$RUNNER_TEMP/vcpkg/vcpkg${{ runner.os == 'Windows' && '.exe' || '' }}"
           install --x-feature=tests --triplet "${{ matrix.triplet }}"
 
       - name: Add runtime libraries to PATH
+        if: runner.os == 'Windows'
         shell: bash
         run: |
           runtime_dir="$GITHUB_WORKSPACE/build/vcpkg_installed/${{ matrix.triplet }}/bin"
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            runtime_dir="$(cygpath -m "$runtime_dir")"
-          fi
+          runtime_dir="$(cygpath -m "$runtime_dir")"
           echo "$runtime_dir" >> "$GITHUB_PATH"
 
       - name: Configure
         shell: bash
-        run: >-
-          cmake -S . -B build -G Ninja
-          -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
-          -DVCPKG_TARGET_TRIPLET="${{ matrix.triplet }}"
-          -DBUILD_TESTING=ON
+        run: |
+          cmake_args=(
+            -S .
+            -B build
+            -G Ninja
+            -DCMAKE_BUILD_TYPE=Release
+            -DBUILD_TESTING=ON
+          )
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cmake_args+=(
+              "-DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+              "-DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}"
+            )
+          fi
+          cmake "${cmake_args[@]}"
 
       - name: Build
         run: cmake --build build --parallel

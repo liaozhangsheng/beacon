@@ -61,22 +61,31 @@ The active world is checked frequently; other worlds are scanned periodically fo
 - A C++20 compiler
 - CMake 3.21 or newer
 - Git with submodule support
-- vcpkg
+- OpenSSL and Catch2 from the platform's native package manager; SDL3 from the
+  native package manager or an upstream CMake build
 
-SDL3, SDL3_image, OpenSSL, and the optional Catch2 test dependency are declared in [`vcpkg.json`](vcpkg.json). The desktop application uses SDL3 and OpenSSL; the core libraries can be built without them.
+The desktop application uses SDL3 and OpenSSL; the core libraries can be built without them. The Windows CI job uses the manifest in [`vcpkg.json`](vcpkg.json); Linux and macOS use native dependencies instead. On Ubuntu 24.04, the CI job builds SDL3 3.2.6 with SDL's upstream CMake project because that image does not provide an SDL3 development package.
 
 ### Build from source
 
-Clone the repository with its submodules, then configure it with vcpkg manifest mode:
+Clone the repository with its submodules, then configure it with CMake:
 
 ```sh
 git clone --recurse-submodules https://github.com/liaozhangsheng/beacon.git
 cd beacon
 
 cmake -S . -B build -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+  -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
+```
+
+On Windows, configure with the vcpkg toolchain as well:
+
+```sh
+cmake -S . -B build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+  -DVCPKG_TARGET_TRIPLET=x64-windows
 ```
 
 Run the application:
@@ -107,11 +116,12 @@ Configure with the test feature enabled, build, and run the regression suite:
 ```sh
 cmake -S . -B build -G Ninja \
   -DCMAKE_BUILD_TYPE=Debug \
-  -DBUILD_TESTING=ON \
-  -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+  -DBUILD_TESTING=ON
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
+
+On Windows, add the vcpkg toolchain and `-DVCPKG_TARGET_TRIPLET=x64-windows` to the configure command.
 
 On Linux, formatting can be checked with:
 
