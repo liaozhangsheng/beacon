@@ -15,9 +15,9 @@ namespace beacon {
 
 WindowRenderer::Impl::Impl(const std::string& title, const WindowSettings& settings, const bool overlay,
                            const std::filesystem::path& asset_root, const ProgressViewModel& view, const float scale,
-                           const bool overlay_transparent)
+                           const bool overlay_transparent, const bool initially_visible)
     : title_(title), asset_root_(asset_root), overlay_(overlay), overlay_transparent_(overlay_transparent),
-      scale_(scale), context_(title, settings, overlay, scale, overlay_transparent), view_(view) {
+      scale_(scale), context_(title, settings, overlay, scale, overlay_transparent, initially_visible), view_(view) {
     if (!context_.ready())
         return;
     const auto icon_path = asset_root_ / "assets/beacon.png";

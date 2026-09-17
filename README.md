@@ -50,7 +50,7 @@ The bundled templates currently include:
 
 ### Data and recovery behavior
 
-Beacon only reads the selected Minecraft save. Settings and avatar cache are stored in the platform-specific application data directory, under `config/settings.json` and `cache/avatars/`.
+Beacon only reads the selected Minecraft save. Settings are stored next to the executable under `config/settings.json`; the avatar cache remains in the platform-specific application data directory under `cache/avatars/`.
 
 The active world is checked frequently; other worlds are scanned periodically for changes. If Minecraft is still writing a file, Beacon keeps the last valid progress, reports the stale data state, and retries. A damaged or inaccessible unrelated world is reported without stopping the active tracker.
 

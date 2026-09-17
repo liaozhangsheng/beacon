@@ -14,7 +14,7 @@ int overlay_min_height(float extra_padding = 0.0F, float scale = 1.0F);
 class WindowContext {
 public:
     WindowContext(const std::string& title, const WindowSettings& settings, bool overlay, float scale = 1.0F,
-                  bool overlay_transparent = true);
+                  bool overlay_transparent = true, bool initially_visible = true);
     ~WindowContext();
     WindowContext(const WindowContext&) = delete;
     WindowContext& operator=(const WindowContext&) = delete;

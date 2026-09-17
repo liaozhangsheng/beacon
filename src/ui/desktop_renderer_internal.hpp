@@ -30,7 +30,7 @@ class WindowRenderer::Impl {
 public:
     Impl(const std::string& title, const WindowSettings& settings, bool overlay,
          const std::filesystem::path& asset_root, const ProgressViewModel& view, float scale = 1.0F,
-         bool overlay_transparent = true);
+         bool overlay_transparent = true, bool initially_visible = true);
 
     [[nodiscard]] bool ready() const;
     [[nodiscard]] SDL_WindowID id() const;

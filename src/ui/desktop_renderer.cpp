@@ -11,6 +11,13 @@ namespace {
 
 constexpr float completion_view_delay = 0.5F;
 
+void configure_overlay_window_activation() {
+    if (!SDL_SetHint(SDL_HINT_WINDOW_ACTIVATE_WHEN_RAISED, "0"))
+        SDL_Log("Could not disable activation when raising overlay: %s", SDL_GetError());
+    if (!SDL_SetHint(SDL_HINT_WINDOW_ACTIVATE_WHEN_SHOWN, "0"))
+        SDL_Log("Could not disable activation when showing overlay: %s", SDL_GetError());
+}
+
 }  // namespace
 
 [[nodiscard]] bool WindowRenderer::Impl::ready() const {
@@ -27,9 +34,12 @@ constexpr float completion_view_delay = 0.5F;
 
 std::unique_ptr<WindowRenderer::Impl> WindowRenderer::Impl::recreate(const bool overlay_transparent) const {
     WindowSettings settings;
-    SDL_GetWindowPosition(context_.window(), &settings.x, &settings.y);
-    SDL_GetWindowSize(context_.window(), &settings.width, &settings.height);
-    return std::make_unique<Impl>(title_, settings, overlay_, asset_root_, view_, scale_, overlay_transparent);
+    auto* const old_window = context_.window();
+    const auto old_flags = SDL_GetWindowFlags(old_window);
+    SDL_GetWindowPosition(old_window, &settings.x, &settings.y);
+    SDL_GetWindowSize(old_window, &settings.width, &settings.height);
+    return std::make_unique<Impl>(title_, settings, overlay_, asset_root_, view_, scale_, overlay_transparent,
+                                  (old_flags & SDL_WINDOW_HIDDEN) == 0);
 }
 
 void WindowRenderer::Impl::set_scale(const float scale) {
@@ -154,8 +164,12 @@ std::uint64_t WindowRenderer::refresh_delay_ms() const {
 
 WindowRenderer::WindowRenderer(const std::string& title, const WindowSettings& settings, const bool overlay,
                                const std::filesystem::path& asset_root, const ProgressViewModel& view,
-                               const float scale, const bool overlay_transparent)
-    : impl_(std::make_unique<Impl>(title, settings, overlay, asset_root, view, scale, overlay_transparent)) {}
+                               const float scale, const bool overlay_transparent, const bool initially_visible) {
+    if (overlay)
+        configure_overlay_window_activation();
+    impl_ = std::make_unique<Impl>(title, settings, overlay, asset_root, view, scale, overlay_transparent,
+                                   initially_visible);
+}
 
 bool WindowRenderer::overlay_transparent() const {
     return impl_->overlay_transparent();

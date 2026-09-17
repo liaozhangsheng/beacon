@@ -46,7 +46,7 @@ Beacon 是一个面向 Minecraft 速通的进度追踪器。它读取本地存�
 
 ### 数据与异常恢复
 
-Beacon 只读取选中的 Minecraft 存档。设置和头像缓存保存在各平台的应用数据目录中，分别位于 `config/settings.json` 和 `cache/avatars/`。
+Beacon 只读取选中的 Minecraft 存档。设置保存在程序目录下的 `config/settings.json`，头像缓存仍保存在各平台的应用数据目录下的 `cache/avatars/`。
 
 程序会高频检查当前世界，并定期扫描其他世界的变化。如果 Minecraft 正在写入文件，Beacon 会保留上次有效进度，显示数据过期状态并自动重试。无关世界损坏或无法访问时，程序会单独提示，不会阻断当前追踪。
 

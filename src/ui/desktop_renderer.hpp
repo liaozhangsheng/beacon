@@ -21,7 +21,7 @@ class WindowRenderer {
 public:
     WindowRenderer(const std::string& title, const WindowSettings& settings, bool overlay,
                    const std::filesystem::path& asset_root, const ProgressViewModel& view, float scale = 1.0F,
-                   bool overlay_transparent = true);
+                   bool overlay_transparent = true, bool initially_visible = true);
     ~WindowRenderer();
 
     WindowRenderer(const WindowRenderer&) = delete;

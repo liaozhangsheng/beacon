@@ -147,7 +147,7 @@ std::unique_ptr<Application> create_application(const int argc, int& status) {
 
     auto application = std::make_unique<Application>();
     application->templates = std::move(*templates);
-    application->persistence = std::make_unique<beacon::Persistence>(data_root);
+    application->persistence = std::make_unique<beacon::Persistence>(asset_root);
     std::optional<beacon::Error> startup_error;
     const auto remember_error = [&](beacon::Error error) {
         if (!startup_error)

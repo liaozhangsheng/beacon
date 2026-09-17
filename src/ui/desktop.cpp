@@ -40,6 +40,11 @@ private:
     bool owns_sdl_ = false;
 };
 
+void raise_overlay_window(SDL_Window* window) {
+    if (!SDL_RaiseWindow(window))
+        SDL_Log("Could not raise overlay window: %s", SDL_GetError());
+}
+
 }  // namespace
 
 struct DesktopLoop::Impl {
@@ -56,7 +61,8 @@ public:
           applied_settings_(settings), frame_limit_(frame_limit), runtime_error_(std::move(initial_error)),
           tracker_("Beacon Tracker", WindowSettings{}, false, asset_root_, view_, settings.main_window_scale),
           overlay_("Beacon Overlay", WindowSettings{.x = 120, .y = 120, .width = 1280, .height = 180}, true,
-                   asset_root_, view_, settings.overlay_window_scale, settings.overlay_transparent),
+                   asset_root_, view_, settings.overlay_window_scale, settings.overlay_transparent,
+                   settings.overlay_visible),
           profile_loader_(data_root_) {
         const auto initial_state = runtime_ ? runtime_->state() : fixed_state_;
         resource_loader_ =
@@ -72,7 +78,7 @@ public:
         if (!overlay_visible_)
             SDL_HideWindow(SDL_GetWindowFromID(overlay_.id()));
         else
-            SDL_RaiseWindow(SDL_GetWindowFromID(overlay_.id()));
+            raise_overlay_window(SDL_GetWindowFromID(overlay_.id()));
         next_poll_ = next_tracker_frame_ = next_overlay_frame_ = Clock::now();
         ready_ = true;
     }
@@ -190,7 +196,7 @@ public:
             if (overlay_visible_) {
                 auto* window = SDL_GetWindowFromID(overlay_.id());
                 SDL_ShowWindow(window);
-                SDL_RaiseWindow(window);
+                raise_overlay_window(window);
             } else
                 SDL_HideWindow(SDL_GetWindowFromID(overlay_.id()));
         }

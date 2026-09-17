@@ -59,7 +59,7 @@ int overlay_min_height(const float extra_padding, const float scale) {
 }
 
 WindowContext::WindowContext(const std::string& title, const WindowSettings& settings, const bool overlay,
-                             const float scale, const bool overlay_transparent)
+                             const float scale, const bool overlay_transparent, const bool initially_visible)
     : overlay_(overlay), scale_(scale) {
     const auto overlay_focus_flags =
 #if defined(__linux__)
@@ -69,7 +69,9 @@ WindowContext::WindowContext(const std::string& title, const WindowSettings& set
 #endif
     const auto overlay_flags =
         SDL_WINDOW_BORDERLESS | overlay_focus_flags | (overlay_transparent ? SDL_WINDOW_TRANSPARENT : 0);
-    const auto flags = SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_RESIZABLE | (overlay ? overlay_flags : 0);
+    const auto visibility_flags = initially_visible ? 0u : SDL_WINDOW_HIDDEN;
+    const auto flags =
+        SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_RESIZABLE | visibility_flags | (overlay ? overlay_flags : 0);
     const int height = overlay ? std::max(settings.height, overlay_min_height(0.0F, scale)) : settings.height;
     window_ = SDL_CreateWindow(title.c_str(), settings.width, height, flags);
     if (window_ == nullptr)

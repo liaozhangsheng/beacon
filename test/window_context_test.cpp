@@ -55,6 +55,22 @@ TEST_CASE("window contexts scale from baseline and isolate mouse input") {
     frame(overlay, false);
 }
 
+TEST_CASE("window contexts can start hidden without becoming always-on-top") {
+    REQUIRE(SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy"));
+    REQUIRE(SDL_InitSubSystem(SDL_INIT_VIDEO));
+    struct VideoSession {
+        ~VideoSession() {
+            SDL_QuitSubSystem(SDL_INIT_VIDEO);
+        }
+    } session;
+
+    beacon::WindowContext overlay("Overlay", {}, true, 1.0F, false, false);
+    REQUIRE(overlay.ready());
+    const auto flags = SDL_GetWindowFlags(overlay.window());
+    CHECK((flags & SDL_WINDOW_HIDDEN) != 0);
+    CHECK((flags & SDL_WINDOW_ALWAYS_ON_TOP) == 0);
+}
+
 TEST_CASE("text input moves its cursor through SDL keyboard events with an overlay") {
     REQUIRE(SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy"));
     REQUIRE(SDL_InitSubSystem(SDL_INIT_VIDEO));
