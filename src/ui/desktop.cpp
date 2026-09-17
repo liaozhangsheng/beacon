@@ -71,6 +71,8 @@ public:
         overlay_visible_ = current_settings_.overlay_visible;
         if (!overlay_visible_)
             SDL_HideWindow(SDL_GetWindowFromID(overlay_.id()));
+        else
+            SDL_RaiseWindow(SDL_GetWindowFromID(overlay_.id()));
         next_poll_ = next_tracker_frame_ = next_overlay_frame_ = Clock::now();
         ready_ = true;
     }
@@ -185,9 +187,11 @@ public:
         }
         if (overlay_visible_ != current_settings_.overlay_visible) {
             overlay_visible_ = current_settings_.overlay_visible;
-            if (overlay_visible_)
-                SDL_ShowWindow(SDL_GetWindowFromID(overlay_.id()));
-            else
+            if (overlay_visible_) {
+                auto* window = SDL_GetWindowFromID(overlay_.id());
+                SDL_ShowWindow(window);
+                SDL_RaiseWindow(window);
+            } else
                 SDL_HideWindow(SDL_GetWindowFromID(overlay_.id()));
         }
         const bool draw_overlay = overlay_visible_ && (SDL_GetWindowFlags(SDL_GetWindowFromID(overlay_.id())) &
