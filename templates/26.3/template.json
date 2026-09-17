@@ -245,7 +245,7 @@
       "view": {
         "name_key": "advancement.nether.loot_bastion",
         "type": "task",
-        "icon": "minecraft/item/chest_minecart.png"
+        "icon": "minecraft/item/chest.png"
       }
     },
     {
