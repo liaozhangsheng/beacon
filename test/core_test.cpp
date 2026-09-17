@@ -312,6 +312,11 @@ TEST_CASE("snapshot publishing increments revisions and reflects current results
     REQUIRE(first->revision == 1);
     REQUIRE(first->results[compiled->completion_node].done);
     REQUIRE(first->play_ticks == 120);
+    REQUIRE(first->completion_play_ticks == 120);
+
+    auto refreshed = beacon::publish(*compiled, *results, {7, 180}, &*first);
+    REQUIRE(refreshed);
+    REQUIRE(refreshed->completion_play_ticks == 120);
 
     facts.erase("first");
     results = beacon::evaluate(*compiled, facts);

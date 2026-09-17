@@ -10,16 +10,19 @@
 #include <chrono>
 #include <cmath>
 #include <format>
+#include <limits>
 
 namespace beacon {
 namespace {
 
 std::string format_igt(const std::int64_t play_ticks) {
-    const auto seconds = std::max<std::int64_t>(0, play_ticks) / 20;
+    const auto ticks = std::max<std::int64_t>(0, play_ticks);
+    const auto seconds = ticks / 20;
     const auto hours = seconds / 3600;
     const auto minutes = (seconds / 60) % 60;
     const auto remainder = seconds % 60;
-    return std::format("{:02}:{:02}:{:02}", hours, minutes, remainder);
+    const auto centiseconds = (ticks % 20) * 5;
+    return std::format("{:02}:{:02}:{:02}.{:02}", hours, minutes, remainder, centiseconds);
 }
 
 std::string format_rule_progress(const RuleResult& result) {
@@ -231,7 +234,8 @@ void WindowRenderer::Impl::draw_completion_view(const PublishedState& state) {
     }
 
     const auto template_name = std::string(state.localization->text(state.compiled->template_name_key));
-    const auto igt = std::string("IGT: ") + format_igt(state.snapshot.play_ticks);
+    const auto igt =
+        std::string("IGT: ") + format_igt(state.snapshot.completion_play_ticks.value_or(state.snapshot.play_ticks));
     const float completion_font_size = std::max(1.0F, window_size.y * 0.25F);
     auto* const font = ImGui::GetFont();
     const float text_x = avatar_min.x + avatar_size + (window_size.y * 0.1F);
@@ -240,7 +244,7 @@ void WindowRenderer::Impl::draw_completion_view(const PublishedState& state) {
     const float title_y = window_min.y + ((window_size.y - text_block_height) * 0.5F);
     const float igt_y = title_y + completion_font_size + line_gap;
     draw->AddText(font, completion_font_size, {text_x, title_y}, IM_COL32(255, 215, 0, 255), template_name.c_str());
-    draw->AddText(font, completion_font_size, {text_x, igt_y}, IM_COL32(255, 255, 255, 255), igt.c_str());
+    draw->AddText(font, completion_font_size, {text_x, igt_y}, IM_COL32(255, 215, 0, 255), igt.c_str());
 }
 
 void WindowRenderer::Impl::draw_player_card(const PublishedState& state, const float center_y) const {
@@ -299,6 +303,7 @@ void WindowRenderer::Impl::draw_header(const PublishedState& state) {
     const auto beacon = std::string("Beacon ") + beacon_version;
     const auto nickname = player_card_ ? player_card_->name : std::string("Steve");
     const auto template_name = std::string(state.localization->text(state.compiled->template_name_key));
+    const auto igt = std::string("IGT: ") + format_igt(state.snapshot.play_ticks);
     const bool has_refreshed = state.last_successful_read_at != 0;
     const auto refreshed = has_refreshed ? std::string("读取于 ") +
                                                format_elapsed(std::chrono::duration_cast<std::chrono::seconds>(
@@ -310,12 +315,16 @@ void WindowRenderer::Impl::draw_header(const PublishedState& state) {
     const auto stats = summarize_progress(state, view_.goal_nodes);
     const auto progress = std::to_string(stats.completed) + " / " + std::to_string(stats.total);
     const auto percentage = format_percentage(stats.ratio());
+    constexpr float igt_scale = 1.5F;
+    const float igt_font_size = ImGui::GetFontSize() * igt_scale;
     const float avatar_size = icon_size();
     const float progress_bar_width = from_icon(256.0F);
     const float spacing = from_icon(8.0F);
     const float separator_spacing = from_icon(12.0F);
     const auto separator_size = ImGui::CalcTextSize("|");
     const auto player_size = ImGui::CalcTextSize(nickname.c_str());
+    const auto igt_size =
+        ImGui::GetFont()->CalcTextSizeA(igt_font_size, std::numeric_limits<float>::max(), 0.0F, igt.c_str());
     const auto progress_size = ImGui::CalcTextSize(progress.c_str());
     const auto percentage_size = ImGui::CalcTextSize(percentage.c_str());
     const float player_width =
@@ -323,8 +332,8 @@ void WindowRenderer::Impl::draw_header(const PublishedState& state) {
     const float completion_width = progress_size.x + (spacing * 2.0F) + progress_bar_width + percentage_size.x;
     const float header_width =
         ImGui::CalcTextSize(beacon.c_str()).x + player_width + ImGui::CalcTextSize(template_name.c_str()).x +
-        ImGui::CalcTextSize(refreshed.c_str()).x + completion_width +
-        (separator_size.x + (separator_spacing * 2.0F)) * static_cast<float>(has_refreshed ? 4 : 3);
+        ImGui::CalcTextSize(refreshed.c_str()).x + igt_size.x + completion_width +
+        (separator_size.x + (separator_spacing * 2.0F)) * static_cast<float>(has_refreshed ? 5 : 4);
     ImGui::SetCursorPosX(overlay_ ? (ImGui::GetWindowWidth() - header_width) * 0.5F
                                   : ImGui::GetWindowWidth() - header_width - from_icon(8.0F));
     ImGui::SetCursorScreenPos({ImGui::GetCursorScreenPos().x, text_y});
@@ -338,6 +347,21 @@ void WindowRenderer::Impl::draw_header(const PublishedState& state) {
         ImGui::TextUnformatted("|");
         ImGui::SameLine(0.0F, separator_spacing);
     };
+    const auto draw_igt = [&] {
+        const auto cursor = ImGui::GetCursorScreenPos();
+        auto* const font = ImGui::GetFont();
+        // Match visible digit centers: line boxes include unequal padding at different font sizes.
+        const auto digit_center = [&](const float size) {
+            auto* const baked = font->GetFontBaked(size);
+            const auto* const glyph = baked->FindGlyph('0');
+            return (glyph->Y0 + glyph->Y1) * 0.5F * (size / baked->Size);
+        };
+        const float base_center = std::trunc(text_y) + digit_center(ImGui::GetFontSize());
+        const float igt_y = std::round(base_center - digit_center(igt_font_size));
+        ImGui::GetWindowDrawList()->AddText(font, igt_font_size, {cursor.x, igt_y},
+                                            ImGui::GetColorU32(ImVec4{1.0F, 215.0F / 255.0F, 0.0F, 1.0F}), igt.c_str());
+        ImGui::Dummy({igt_size.x, ImGui::GetTextLineHeight()});
+    };
 
     draw_text(beacon);
     draw_separator();
@@ -349,6 +373,8 @@ void WindowRenderer::Impl::draw_header(const PublishedState& state) {
         draw_separator();
         draw_text(refreshed);
     }
+    draw_separator();
+    draw_igt();
     draw_separator();
     draw_completion_progress(stats, progress, percentage, center_y);
     ImGui::SetCursorScreenPos({origin.x, origin.y + from_icon(32.0F)});

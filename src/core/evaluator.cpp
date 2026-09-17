@@ -191,6 +191,11 @@ ylt::expected<Snapshot, Error> publish(const CompiledTemplate& compiled, RuleRes
     snapshot.run_epoch = context.run_epoch;
     snapshot.results = std::move(results);
     snapshot.play_ticks = context.play_ticks;
+    if (snapshot.results[compiled.completion_node].done) {
+        snapshot.completion_play_ticks = previous != nullptr && previous->run_epoch == context.run_epoch
+                                             ? previous->completion_play_ticks.value_or(context.play_ticks)
+                                             : context.play_ticks;
+    }
     return snapshot;
 }
 

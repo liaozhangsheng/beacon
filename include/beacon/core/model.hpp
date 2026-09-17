@@ -137,6 +137,7 @@ struct Snapshot {
     std::uint64_t run_epoch = 0;
     RuleResults results;
     std::int64_t play_ticks = 0;
+    std::optional<std::int64_t> completion_play_ticks;
 };
 
 struct ManualProgress {
