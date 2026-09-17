@@ -1,4 +1,5 @@
 #include <beacon/ui/desktop.hpp>
+#include <beacon/minecraft/process.hpp>
 #include <beacon/ui/display.hpp>
 #include <beacon/ui/profile.hpp>
 #include <beacon/ui/progress.hpp>
@@ -118,6 +119,13 @@ public:
         const auto frame_started = Clock::now();
         if (runtime_ != nullptr && frame_started >= next_poll_) {
             next_poll_ = frame_started + poll_interval;
+            if (applied_settings_.auto_detect && current_settings_.auto_detect) {
+                if (auto directory = foreground_minecraft_directory();
+                    directory && *directory != applied_settings_.game_root) {
+                    current_settings_.game_root = std::move(*directory);
+                    apply_settings_ = true;
+                }
+            }
             (void)runtime_->poll_files();
         }
         if (runtime_ != nullptr)

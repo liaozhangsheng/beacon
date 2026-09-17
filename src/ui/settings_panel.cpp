@@ -54,12 +54,12 @@ void SettingsPanel::render(const ImGuiViewport* viewport, Settings& settings, st
         return;
     }
     ImGui::PushFont(nullptr, ui::settings_font_size);
-    constexpr ImVec2 settings_size{520.0F, 560.0F};
+    constexpr ImVec2 settings_size{520.0F, 620.0F};
     const ImVec2 initial_padding{settings_size.x * (16.0F / 146.0F), settings_size.y * (12.0F / 180.0F)};
     ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing, {0.5F, 0.5F});
     ImGui::SetNextWindowSize(settings_size, ImGuiCond_Appearing);
-    ImGui::SetNextWindowSizeConstraints({520.0F, 560.0F}, {std::max(520.0F, viewport->WorkSize.x - 32.0F),
-                                                           std::max(560.0F, viewport->WorkSize.y - 32.0F)});
+    ImGui::SetNextWindowSizeConstraints({520.0F, 620.0F}, {std::max(520.0F, viewport->WorkSize.x - 32.0F),
+                                                           std::max(620.0F, viewport->WorkSize.y - 32.0F)});
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0F);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, initial_padding);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, {0.0F, 0.0F, 0.0F, 0.0F});
@@ -107,7 +107,23 @@ void SettingsPanel::render(const ImGuiViewport* viewport, Settings& settings, st
     ImGui::SetCursorPos(padding);
     ImGui::TextUnformatted("Beacon 设置");
     ImGui::SetCursorPos({padding.x, padding.y + 44.0F});
-    const float label_width = ImGui::CalcTextSize("Minecraft 存档目录：").x;
+    const char* const setting_labels[] = {
+        "模板：",
+        "语言：",
+        "自动识别游戏目录：",
+        "游戏目录：",
+        "主窗口 缩放（倍率）：",
+        "主窗口 背景色：",
+        "Overlay 显示：",
+        "Overlay 透明背景：",
+        "Overlay 滚动方向：",
+        "Overlay 缩放（倍率）：",
+        "Overlay 背景色：",
+        "Overlay 滚动速度：",
+    };
+    float label_width = 0.0F;
+    for (const auto* label : setting_labels)
+        label_width = std::max(label_width, ImGui::CalcTextSize(label).x);
     ImGui::TextUnformatted("数据来源");
     ImGui::SetCursorPosX(padding.x);
     bool changed = render_source(settings, templates, content_size, label_width, apply, assets);
@@ -131,7 +147,7 @@ void SettingsPanel::render(const ImGuiViewport* viewport, Settings& settings, st
 
 bool SettingsPanel::render_source(Settings& settings, const std::vector<std::filesystem::path>* templates,
                                   const ImVec2 content_size, const float label_width, bool* apply, UiAssets& assets) {
-    if (!game_root_input_loaded_) {
+    if (!game_root_input_loaded_ || settings.auto_detect) {
         const auto value = path_to_utf8(settings.game_root);
         const auto length = std::min(value.size(), game_root_input_.size() - 1);
         std::copy_n(value.data(), length, game_root_input_.data());
@@ -215,14 +231,23 @@ bool SettingsPanel::render_source(Settings& settings, const std::vector<std::fil
     }
     ImGui::PopStyleColor();
     ImGui::PopStyleVar();
-    form_row("Minecraft 存档目录：");
+    form_row("自动识别游戏目录：");
+    if (textured_checkbox(assets.widget("checkbox.png"), assets.widget("checkbox_highlighted.png"),
+                          assets.widget("checkbox_selected.png"), assets.widget("checkbox_selected_highlighted.png"),
+                          "##auto-detect", "开启", &settings.auto_detect, false, {0.0F, 0.0F, 0.0F, 1.0F})) {
+        changed = true;
+        if (apply != nullptr)
+            *apply = true;
+    }
+    form_row("游戏目录：");
+    ImGui::BeginDisabled(settings.auto_detect);
     const bool game_root_changed =
         textured_input(assets.widget("text_field.png"), assets.widget("text_field_highlighted.png"), "##game-root",
                        game_root_input_.data(), game_root_input_.size());
     if (game_root_changed) {
         settings.game_root = path_from_utf8(game_root_input_.data());
     }
-    ImGui::TextUnformatted("路径应包含 saves 文件夹");
+    ImGui::EndDisabled();
     ImGui::EndTable();
     return changed || game_root_changed;
 }

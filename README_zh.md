@@ -44,6 +44,8 @@ Beacon 是一个面向 Minecraft 速通的进度追踪器。它读取本地存�
 | `26.3` | Minecraft 26.3 速通进度 |
 | `all_potions` | 与版本无关的全药水清单 |
 
+设置中的“自动探测”默认开启。开启后，切换到 Minecraft 窗口，Beacon 会从该进程的 `--gameDir` 启动参数读取游戏目录，并在其 `saves` 下沿用活跃世界发现逻辑。未探测到有效目录时保留当前路径。支持 Windows、macOS 和启用 X11 支持的 Linux 构建；Wayland 请手动填写目录。相对路径或未传入 `--gameDir` 的启动方式暂不支持。
+
 ### 数据与异常恢复
 
 Beacon 只读取选中的 Minecraft 存档。设置保存在程序目录下的 `config/settings.json`，头像缓存仍保存在各平台的应用数据目录下的 `cache/avatars/`。

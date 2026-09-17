@@ -48,6 +48,8 @@ The bundled templates currently include:
 | `26.3` | Minecraft 26.3 speedrun advancements |
 | `all_potions` | A version-independent all-potions checklist |
 
+The **自动探测 (Auto detect)** setting is on by default. When enabled, focusing Minecraft reads its process’s `--gameDir` argument and uses the existing active-world discovery under `saves`. Failed detection keeps the current directory. Supported on Windows, macOS, and Linux builds with X11 support; use a manual directory on Wayland. Relative paths and launches without `--gameDir` are not supported.
+
 ### Data and recovery behavior
 
 Beacon only reads the selected Minecraft save. Settings are stored next to the executable under `config/settings.json`; the avatar cache remains in the platform-specific application data directory under `cache/avatars/`.
