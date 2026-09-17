@@ -29,8 +29,8 @@ struct Settings {
 
     float main_window_scale = 0.5F;
     std::array<float, 3> main_window_background_color{51.0F / 255.0F, 57.0F / 255.0F, 63.0F / 255.0F};
-    bool overlay_visible = false;
-    bool overlay_transparent = true;
+    bool overlay_visible = true;
+    bool overlay_transparent = false;
     bool overlay_scroll_right = false;
     float overlay_window_scale = 1.0F;
     std::array<float, 3> overlay_window_background_color = default_overlay_window_background_color;
