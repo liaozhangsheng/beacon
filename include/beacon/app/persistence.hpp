@@ -25,6 +25,7 @@ struct Settings {
     std::filesystem::path game_root;
     std::filesystem::path template_path;
     std::string language;
+    bool auto_detect = true;
 
     float main_window_scale = 0.5F;
     std::array<float, 3> main_window_background_color{51.0F / 255.0F, 57.0F / 255.0F, 63.0F / 255.0F};

@@ -193,10 +193,15 @@ bool short_string(const Json::Value& value) {
 }
 
 bool valid_settings_json(const Json::Value& root) {
-    if (!exact_json_fields(root, {"game_root", "template_path", "language", "main_window_scale",
-                                  "main_window_background_color", "overlay_visible", "overlay_transparent",
-                                  "overlay_scroll_right", "overlay_window_scale", "overlay_window_background_color",
-                                  "overlay_scroll_speed"}) ||
+    if (!root.isObject())
+        return false;
+    auto fields = root;
+    fields.removeMember("auto_detect");
+    if ((root.isMember("auto_detect") && !root["auto_detect"].isBool()) ||
+        !exact_json_fields(fields, {"game_root", "template_path", "language", "main_window_scale",
+                                    "main_window_background_color", "overlay_visible", "overlay_transparent",
+                                    "overlay_scroll_right", "overlay_window_scale", "overlay_window_background_color",
+                                    "overlay_scroll_speed"}) ||
         !short_string(root["game_root"]) || root["game_root"].asString().empty() ||
         !short_string(root["template_path"]) || root["template_path"].asString().empty() ||
         !short_string(root["language"]) ||
@@ -286,6 +291,7 @@ ylt::expected<std::optional<Settings>, Error> Persistence::load_settings() const
     Settings settings;
     settings.game_root = path_from_utf8((*root)["game_root"].asString());
     settings.template_path = path_from_utf8((*root)["template_path"].asString());
+    settings.auto_detect = (*root).get("auto_detect", true).asBool();
     settings.language = (*root)["language"].asString();
     settings.main_window_scale = (*root)["main_window_scale"].asFloat();
     for (Json::ArrayIndex index = 0; index < 3; ++index) {
@@ -307,6 +313,7 @@ ylt::expected<void, Error> Persistence::save_settings(const Settings& settings) 
     Json::Value root(Json::objectValue);
     root["game_root"] = path_to_utf8(settings.game_root);
     root["template_path"] = path_to_utf8(settings.template_path);
+    root["auto_detect"] = settings.auto_detect;
     root["language"] = settings.language;
     root["main_window_scale"] = settings.main_window_scale;
     root["main_window_background_color"] = Json::arrayValue;

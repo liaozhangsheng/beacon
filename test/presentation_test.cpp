@@ -570,6 +570,7 @@ TEST_CASE("settings round-trip validates fields and ranges") {
     settings.game_root = root / ".minecraft";
     settings.template_path = "/tmp/template.json";
     settings.language = "en";
+    settings.auto_detect = true;
     settings.overlay_transparent = false;
     settings.main_window_background_color = {0.1F, 0.2F, 0.3F};
     settings.overlay_window_background_color = {0.4F, 0.5F, 0.6F};
@@ -584,6 +585,7 @@ TEST_CASE("settings round-trip validates fields and ranges") {
     REQUIRE(*loaded);
     REQUIRE((**loaded).game_root == settings.game_root);
     REQUIRE((**loaded).language == settings.language);
+    REQUIRE((**loaded).auto_detect == settings.auto_detect);
     REQUIRE((**loaded).overlay_transparent == settings.overlay_transparent);
     REQUIRE((**loaded).main_window_background_color == settings.main_window_background_color);
     REQUIRE((**loaded).overlay_window_background_color == settings.overlay_window_background_color);

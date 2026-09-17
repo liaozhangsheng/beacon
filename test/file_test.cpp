@@ -2,6 +2,7 @@
 
 #include <beacon/app/persistence.hpp>
 #include <beacon/io/file.hpp>
+#include <beacon/minecraft/process.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -84,3 +85,50 @@ TEST_CASE("bounded file reads reject special files and symbolic links") {
     REQUIRE(link_result.error().code == beacon::ErrorCode::Io);
 }
 #endif
+
+TEST_CASE("Minecraft process arguments select only an explicit absolute game directory") {
+    const auto root = std::filesystem::temp_directory_path() / beacon::path_from_utf8("Minecraft 空 格");
+    const auto path = beacon::path_to_utf8(root);
+    REQUIRE(beacon::minecraft_game_directory(
+                std::vector<std::string>{"java", "net.minecraft.client.main.Main", "--gameDir", path}) == root);
+    REQUIRE(beacon::minecraft_game_directory(std::vector<std::string>{
+                "java", "net.fabricmc.loader.impl.launch.knot.KnotClient", "--gameDir=" + path}) == root);
+    REQUIRE_FALSE(beacon::minecraft_game_directory(std::vector<std::string>{"other", "--gameDir", path}));
+    REQUIRE_FALSE(beacon::minecraft_game_directory(
+        std::vector<std::string>{"java", "net.minecraft.client.main.Main", "--gameDir"}));
+    REQUIRE_FALSE(beacon::minecraft_game_directory(
+        std::vector<std::string>{"java", "net.minecraft.client.main.Main", "--gameDir="}));
+    REQUIRE_FALSE(beacon::minecraft_game_directory(
+        std::vector<std::string>{"java", "net.minecraft.client.main.Main", "--gameDir", "relative"}));
+    REQUIRE_FALSE(beacon::minecraft_game_directory(
+        std::vector<std::string>{"java", "net.minecraft.client.main.Main", "--gameDir", std::string("/tmp/a\0b", 8)}));
+}
+
+TEST_CASE("auto detection defaults to enabled when absent from settings files") {
+    const beacon::test::TemporaryDirectory directory;
+    beacon::Persistence persistence(directory.path);
+    beacon::Settings settings;
+    settings.game_root = directory.path;
+    settings.template_path = directory.path / "template.json";
+    REQUIRE(persistence.save_settings(settings));
+    const auto path = directory.path / "config/settings.json";
+    auto json = beacon::read_bounded_file(path, "settings");
+    REQUIRE(json);
+    const auto field = json->find("  \"auto_detect\" : true,\n");
+    REQUIRE(field != std::string::npos);
+    json->erase(field, std::string("  \"auto_detect\" : true,\n").size());
+    {
+        std::ofstream output(path);
+        output << *json;
+    }
+    const auto loaded = persistence.load_settings();
+    REQUIRE(loaded);
+    REQUIRE(*loaded);
+    REQUIRE((**loaded).auto_detect);
+    json->insert(1, "\"auto_detect\":\"yes\",");
+    {
+        std::ofstream output(path);
+        output << *json;
+    }
+    REQUIRE_FALSE(persistence.load_settings());
+}

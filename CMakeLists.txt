@@ -77,11 +77,25 @@ beacon_warnings(beacon_resources)
 
 add_library(beacon_runtime STATIC
     src/minecraft/adapter.cpp
+    src/minecraft/process.cpp
     src/app/persistence.cpp
     src/app/runtime.cpp
 )
 target_include_directories(beacon_runtime PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(beacon_runtime PUBLIC beacon_core PRIVATE beacon_io jsoncpp_static Threads::Threads)
+if(WIN32)
+    target_link_libraries(beacon_runtime PRIVATE shell32 user32)
+elseif(APPLE)
+    enable_language(OBJCXX)
+    target_sources(beacon_runtime PRIVATE src/minecraft/process_macos.mm)
+    target_link_libraries(beacon_runtime PRIVATE "-framework AppKit")
+elseif(UNIX)
+    find_package(X11 QUIET)
+    if(X11_FOUND)
+        target_link_libraries(beacon_runtime PRIVATE X11::X11)
+        target_compile_definitions(beacon_runtime PRIVATE BEACON_HAVE_X11)
+    endif()
+endif()
 beacon_warnings(beacon_runtime)
 
 option(BEACON_BUILD_DESKTOP "Build the SDL desktop application" ON)
