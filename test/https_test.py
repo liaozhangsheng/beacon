@@ -3,6 +3,7 @@ import hashlib
 import http.server
 import os
 from pathlib import Path
+import socket
 import socketserver
 import ssl
 import subprocess
@@ -12,6 +13,20 @@ import threading
 import time
 
 PAYLOAD = b'beacon-update\0' * 20000
+
+
+def make_server(server_type, handler):
+    if not socket.has_dualstack_ipv6():
+        return server_type(('127.0.0.1', 0), handler)
+
+    class DualStackServer(server_type):
+        address_family = socket.AF_INET6
+
+        def server_bind(self):
+            self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+            super().server_bind()
+
+    return DualStackServer(('::', 0), handler)
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -88,7 +103,7 @@ def main():
         context.load_cert_chain(root / 'cert.pem', root / 'key.pem')
         trusted = dict(os.environ, SSL_CERT_FILE=str(root / 'cert.pem'), SSL_CERT_DIR=str(root / 'empty'))
         destination = root / 'cache' / 'artifact.zip'
-        with http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler) as server:
+        with make_server(http.server.ThreadingHTTPServer, Handler) as server:
             server.release = threading.Event()
             server.socket = context.wrap_socket(server.socket, server_side=True)
             worker = threading.Thread(target=server.serve_forever, daemon=True)
@@ -140,7 +155,7 @@ def main():
         def handle(self):
             self.server.release.wait(3)
 
-    with socketserver.ThreadingTCPServer(('127.0.0.1', 0), StallHandshake) as server:
+    with make_server(socketserver.ThreadingTCPServer, StallHandshake) as server:
         server.release = threading.Event()
         worker = threading.Thread(target=server.serve_forever, daemon=True)
         worker.start()
