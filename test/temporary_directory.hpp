@@ -10,7 +10,7 @@ class TemporaryDirectory {
 public:
     TemporaryDirectory() {
         std::random_device random;
-        const auto root = std::filesystem::temp_directory_path();
+        const auto root = std::filesystem::canonical(std::filesystem::temp_directory_path());
         do {
             path = root / ("beacon-test-" + std::to_string(random()));
         } while (!std::filesystem::create_directory(path));

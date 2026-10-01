@@ -37,8 +37,6 @@ struct Settings {
     float overlay_scroll_speed = 60.0F;
 };
 
-std::string make_storage_key();
-
 class Persistence {
 public:
     explicit Persistence(std::filesystem::path root);

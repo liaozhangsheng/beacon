@@ -8,22 +8,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
-#include <fstream>
-#include <iomanip>
-#include <random>
-#include <sstream>
 #include <string_view>
-
-#if defined(_WIN32)
-    #ifndef NOMINMAX
-        #define NOMINMAX
-    #endif
-    #include <windows.h>
-#else
-    #include <fcntl.h>
-    #include <sys/stat.h>
-    #include <unistd.h>
-#endif
 
 namespace beacon {
 namespace {
@@ -34,65 +19,6 @@ Error path_error(ErrorCode code, std::string message, const std::filesystem::pat
     return {.code = code, .message = std::move(message), .context = path_to_utf8(path.filename())};
 }
 
-bool sync_file(const std::filesystem::path& path) {
-#if defined(_WIN32)
-    const auto handle = CreateFileW(path.wstring().c_str(), GENERIC_READ | GENERIC_WRITE,
-                                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
-                                    FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (handle == INVALID_HANDLE_VALUE) {
-        return false;
-    }
-    const auto ok = FlushFileBuffers(handle);
-    CloseHandle(handle);
-    return ok != 0;
-#else
-    const auto descriptor = open(path.c_str(), O_RDONLY);
-    if (descriptor < 0) {
-        return false;
-    }
-    const auto ok = fsync(descriptor) == 0;
-    close(descriptor);
-    return ok;
-#endif
-}
-
-bool sync_directory(const std::filesystem::path& path) {
-#if defined(_WIN32)
-    (void)path;
-    return true;
-#else
-    int flags = O_RDONLY;
-    #if defined(O_DIRECTORY)
-    flags |= O_DIRECTORY;
-    #elif defined(O_NONBLOCK)
-    flags |= O_NONBLOCK;
-    #endif
-    const auto descriptor = open(path.c_str(), flags);
-    if (descriptor < 0) {
-        return false;
-    }
-    struct stat info = {};
-    const auto ok = fstat(descriptor, &info) == 0 && S_ISDIR(info.st_mode) && fsync(descriptor) == 0;
-    close(descriptor);
-    return ok;
-#endif
-}
-
-bool replace_path(const std::filesystem::path& source, const std::filesystem::path& target, std::error_code& error) {
-#if defined(_WIN32)
-    if (!MoveFileExW(source.wstring().c_str(), target.wstring().c_str(),
-                     MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
-        error = std::error_code(static_cast<int>(GetLastError()), std::system_category());
-        return false;
-    }
-    error.clear();
-    return true;
-#else
-    std::filesystem::rename(source, target, error);
-    return !error;
-#endif
-}
-
 ylt::expected<Json::Value, Error> read_json(const std::filesystem::path& path) {
     auto data = read_bounded_file(path, "state file");
     if (!data) {
@@ -101,88 +27,34 @@ ylt::expected<Json::Value, Error> read_json(const std::filesystem::path& path) {
     return parse_json(*data, path_to_utf8(path.filename()), "invalid state JSON");
 }
 
-ylt::expected<void, Error> replace_file_atomically(const std::filesystem::path& target, const std::string& json,
-                                                   JsonValidator valid) {
-    std::error_code ec;
-    std::filesystem::create_directories(target.parent_path(), ec);
-    if (ec) {
-        return ylt::unexpected<Error>{path_error(ErrorCode::Io, "cannot create state directory", target)};
-    }
-    auto temporary = target;
-    temporary += std::filesystem::path(".tmp-" + make_storage_key());
-    {
-        std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
-        output.write(json.data(), static_cast<std::streamsize>(json.size()));
-        output.flush();
-        if (!output) {
-            std::filesystem::remove(temporary, ec);
-            return ylt::unexpected<Error>{path_error(ErrorCode::Io, "cannot write temporary state file", target)};
-        }
-    }
-    if (!sync_file(temporary)) {
-        std::filesystem::remove(temporary, ec);
-        return ylt::unexpected<Error>{path_error(ErrorCode::Io, "cannot flush temporary state file", target)};
-    }
-    const auto verified = read_json(temporary);
-    if (!verified || !valid(*verified)) {
-        std::filesystem::remove(temporary, ec);
-        return ylt::unexpected<Error>{path_error(ErrorCode::Internal, "temporary state verification failed", target)};
-    }
-
-    auto backup = target;
-    backup += std::filesystem::path(".bak");
-    const auto target_exists = std::filesystem::exists(target, ec);
-    if (ec) {
-        std::filesystem::remove(temporary, ec);
-        return ylt::unexpected<Error>{path_error(ErrorCode::Io, "cannot inspect current state file", target)};
-    }
-    if (target_exists) {
-        const auto current = read_json(target);
-        if (current && valid(*current)) {
-            std::filesystem::copy_file(target, backup, std::filesystem::copy_options::overwrite_existing, ec);
-            if (ec) {
-                std::filesystem::remove(temporary, ec);
-                return ylt::unexpected<Error>{path_error(ErrorCode::Io, "cannot preserve state backup", target)};
-            }
-        }
-    }
-
-    auto rollback = target;
-    rollback += std::filesystem::path(".rollback-" + make_storage_key());
-    if (target_exists) {
-        std::filesystem::copy_file(target, rollback, std::filesystem::copy_options::overwrite_existing, ec);
-        if (ec || !sync_file(rollback)) {
-            std::filesystem::remove(temporary, ec);
-            std::filesystem::remove(rollback, ec);
-            return ylt::unexpected<Error>{path_error(ErrorCode::Io, "cannot preserve rollback state", target)};
-        }
-    }
-    if (!replace_path(temporary, target, ec)) {
-        std::filesystem::remove(temporary, ec);
-        std::filesystem::remove(rollback, ec);
-        return ylt::unexpected<Error>{path_error(ErrorCode::Io, "cannot replace state file", target)};
-    }
-    if (!sync_directory(target.parent_path())) {
-        bool restored = false;
-        if (target_exists) {
-            restored = replace_path(rollback, target, ec) && sync_directory(target.parent_path());
-        } else {
-            restored = std::filesystem::remove(target, ec) && !ec && sync_directory(target.parent_path());
-        }
-        if (!restored) {
-            return ylt::unexpected<Error>{
-                path_error(ErrorCode::Internal, "state commit failed with uncertain rollback", target)};
-        }
-        return ylt::unexpected<Error>{path_error(ErrorCode::Io, "state commit was rolled back", target)};
-    }
-    std::filesystem::remove(rollback, ec);
-    return {};
-}
-
 std::string write_json(const Json::Value& value) {
     Json::StreamWriterBuilder builder;
     builder["indentation"] = "  ";
     return Json::writeString(builder, value);
+}
+
+// The previous valid file stays in .bak, which read_validated falls back to
+// when the primary file becomes invalid, for example after a hand edit.
+ylt::expected<void, Error> save_json(const std::filesystem::path& target, const std::string& json,
+                                     JsonValidator valid) {
+    std::error_code error;
+    std::filesystem::create_directories(target.parent_path(), error);
+    if (error) {
+        return ylt::unexpected<Error>{path_error(ErrorCode::Io, "cannot create state directory", target)};
+    }
+    // A recovered backup must remain selected if this directory cannot be
+    // opened for flushing after replacing the missing primary file.
+    if (auto synced = sync_path(target.parent_path(), true); !synced) {
+        return synced;
+    }
+    auto backup = target;
+    backup += std::filesystem::path(".bak");
+    if (const auto current = read_json(target); current && valid(*current)) {
+        if (auto saved = write_file_atomically(backup, write_json(*current)); !saved) {
+            return ylt::unexpected<Error>{path_error(ErrorCode::Io, "cannot preserve state backup", target)};
+        }
+    }
+    return write_file_atomically(target, json);
 }
 
 bool short_string(const Json::Value& value) {
@@ -249,20 +121,6 @@ read_validated(const std::filesystem::path& path, JsonValidator valid,
 }
 
 }  // namespace
-
-std::string make_storage_key() {
-    std::array<std::uint32_t, 4> words{};
-    std::random_device random;
-    for (auto& word : words) {
-        word = random();
-    }
-    std::ostringstream output;
-    output << std::hex << std::setfill('0');
-    for (const auto word : words) {
-        output << std::setw(8) << word;
-    }
-    return output.str();
-}
 
 Persistence::Persistence(std::filesystem::path root) : root_(std::move(root)) {}
 
@@ -333,7 +191,7 @@ ylt::expected<void, Error> Persistence::save_settings(const Settings& settings) 
         return ylt::unexpected<Error>{
             {.code = ErrorCode::Validation, .message = "invalid settings", .context = "settings"}};
     }
-    return replace_file_atomically(path, write_json(root), valid_settings_json);
+    return save_json(path, write_json(root), valid_settings_json);
 }
 
 }  // namespace beacon

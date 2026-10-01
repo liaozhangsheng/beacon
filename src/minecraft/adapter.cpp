@@ -215,7 +215,7 @@ ylt::expected<std::vector<SourceCandidate>, Error> scan_world_layout(const World
         if (file_path.extension() != ".json") {
             continue;
         }
-        const auto uuid = file_path.stem().string();
+        const auto uuid = path_to_utf8(file_path.stem());
         if (!valid_player_id(uuid)) {
             continue;
         }
