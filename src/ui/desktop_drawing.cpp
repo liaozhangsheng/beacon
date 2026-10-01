@@ -24,8 +24,8 @@ constexpr float header_igt_scale = 1.5F;
 // §7 gray for separators and secondary details.
 constexpr ImVec4 secondary_text_color{170.0F / 255.0F, 170.0F / 255.0F, 170.0F / 255.0F, 1.0F};
 
-std::string update_button_label(const UpdateNotice& notice) {
-    return "更新到 " + notice.version;
+std::string update_button_label(const UpdateNotice& notice, std::string_view language) {
+    return std::string(interface_text(language, "更新到 ", "Update to ")) + notice.version;
 }
 
 std::string format_igt(const std::int64_t play_ticks) {
@@ -126,7 +126,7 @@ void WindowRenderer::Impl::render_progress_view(const std::shared_ptr<const Publ
         const auto available = ImGui::GetContentRegionAvail();
         if (!overlay_) {
             if (footer_message_.empty())
-                footer_message_ = "未找到 Minecraft 存档";
+                footer_message_ = text("未找到 Minecraft 存档", "No Minecraft save found");
             draw_main_footer(nullptr, nullptr, origin, available);
         } else if (!footer_message_.empty()) {
             draw_status_footer(origin, available, origin.y + available.y - status_footer_height());
@@ -138,14 +138,15 @@ void WindowRenderer::Impl::render_progress_view(const std::shared_ptr<const Publ
         footer_color_ = error_text_color;
     }
     if (footer_message_.empty() && state->data_status == DataStatus::Stale) {
-        footer_message_ = "进度已过期，正在显示上次成功读取的数据";
+        footer_message_ =
+            text("进度已过期，正在显示上次成功读取的数据", "Progress is stale; showing the last successful read");
     } else if (footer_message_.empty() && !state->has_data() && !overlay_) {
-        footer_message_ = "未找到 Minecraft 存档";
+        footer_message_ = text("未找到 Minecraft 存档", "No Minecraft save found");
     }
     if (footer_message_.empty() && !state->warnings.empty()) {
         const auto& warning = state->warnings.front();
-        footer_message_ = "存档扫描警告 (" + std::to_string(state->warnings.size()) + "): " + warning.message + ": " +
-                          warning.context;
+        footer_message_ = std::string(text("存档扫描警告 (", "Save scan warnings (")) +
+                          std::to_string(state->warnings.size()) + "): " + warning.message + ": " + warning.context;
     }
     update_progress_glows(*state);
     if (overlay_) {
@@ -165,10 +166,11 @@ void WindowRenderer::Impl::restart_run() {
     if (manual_runtime_ == nullptr)
         return;
     if (const auto restarted = manual_runtime_->restart_run(); restarted) {
-        feedback_message_ = "已重开本轮：手动标记已清除，正在重新读取存档";
+        feedback_message_ =
+            text("已重开本轮：手动标记已清除，正在重新读取存档", "Run restarted: marks cleared; reloading save");
         feedback_color_ = success_text_color;
     } else {
-        feedback_message_ = "重开本轮失败：" + restarted.error().message;
+        feedback_message_ = std::string(text("重开本轮失败：", "Restart failed: ")) + restarted.error().message;
         feedback_color_ = error_text_color;
     }
     feedback_until_ = SDL_GetTicks() + 2500;
@@ -184,19 +186,21 @@ float WindowRenderer::Impl::status_footer_height() const {
 float WindowRenderer::Impl::draw_main_controls(const ImVec2 origin, const float center_y) {
     const float button_height = ImGui::GetFrameHeight() + from_icon(8.0F);
     ImGui::SetCursorScreenPos({origin.x + from_icon(8.0F), center_y - (button_height * 0.5F)});
-    if (minecraft_button(*assets_, "##settings", "设置", {from_icon(96.0F), button_height})) {
+    if (minecraft_button(*assets_, "##settings", text("设置", "Settings"), {from_icon(96.0F), button_height})) {
         settings_panel_.open();
     }
     if (update_notice_ != nullptr && !update_notice_->version.empty()) {
         ImGui::SameLine();
         ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(update_text_color));
-        if (minecraft_button(*assets_, "##apply-update", update_button_label(*update_notice_).c_str(),
+        if (minecraft_button(*assets_, "##apply-update", update_button_label(*update_notice_, ui_language_).c_str(),
                              {update_button_width(), button_height}))
             update_notice_->apply_requested = true;
         ImGui::PopStyleColor();
         if (ImGui::IsItemHovered()) {
             // Launch failures are reported in the status line, so the tooltip only explains the action.
-            const auto tooltip = "发现新版本 " + update_notice_->version + "\n点击后将关闭 Beacon 并安装更新";
+            const auto tooltip =
+                std::string(text("发现新版本 ", "New version available: ")) + update_notice_->version +
+                text("\n点击后将关闭 Beacon 并安装更新", "\nClick to close Beacon and install the update");
             minecraft_tooltip(tooltip.c_str());
         }
     }
@@ -267,7 +271,8 @@ float WindowRenderer::Impl::update_button_width() const {
     if (overlay_ || update_notice_ == nullptr || update_notice_->version.empty())
         return 0.0F;
     return std::max(from_icon(96.0F),
-                    ImGui::CalcTextSize(update_button_label(*update_notice_).c_str()).x + from_icon(24.0F));
+                    ImGui::CalcTextSize(update_button_label(*update_notice_, ui_language_).c_str()).x +
+                        from_icon(24.0F));
 }
 
 void WindowRenderer::Impl::set_completion_view(const bool complete) {
@@ -381,7 +386,8 @@ WindowRenderer::Impl::HeaderText WindowRenderer::Impl::make_header(const Publish
         const auto now =
             std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch())
                 .count();
-        header.refreshed = "读取于 " + format_elapsed(now - state.last_successful_read_at) + " 前";
+        header.refreshed = std::string(text("读取于 ", "Read ")) + format_elapsed(now - state.last_successful_read_at) +
+                           text(" 前", " ago");
     }
     header.stats = summarize_progress(state, view_.goal_nodes);
     header.progress = std::to_string(header.stats.completed) + " / " + std::to_string(header.stats.total);

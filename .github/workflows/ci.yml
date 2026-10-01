@@ -51,7 +51,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes \
-            catch2 clang-format libarchive-dev libssl-dev ninja-build pkg-config \
+            catch2 clang-format libarchive-dev libfreetype-dev libssl-dev ninja-build pkg-config \
             libasound2-dev libpulse-dev libfribidi-dev libjack-dev libsndio-dev \
             libaudio-dev \
             libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
@@ -85,7 +85,7 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          brew install catch2 libarchive llvm@18 openssl@3 sdl3
+          brew install catch2 freetype libarchive llvm@18 openssl@3 sdl3
           brew_prefix="$(brew --prefix)"
           llvm_root="$(brew --prefix llvm@18)"
           openssl_root="$(brew --prefix openssl@3)"

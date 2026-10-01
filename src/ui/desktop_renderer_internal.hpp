@@ -6,6 +6,7 @@
 #include "window_context.hpp"
 
 #include <beacon/ui/carousel.hpp>
+#include <beacon/ui/language.hpp>
 #include <beacon/ui/layout_metrics.hpp>
 #include <beacon/ui/profile.hpp>
 #include <beacon/ui/progress.hpp>
@@ -173,6 +174,11 @@ private:
         return ui::icon_size(scale_);
     }
 
+    const char* text(const char* chinese, const char* english) const {
+        return interface_text(ui_language_, chinese, english);
+    }
+
+    std::string ui_language_ = "zh";
     IconFiles icon_files_;
     std::string title_;
     std::filesystem::path asset_root_;

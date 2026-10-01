@@ -5,6 +5,8 @@
 
 #include <SDL3_image/SDL_image.h>
 #include <imgui.h>
+#include <imgui_internal.h>
+#include <imgui_freetype.h>
 
 #include <algorithm>
 #include <cmath>
@@ -239,10 +241,13 @@ void WindowRenderer::Impl::load_cjk_font() {
             found = files.emplace(path, FontFile{std::move(data), static_cast<int>(size)}).first;
         }
         config.FontDataOwnedByAtlas = false;
-        return ImGui::GetIO().Fonts->AddFontFromMemoryTTF(found->second.first.get(), found->second.second, font_size,
-                                                          &config, ranges);
+        return ImGui::GetIO().Fonts->AddFontFromMemoryTTF(found->second.first.get(), found->second.second,
+                                                          config.SizePixels, &config, ranges);
     };
+    // FreeType needs atlas-level initialization even when used by only one source.
+    ImGui::GetIO().Fonts->SetFontLoader(ImGuiFreeType::GetFontLoader());
     ImFontConfig base_config;
+    base_config.FontLoader = ImFontAtlasGetFontLoaderForStbTruetype();
     base_config.SizePixels = font_size;
     base_config.RasterizerMultiply = 2.0F;
     const auto bundled_font = asset_root_ / "assets/fonts/Minecraft.otf";
@@ -253,6 +258,10 @@ void WindowRenderer::Impl::load_cjk_font() {
     config.MergeMode = true;
     config.SizePixels = font_size;
     config.RasterizerMultiply = base_config.RasterizerMultiply;
+    // Keep Minecraft Latin unchanged; embolden only the Chinese fallback with crisp pixel edges.
+    config.FontLoader = ImGuiFreeType::GetFontLoader();
+    config.FontLoaderFlags =
+        ImGuiFreeTypeLoaderFlags_Bold | ImGuiFreeTypeLoaderFlags_Monochrome | ImGuiFreeTypeLoaderFlags_MonoHinting;
     const auto unifont = asset_root_ / "assets/fonts/Unifont.ttf";
     if (std::filesystem::exists(unifont)) {
         add_font(unifont, config, ImGui::GetIO().Fonts->GetGlyphRangesChineseSimplifiedCommon());

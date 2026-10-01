@@ -232,7 +232,9 @@ public:
             if (runtime_ == nullptr || persistence_ == nullptr) {
                 applied = ylt::unexpected<Error>{
                     {.code = ErrorCode::Internal, .message = "runtime is unavailable", .context = "settings"}};
-            } else {
+            } else if (current_settings_.game_root != applied_settings_.game_root ||
+                       current_settings_.template_path != applied_settings_.template_path ||
+                       current_settings_.language != applied_settings_.language) {
                 const bool language_only = current_settings_.template_path == applied_settings_.template_path &&
                                            current_settings_.language != applied_settings_.language;
                 auto resources = candidate_loader.load(current_settings_.template_path, asset_root_,

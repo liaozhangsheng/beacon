@@ -54,12 +54,12 @@ The **自动探测 (Auto detect)** setting is on by default. When enabled, focus
 
 | Action | Shortcut |
 | --- | --- |
-| Restart the run (clear manual marks and re-read the save; the save itself is not modified) | `Ctrl+R` (on macOS, `Ctrl+R` or `Cmd+R`) |
-| Mark a goal done / undo a manual mark | `Ctrl`+left / right click its icon (`Cmd` on macOS) |
+| Restart the run (clear manual marks and re-read the save; the save itself is not modified) | Windows/Linux: `Ctrl+R`; macOS: `Cmd+R` |
+| Mark a goal done / undo a manual mark | Hold `Ctrl` on Windows/Linux or `Cmd` on macOS, then left / right click its icon |
 | Move or resize the overlay | Drag the overlay / drag its edges |
 | Close settings | `Esc` |
 
-The same tips are listed at the bottom of the settings window.
+The restart and manual-mark shortcuts are also listed at the bottom of the settings window.
 
 ### Data and recovery behavior
 
@@ -82,7 +82,7 @@ Update-ready full packages check for signed updates in the background once at st
 - OpenSSL and Catch2 from the platform's native package manager; SDL3 from the
   native package manager or an upstream CMake build
 
-The desktop application uses SDL3 and OpenSSL; the core libraries can be built without them. The Windows CI job uses the manifest in [`vcpkg.json`](vcpkg.json); Linux and macOS use native dependencies instead. On Ubuntu 24.04, the CI job builds SDL3 3.2.6 with SDL's upstream CMake project because that image does not provide an SDL3 development package.
+The desktop application uses SDL3, FreeType (macOS: `brew install freetype`; Ubuntu: `libfreetype-dev`), and OpenSSL; the core libraries can be built without them. The Windows CI job uses the manifest in [`vcpkg.json`](vcpkg.json); Linux and macOS use native dependencies instead. On Ubuntu 24.04, the CI job builds SDL3 3.2.6 with SDL's upstream CMake project because that image does not provide an SDL3 development package.
 
 ### Build from source
 
@@ -196,3 +196,5 @@ Minecraft is a trademark of Microsoft Corporation. Beacon is an independent, uno
 ## License
 
 Beacon is released under the [MIT License](LICENSE). Third-party components and resources retain their own licenses and notices, including [GNU Unifont's SIL Open Font License](assets/fonts/Unifont-LICENSE.txt).
+
+This software is based in part on the work of the [FreeType Project](https://freetype.org), used under the [FreeType License](licenses/FreeType-LICENSE.txt).

@@ -75,6 +75,11 @@ void WindowRenderer::Impl::render(const std::shared_ptr<const PublishedState>& s
                                   Runtime* runtime, UpdateNotice* update_notice) {
     context_.make_current();
     if (settings != nullptr) {
+        if (ui_language_ != settings->ui_language) {
+            ui_language_ = settings->ui_language;
+            feedback_message_.clear();
+            feedback_until_ = 0;
+        }
         const auto requested_scale = overlay_ ? settings->overlay_window_scale : settings->main_window_scale;
         set_scale(std::clamp(requested_scale, min_window_scale, max_window_scale));
     }
@@ -86,12 +91,8 @@ void WindowRenderer::Impl::render(const std::shared_ptr<const PublishedState>& s
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
     if (!overlay_ && manual_runtime_ != nullptr && !ImGui::GetIO().WantTextInput) {
-        bool restart = ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_R);
-#if defined(__APPLE__)
-        // ImGui maps Cmd to Ctrl on macOS; also accept the physical Ctrl key.
-        restart = restart || ImGui::IsKeyChordPressed(ImGuiMod_Super | ImGuiKey_R);
-#endif
-        if (restart)
+        // ImGui maps physical Cmd to Ctrl on macOS.
+        if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_R))
             restart_run();
     }
 

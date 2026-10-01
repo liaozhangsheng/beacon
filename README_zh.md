@@ -50,12 +50,12 @@ Beacon 是一个面向 Minecraft 速通的进度追踪器。它读取本地存�
 
 | 操作 | 方式 |
 | --- | --- |
-| 重开本轮（清除手动标记并重新读取存档，不修改存档） | `Ctrl+R`（macOS 上 `Ctrl+R` 或 `Cmd+R`） |
-| 手动标记完成 / 撤销手动标记 | 按住 `Ctrl` 左键 / 右键点击图标（macOS 为 `Cmd`） |
+| 重开本轮（清除手动标记并重新读取存档，不修改存档） | Windows/Linux：`Ctrl+R`；macOS：`Cmd+R` |
+| 手动标记完成 / 撤销手动标记 | Windows/Linux 按住 `Ctrl`，macOS 按住 `Cmd`，左键 / 右键点击图标 |
 | 移动或缩放 Overlay | 拖动 Overlay / 拖动其边缘 |
 | 关闭设置窗口 | `Esc` |
 
-设置窗口底部也列出了这些提示。
+设置窗口底部也列出了重开本轮和手动标记的快捷键提示。
 
 ### 数据与异常恢复
 
@@ -78,7 +78,7 @@ Beacon 只读取选中的 Minecraft 存档。设置保存在安装目录（`beac
 - 由平台原生包管理器提供的 OpenSSL 和 Catch2；SDL3 可以由原生包管理器提供，
   也可以通过上游 CMake 构建
 
-桌面程序使用 SDL3 和 OpenSSL；核心库可以在不启用桌面程序的情况下构建。Windows CI 使用 [`vcpkg.json`](vcpkg.json) 中的 manifest，Linux 和 macOS 则使用原生依赖。Ubuntu 24.04 镜像没有 SDL3 开发包，因此 CI 会使用 SDL 官方 CMake 项目构建 SDL3 3.2.6。
+桌面程序使用 SDL3、FreeType（macOS：`brew install freetype`；Ubuntu：`libfreetype-dev`）和 OpenSSL；核心库可以在不启用桌面程序的情况下构建。Windows CI 使用 [`vcpkg.json`](vcpkg.json) 中的 manifest，Linux 和 macOS 则使用原生依赖。Ubuntu 24.04 镜像没有 SDL3 开发包，因此 CI 会使用 SDL 官方 CMake 项目构建 SDL3 3.2.6。
 
 ### 从源码构建
 
@@ -192,3 +192,5 @@ Minecraft 是 Microsoft Corporation 的商标。Beacon 是独立的非官方项�
 ## 许可证
 
 Beacon 使用 [MIT License](LICENSE) 发布。第三方组件和资源仍适用其各自的许可证与声明，包括 [GNU Unifont 的 SIL Open Font License](assets/fonts/Unifont-LICENSE.txt)。
+
+本软件部分基于 [FreeType 项目](https://freetype.org)的工作，并按照 [FreeType License](licenses/FreeType-LICENSE.txt) 使用。

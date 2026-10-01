@@ -90,6 +90,7 @@ void SettingsPanel::render(const ImGuiViewport* viewport, Settings& settings, st
     if (!open_) {
         return;
     }
+    ui_language_ = settings.ui_language;
     ImGui::PushFont(nullptr, ui::settings_font_size);
     constexpr ImVec2 settings_size{book_texels.x * minimum_book_scale, book_texels.y * minimum_book_scale};
     const ImVec2 initial_padding{settings_size.x * (16.0F / 146.0F), settings_size.y * (12.0F / 180.0F)};
@@ -107,6 +108,8 @@ void SettingsPanel::render(const ImGuiViewport* viewport, Settings& settings, st
     }
     // Combos and color fields mimic the vanilla text field: black body, #A0A0A0 frame.
     constexpr ImVec4 field_border{160.0F / 255.0F, 160.0F / 255.0F, 160.0F / 255.0F, 1.0F};
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {ImGui::GetStyle().ItemSpacing.x, 2.0F});
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, {ImGui::GetStyle().CellPadding.x, 1.0F});
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0F);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, initial_padding);
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0F);
@@ -134,10 +137,10 @@ void SettingsPanel::render(const ImGuiViewport* viewport, Settings& settings, st
     ImGui::PushStyleColor(ImGuiCol_SeparatorActive, {0.0F, 0.0F, 0.0F, 0.0F});
     const auto restore_style = [] {
         ImGui::PopStyleColor(19);
-        ImGui::PopStyleVar(6);
+        ImGui::PopStyleVar(8);
         ImGui::PopFont();
     };
-    const bool window_visible = ImGui::Begin("设置##beacon", &open_,
+    const bool window_visible = ImGui::Begin("###beacon-settings", &open_,
                                              ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
                                                  ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings);
     if (!window_visible) {
@@ -163,50 +166,91 @@ void SettingsPanel::render(const ImGuiViewport* viewport, Settings& settings, st
         drag_grab_.reset();
     }
     ImGui::SetCursorPos(padding);
-    ImGui::TextUnformatted("Beacon 设置");
-    ImGui::SetCursorPos({padding.x, padding.y + 44.0F});
+    ImGui::TextUnformatted(text("Beacon 设置", "Beacon Settings"));
+    const float title_height = ImGui::GetTextLineHeight() + 8.0F;
+    ImGui::SetCursorPos({padding.x, padding.y + title_height});
+    // Keep the title and actions visible when translated text needs more room.
+    const float actions_height = ImGui::GetFrameHeight() + 8.0F;
+    ImGui::BeginChild("##settings-content",
+                      {content_size.x, window_size.y - (padding.y * 2.0F) - title_height - actions_height -
+                                           (ImGui::GetStyle().ItemSpacing.y * 2.0F) - 1.0F});
+    const ImVec2 form_size{ImGui::GetContentRegionAvail().x, 0.0F};
     const char* const setting_labels[] = {
-        "模板：",
-        "语言：",
-        "自动识别游戏目录：",
-        "游戏目录：",
-        "主窗口 缩放（倍率）：",
-        "主窗口 背景色：",
-        "Overlay 显示：",
-        "Overlay 透明背景：",
-        "Overlay 滚动方向：",
-        "Overlay 缩放（倍率）：",
-        "Overlay 背景色：",
-        "Overlay 滚动速度：",
+        text("界面语言：", "Interface language:"),
+        text("模板：", "Template:"),
+        text("模板语言：", "Template language:"),
+        text("自动识别游戏目录：", "Auto-detect game:"),
+        text("游戏目录：", "Game directory:"),
+        text("主窗口 缩放（倍率）：", "Main scale:"),
+        text("主窗口 背景色：", "Main background:"),
+        text("Overlay 显示：", "Show overlay:"),
+        text("Overlay 透明背景：", "Transparent overlay:"),
+        text("Overlay 滚动方向：", "Scroll direction:"),
+        text("Overlay 缩放（倍率）：", "Overlay scale:"),
+        text("Overlay 背景色：", "Overlay background:"),
+        text("Overlay 滚动速度：", "Scroll speed:"),
     };
     float label_width = 0.0F;
     for (const auto* label : setting_labels)
         label_width = std::max(label_width, ImGui::CalcTextSize(label).x);
-    ImGui::TextUnformatted("数据来源");
-    ImGui::SetCursorPosX(padding.x);
-    bool changed = render_source(settings, templates, content_size, label_width, apply, assets);
-    ImGui::SetCursorPosX(padding.x);
+    ImGui::TextUnformatted(text("界面", "Interface"));
+    ImGui::SetCursorPosX(0.0F);
+    bool changed = render_interface(settings, form_size, label_width, apply);
+    ImGui::SetCursorPosX(0.0F);
     ImGui::Separator();
-    ImGui::SetCursorPosX(padding.x);
-    ImGui::TextUnformatted("外观");
-    ImGui::SetCursorPosX(padding.x);
-    changed = render_appearance(settings, content_size, label_width, assets) || changed;
+    ImGui::SetCursorPosX(0.0F);
+    ImGui::TextUnformatted(text("数据来源", "Data source"));
+    ImGui::SetCursorPosX(0.0F);
+    changed = render_source(settings, templates, form_size, label_width, apply, assets) || changed;
+    ImGui::SetCursorPosX(0.0F);
+    ImGui::Separator();
+    ImGui::SetCursorPosX(0.0F);
+    ImGui::TextUnformatted(text("外观", "Appearance"));
+    ImGui::SetCursorPosX(0.0F);
+    changed = render_appearance(settings, form_size, label_width, assets) || changed;
     if (changed && error != nullptr) {
         error->reset();
     }
     if (error != nullptr && *error) {
-        ImGui::SetCursorPosX(padding.x);
-        ImGui::Text("无法保存：%s", (*error)->message.c_str());
+        ImGui::SetCursorPosX(0.0F);
+        ImGui::Text(text("无法保存：%s", "Cannot save: %s"), (*error)->message.c_str());
     }
-    ImGui::SetCursorPosX(padding.x);
+    ImGui::SetCursorPosX(0.0F);
     ImGui::Separator();
-    ImGui::SetCursorPosX(padding.x);
-    ImGui::TextUnformatted("操作提示");
-    ImGui::SetCursorPosX(padding.x);
-    render_tips(content_size);
+    ImGui::SetCursorPosX(0.0F);
+    ImGui::TextUnformatted(text("操作提示", "Controls"));
+    ImGui::SetCursorPosX(0.0F);
+    render_tips(form_size);
+    ImGui::EndChild();
     render_actions(padding, apply, assets);
     ImGui::End();
     restore_style();
+}
+
+bool SettingsPanel::render_interface(Settings& settings, const ImVec2 content_size, const float label_width,
+                                     bool* apply) {
+    if (!ImGui::BeginTable("##interface-settings", 2, ImGuiTableFlags_SizingStretchProp, content_size))
+        return false;
+    ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, label_width);
+    ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch);
+    bool changed = false;
+    form_row(text("界面语言：", "Interface language:"));
+    push_combo_style();
+    if (ImGui::BeginCombo("##ui-language", settings.ui_language == "en" ? "English" : "中文")) {
+        for (const auto& [code, label] : {std::pair{"zh", "中文"}, std::pair{"en", "English"}}) {
+            if (ImGui::Selectable(label, settings.ui_language == code) && settings.ui_language != code) {
+                settings.ui_language = code;
+                ui_language_ = code;
+                changed = true;
+                if (apply != nullptr)
+                    *apply = true;
+            }
+        }
+        ImGui::EndCombo();
+    }
+    pop_combo_style();
+    ImGui::EndTable();
+    return changed;
 }
 
 bool SettingsPanel::render_source(Settings& settings, const std::vector<std::filesystem::path>* templates,
@@ -231,7 +275,7 @@ bool SettingsPanel::render_source(Settings& settings, const std::vector<std::fil
             *apply = true;
     };
     refresh_languages(settings.template_path);
-    form_row("模板：");
+    form_row(text("模板：", "Template:"));
     if (templates != nullptr && !templates->empty()) {
         int selected = 0;
         for (int index = 0; index < static_cast<int>(templates->size()); ++index) {
@@ -258,9 +302,9 @@ bool SettingsPanel::render_source(Settings& settings, const std::vector<std::fil
         }
         pop_combo_style();
     } else {
-        ImGui::TextUnformatted("没有可用模板");
+        ImGui::TextUnformatted(text("没有可用模板", "No templates available"));
     }
-    form_row("语言：");
+    form_row(text("模板语言：", "Template language:"));
     int selected_language = 0;
     for (int index = 0; index < static_cast<int>(languages_.size()); ++index) {
         if (languages_[index] == settings.language) {
@@ -269,10 +313,10 @@ bool SettingsPanel::render_source(Settings& settings, const std::vector<std::fil
         }
     }
     push_combo_style();
-    const auto selected_language_name =
-        selected_language == 0 ? std::string_view{"默认"} : std::string_view{languages_[selected_language - 1]};
+    const auto selected_language_name = selected_language == 0 ? std::string_view{text("默认", "Default")}
+                                                               : std::string_view{languages_[selected_language - 1]};
     if (ImGui::BeginCombo("##language", selected_language_name.data())) {
-        if (ImGui::Selectable("默认", selected_language == 0)) {
+        if (ImGui::Selectable(text("默认", "Default"), selected_language == 0)) {
             settings.language.clear();
             apply_now();
         }
@@ -286,10 +330,11 @@ bool SettingsPanel::render_source(Settings& settings, const std::vector<std::fil
         ImGui::EndCombo();
     }
     pop_combo_style();
-    form_row("自动识别游戏目录：");
-    if (minecraft_checkbox(assets, "##auto-detect", "开启", &settings.auto_detect, false, book_text_color))
+    form_row(text("自动识别游戏目录：", "Auto-detect game:"));
+    if (minecraft_checkbox(assets, "##auto-detect", text("开启", "Enabled"), &settings.auto_detect, false,
+                           book_text_color))
         apply_now();
-    form_row("游戏目录：");
+    form_row(text("游戏目录：", "Game directory:"));
     ImGui::BeginDisabled(settings.auto_detect);
     const bool game_root_changed =
         textured_input(assets.widget("text_field.png"), assets.widget("text_field_highlighted.png"), "##game-root",
@@ -317,36 +362,37 @@ bool SettingsPanel::render_appearance(Settings& settings, const ImVec2 content_s
         return textured_slider(assets.widget("slider.png"), assets.widget("slider_handle.png"),
                                assets.widget("slider_handle_highlighted.png"), id, value, min_value, max_value);
     };
-    form_row("主窗口 缩放（倍率）：");
+    form_row(text("主窗口 缩放（倍率）：", "Main scale:"));
     changed = slider("##main-window-scale", &settings.main_window_scale, min_window_scale, max_window_scale) || changed;
-    form_row("主窗口 背景色：");
+    form_row(text("主窗口 背景色：", "Main background:"));
     ImGui::PushStyleColor(ImGuiCol_Text, {1.0F, 1.0F, 1.0F, 1.0F});
     changed = ImGui::ColorEdit3("##main-background", settings.main_window_background_color.data()) || changed;
     ImGui::PopStyleColor();
-    form_row("Overlay 显示：");
-    changed = checkbox("##overlay-visible", "开启", &settings.overlay_visible, false) || changed;
-    form_row("Overlay 透明背景：");
-    changed = checkbox("##overlay-transparent", "开启", &settings.overlay_transparent, false) || changed;
-    form_row("Overlay 滚动方向：");
+    form_row(text("Overlay 显示：", "Show overlay:"));
+    changed = checkbox("##overlay-visible", text("开启", "Enabled"), &settings.overlay_visible, false) || changed;
+    form_row(text("Overlay 透明背景：", "Transparent overlay:"));
+    changed =
+        checkbox("##overlay-transparent", text("开启", "Enabled"), &settings.overlay_transparent, false) || changed;
+    form_row(text("Overlay 滚动方向：", "Scroll direction:"));
     bool scroll_left = !settings.overlay_scroll_right;
-    if (checkbox("##overlay-scroll-left", "向左", &scroll_left, true)) {
+    if (checkbox("##overlay-scroll-left", text("向左", "Left"), &scroll_left, true)) {
         settings.overlay_scroll_right = false;
         changed = true;
     }
     ImGui::SameLine();
     bool scroll_right = settings.overlay_scroll_right;
-    if (checkbox("##overlay-scroll-right", "向右", &scroll_right, true)) {
+    if (checkbox("##overlay-scroll-right", text("向右", "Right"), &scroll_right, true)) {
         settings.overlay_scroll_right = true;
         changed = true;
     }
-    form_row("Overlay 缩放（倍率）：");
+    form_row(text("Overlay 缩放（倍率）：", "Overlay scale:"));
     changed =
         slider("##overlay-window-scale", &settings.overlay_window_scale, min_window_scale, max_window_scale) || changed;
-    form_row("Overlay 背景色：");
+    form_row(text("Overlay 背景色：", "Overlay background:"));
     ImGui::PushStyleColor(ImGuiCol_Text, {1.0F, 1.0F, 1.0F, 1.0F});
     changed = ImGui::ColorEdit3("##overlay-background", settings.overlay_window_background_color.data()) || changed;
     ImGui::PopStyleColor();
-    form_row("Overlay 滚动速度：");
+    form_row(text("Overlay 滚动速度：", "Scroll speed:"));
     changed = slider("##overlay-scroll-speed", &settings.overlay_scroll_speed, 0.0F, 300.0F) || changed;
     ImGui::EndTable();
     return changed;
@@ -354,18 +400,15 @@ bool SettingsPanel::render_appearance(Settings& settings, const ImVec2 content_s
 
 void SettingsPanel::render_tips(const ImVec2 content_size) {
 #if defined(__APPLE__)
-    // ImGui reads Cmd as Ctrl on macOS, so clicks use Cmd; Ctrl+R and Cmd+R both restart.
-    constexpr const char* click_key = "Cmd+点击图标";
-    constexpr const char* restart_key = "Ctrl/Cmd+R";
+    const char* click_key = text("Cmd+点击图标", "Cmd+click");
+    constexpr const char* restart_key = "Cmd+R";
 #else
-    constexpr const char* click_key = "Ctrl+点击图标";
+    const char* click_key = text("Ctrl+点击图标", "Ctrl+click");
     constexpr const char* restart_key = "Ctrl+R";
 #endif
     const std::pair<const char*, const char*> tips[] = {
-        {restart_key, "重开本轮：清除手动标记并重读存档"},
-        {click_key, "左键手动完成，右键撤销"},
-        {"拖动 Overlay", "移动位置；拖动边缘调整大小"},
-        {"Esc", "关闭设置"},
+        {restart_key, text("清除手动标记并重读存档", "Clear marks and reload save")},
+        {click_key, text("左键手动完成，右键撤销", "Left: done; right: undo")},
     };
     // Tips are reference text, so pack the rows tighter than the form above.
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, {ImGui::GetStyle().CellPadding.x * 3.0F, 1.0F});
@@ -380,7 +423,9 @@ void SettingsPanel::render_tips(const ImVec2 content_size) {
         ImGui::TableSetColumnIndex(0);
         ImGui::TextUnformatted(key);
         ImGui::TableSetColumnIndex(1);
-        ImGui::TextDisabled("%s", action);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        ImGui::TextWrapped("%s", action);
+        ImGui::PopStyleColor();
     }
     ImGui::EndTable();
     ImGui::PopStyleVar();
@@ -395,11 +440,11 @@ void SettingsPanel::render_actions(const ImVec2 padding, bool* apply, UiAssets& 
     ImGui::SetCursorPosY(std::max(ImGui::GetCursorPosY(), ImGui::GetWindowHeight() - padding.y - action_height));
     ImGui::SetCursorPosX((ImGui::GetWindowWidth() - actions_width) * 0.5F);
     ImGui::PushStyleColor(ImGuiCol_Text, {1.0F, 1.0F, 1.0F, 1.0F});
-    if (minecraft_button(assets, "##close", "关闭", {action_width, action_height})) {
+    if (minecraft_button(assets, "##close", text("关闭", "Close"), {action_width, action_height})) {
         close();
     }
     ImGui::SameLine();
-    if (minecraft_button(assets, "##save", "保存", {action_width, action_height}) && apply != nullptr) {
+    if (minecraft_button(assets, "##save", text("保存", "Save"), {action_width, action_height}) && apply != nullptr) {
         *apply = true;
     }
     ImGui::PopStyleColor();

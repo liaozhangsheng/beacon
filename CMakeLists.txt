@@ -118,6 +118,7 @@ endif()
 
 if(BEACON_BUILD_DESKTOP)
     find_package(SDL3 3.2 REQUIRED CONFIG)
+    find_package(Freetype REQUIRED)
 
     set(SDLIMAGE_INSTALL OFF CACHE BOOL "" FORCE)
     set(SDLIMAGE_SAMPLES OFF CACHE BOOL "" FORCE)
@@ -134,11 +135,13 @@ if(BEACON_BUILD_DESKTOP)
         3rdparty/imgui/imgui_draw.cpp
         3rdparty/imgui/imgui_tables.cpp
         3rdparty/imgui/imgui_widgets.cpp
+        3rdparty/imgui/misc/freetype/imgui_freetype.cpp
         3rdparty/imgui/backends/imgui_impl_sdl3.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/thirdparty/imgui_impl_sdlrenderer3.cpp
     )
-    target_include_directories(beacon_imgui PUBLIC 3rdparty/imgui 3rdparty/imgui/backends)
-    target_link_libraries(beacon_imgui PUBLIC SDL3::SDL3)
+    target_include_directories(beacon_imgui PUBLIC 3rdparty/imgui 3rdparty/imgui/backends
+        3rdparty/imgui/misc/freetype)
+    target_link_libraries(beacon_imgui PUBLIC SDL3::SDL3 Freetype::Freetype)
     beacon_warnings(beacon_imgui)
 
     add_library(beacon_profile STATIC src/ui/profile.cpp)
@@ -225,18 +228,19 @@ if(BEACON_BUILD_DESKTOP)
             INPUT "${CMAKE_CURRENT_BINARY_DIR}/bundle_runtime.cmake.gen")
         install(SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/bundle_runtime-$<CONFIG>.cmake")
     elseif(WIN32)
-        file(GLOB BEACON_OPENSSL_RUNTIME_DLLS
+        file(GLOB BEACON_EXTRA_RUNTIME_DLLS
             "${OPENSSL_ROOT_DIR}/bin/*ssl*.dll"
             "${OPENSSL_ROOT_DIR}/bin/*crypto*.dll"
             "${VCPKG_INSTALLED_DIR}/*/bin/*ssl*.dll"
             "${VCPKG_INSTALLED_DIR}/*/bin/*crypto*.dll"
+            "${VCPKG_INSTALLED_DIR}/*/bin/freetype*.dll"
         )
         install(TARGETS beacon
             RUNTIME DESTINATION ${BEACON_PROGRAM_DIR}
         )
         install(FILES
             "$<TARGET_RUNTIME_DLLS:beacon>"
-            ${BEACON_OPENSSL_RUNTIME_DLLS}
+            ${BEACON_EXTRA_RUNTIME_DLLS}
             DESTINATION ${BEACON_PROGRAM_DIR}
         )
     else()
@@ -287,6 +291,9 @@ if(BEACON_BUILD_DESKTOP)
     install(FILES "${PROJECT_SOURCE_DIR}/3rdparty/SDL_image/LICENSE.txt"
         DESTINATION "${BEACON_PROGRAM_DIR}"
         RENAME "SDL_image-LICENSE.txt"
+    )
+    install(FILES "${PROJECT_SOURCE_DIR}/licenses/FreeType-LICENSE.txt"
+        DESTINATION "${BEACON_PROGRAM_DIR}"
     )
     install(FILES "${PROJECT_SOURCE_DIR}/3rdparty/imgui/LICENSE.txt"
         DESTINATION "${BEACON_PROGRAM_DIR}"

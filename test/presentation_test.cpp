@@ -2,6 +2,7 @@
 
 #include <beacon/io/file.hpp>
 #include <beacon/ui/display.hpp>
+#include <beacon/ui/language.hpp>
 #include <beacon/ui/progress.hpp>
 #include <beacon/ui/carousel.hpp>
 #include <beacon/ui/layout_metrics.hpp>
@@ -570,6 +571,7 @@ TEST_CASE("settings round-trip validates fields and ranges") {
     settings.game_root = root / ".minecraft";
     settings.template_path = "/tmp/template.json";
     settings.language = "en";
+    settings.ui_language = "en";
     settings.auto_detect = true;
     settings.overlay_transparent = false;
     settings.main_window_background_color = {0.1F, 0.2F, 0.3F};
@@ -585,6 +587,7 @@ TEST_CASE("settings round-trip validates fields and ranges") {
     REQUIRE(*loaded);
     REQUIRE((**loaded).game_root == settings.game_root);
     REQUIRE((**loaded).language == settings.language);
+    REQUIRE((**loaded).ui_language == settings.ui_language);
     REQUIRE((**loaded).auto_detect == settings.auto_detect);
     REQUIRE((**loaded).overlay_transparent == settings.overlay_transparent);
     REQUIRE((**loaded).main_window_background_color == settings.main_window_background_color);
@@ -626,4 +629,46 @@ TEST_CASE("settings round-trip validates fields and ranges") {
         output << R"({"game_root":"/tmp"})";
     }
     REQUIRE_FALSE(persistence.load_settings());
+}
+
+TEST_CASE("interface language supports Chinese and English and old settings") {
+    const beacon::test::TemporaryDirectory temporary;
+    beacon::Persistence persistence(temporary.path);
+    beacon::Settings settings{.game_root = temporary.path, .template_path = temporary.path / "template.json"};
+    REQUIRE(settings.ui_language == "zh");
+    for (const auto* language : {"zh", "en"}) {
+        settings.ui_language = language;
+        REQUIRE(persistence.save_settings(settings));
+        const auto loaded = persistence.load_settings();
+        REQUIRE(loaded);
+        REQUIRE(*loaded);
+        REQUIRE((**loaded).ui_language == language);
+        REQUIRE((**loaded).language.empty());
+    }
+    REQUIRE(std::string_view(beacon::interface_text("zh", "设置", "Settings")) == "设置");
+    REQUIRE(std::string_view(beacon::interface_text("en", "设置", "Settings")) == "Settings");
+    for (const auto* invalid : {"", "fr", "EN"}) {
+        settings.ui_language = invalid;
+        REQUIRE_FALSE(persistence.save_settings(settings));
+    }
+    const auto path = temporary.path / "config/settings.json";
+    std::filesystem::remove(temporary.path / "config/settings.json.bak");
+    auto json = beacon::read_bounded_file(path, "settings");
+    REQUIRE(json);
+    const std::string field = ",\n  \"ui_language\" : \"en\"";
+    const auto offset = json->find(field);
+    REQUIRE(offset != std::string::npos);
+    json->erase(offset, field.size());
+    {
+        std::ofstream output(path);
+        output << *json;
+    }
+    const auto loaded = persistence.load_settings();
+    REQUIRE(loaded);
+    REQUIRE(*loaded);
+    REQUIRE((**loaded).ui_language == "zh");
+    for (const auto* invalid : {"null", "true", "42", "\"fr\"", "\"en\\u0000ignored\""}) {
+        std::ofstream(path) << "{\"ui_language\":" << invalid << "," << json->substr(1);
+        REQUIRE_FALSE(persistence.load_settings());
+    }
 }

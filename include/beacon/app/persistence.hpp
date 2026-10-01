@@ -25,6 +25,7 @@ struct Settings {
     std::filesystem::path game_root;
     std::filesystem::path template_path;
     std::string language;
+    std::string ui_language = "zh";
     bool auto_detect = true;
 
     float main_window_scale = 0.5F;

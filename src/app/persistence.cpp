@@ -69,7 +69,11 @@ bool valid_settings_json(const Json::Value& root) {
         return false;
     auto fields = root;
     fields.removeMember("auto_detect");
-    if ((root.isMember("auto_detect") && !root["auto_detect"].isBool()) ||
+    fields.removeMember("ui_language");
+    if ((root.isMember("ui_language") &&
+         (!root["ui_language"].isString() ||
+          (root["ui_language"].asString() != "zh" && root["ui_language"].asString() != "en"))) ||
+        (root.isMember("auto_detect") && !root["auto_detect"].isBool()) ||
         !exact_json_fields(fields, {"game_root", "template_path", "language", "main_window_scale",
                                     "main_window_background_color", "overlay_visible", "overlay_transparent",
                                     "overlay_scroll_right", "overlay_window_scale", "overlay_window_background_color",
@@ -151,6 +155,7 @@ ylt::expected<std::optional<Settings>, Error> Persistence::load_settings() const
     settings.template_path = path_from_utf8((*root)["template_path"].asString());
     settings.auto_detect = (*root).get("auto_detect", true).asBool();
     settings.language = (*root)["language"].asString();
+    settings.ui_language = (*root).get("ui_language", "zh").asString();
     settings.main_window_scale = (*root)["main_window_scale"].asFloat();
     for (Json::ArrayIndex index = 0; index < 3; ++index) {
         settings.main_window_background_color[index] = (*root)["main_window_background_color"][index].asFloat();
@@ -173,6 +178,7 @@ ylt::expected<void, Error> Persistence::save_settings(const Settings& settings) 
     root["template_path"] = path_to_utf8(settings.template_path);
     root["auto_detect"] = settings.auto_detect;
     root["language"] = settings.language;
+    root["ui_language"] = settings.ui_language;
     root["main_window_scale"] = settings.main_window_scale;
     root["main_window_background_color"] = Json::arrayValue;
     for (const auto component : settings.main_window_background_color) {
