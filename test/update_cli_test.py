@@ -94,12 +94,12 @@ def main():
         assert selected() == '1.0.0' and installed() == ['1.0.0']
         run('--check', old)
         current_check = run('--check', old, machine=True)
-        assert current_check.stdout == b'BEACON_UPDATE_CURRENT\t1.0.0\n', current_check.stdout
+        assert current_check.stdout.replace(b'\r\n', b'\n') == b'BEACON_UPDATE_CURRENT\t1.0.0\n', current_check.stdout
         metadata_only, _, _ = package('1.0.1', b'old program', b'old asset')
         metadata_check = run('--check', metadata_only)
         assert b'Update available: 1.0.1' in metadata_check.stdout, metadata_check.stdout
         machine_check = run('--check', metadata_only, machine=True)
-        assert machine_check.stdout == b'BEACON_UPDATE_AVAILABLE\t1.0.1\n', machine_check.stdout
+        assert machine_check.stdout.replace(b'\r\n', b'\n') == b'BEACON_UPDATE_AVAILABLE\t1.0.1\n', machine_check.stdout
         run('--check', old, success=False, message='signature', tamper=True)
         run('--check', dict(old, platform='wrong-platform'), success=False, message='platform')
         run('--check', dict(old, version='0.9.0'), success=False)

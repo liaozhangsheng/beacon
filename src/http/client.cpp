@@ -110,8 +110,10 @@ ylt::expected<std::uint64_t, Error> get(const std::string_view url, const Limits
             client->ssl_context_setup = [](asio::ssl::context& ssl) {
                 (void)add_system_trust(ssl.native_handle());
             };
-            if (!client->init_ssl(asio::ssl::verify_peer, "", std::string(uri.host)))
+            if (!client->init_ssl(asio::ssl::verify_peer, "", std::string(uri.host))) {
+                result = ylt::unexpected<Error>{failure(ErrorCode::Io, "HTTPS TLS initialization failed")};
                 co_return;
+            }
             client->enable_auto_redirect(false);
             client->set_max_http_body_size(static_cast<std::int64_t>(limits.max_bytes));
             client->set_conn_timeout(std::chrono::seconds(limits.connect_timeout_seconds));
@@ -125,13 +127,22 @@ ylt::expected<std::uint64_t, Error> get(const std::string_view url, const Limits
                         resolver.async_resolve(uri.get_host(), uri.get_port(), std::move(callback));
                     },
                     resolver);
-            if (error || timed_out || cancelled)
+            if (error) {
+                result = ylt::unexpected<Error>{failure(ErrorCode::Io, "HTTPS DNS lookup failed: " + error.message())};
+                co_return;
+            }
+            if (timed_out || cancelled)
                 co_return;
             std::vector<asio::ip::tcp::endpoint> endpoints;
             for (const auto& entry : resolved)
                 endpoints.push_back(entry.endpoint());
             const auto connected = co_await client->connect(current, &endpoints);
-            if (connected.net_err || timed_out || cancelled)
+            if (connected.net_err) {
+                result = ylt::unexpected<Error>{
+                    failure(ErrorCode::Io, "HTTPS connection or TLS handshake failed: " + connected.net_err.message())};
+                co_return;
+            }
+            if (timed_out || cancelled)
                 co_return;
             coro_http::req_context<> body;
             body.resp_body_sink = [&](const std::string_view bytes) {
@@ -147,7 +158,12 @@ ylt::expected<std::uint64_t, Error> get(const std::string_view url, const Limits
                 return true;
             };
             const auto response = co_await client->async_request(current, coro_http::http_method::GET, std::move(body));
-            if (response.net_err || timed_out || cancelled)
+            if (response.net_err) {
+                result = ylt::unexpected<Error>{
+                    failure(ErrorCode::Io, "HTTPS response failed: " + response.net_err.message())};
+                co_return;
+            }
+            if (timed_out || cancelled)
                 co_return;
             if (response.status >= 200 && response.status < 300) {
                 result = total;
