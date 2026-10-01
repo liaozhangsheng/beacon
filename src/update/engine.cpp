@@ -54,7 +54,7 @@ bool valid_relative_path(const std::string_view path) {
     }
     std::size_t begin = 0;
     while (begin <= path.size()) {
-        const auto end = std::min(path.find('/', begin), path.size());
+        const auto end = (std::min)(path.find('/', begin), path.size());
         const auto part = path.substr(begin, end - begin);
         if (part.empty() || part == "." || part == "..") {
             return false;

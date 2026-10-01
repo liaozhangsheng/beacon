@@ -52,8 +52,11 @@ def main():
             manifest = workspace / 'release.json'
             manifest.write_text(json.dumps(value))
             signature = workspace / 'release.sig'
-            subprocess.run([args.openssl, 'pkeyutl', '-sign', '-rawin', '-inkey', args.key,
-                            '-in', str(manifest), '-out', str(signature)], check=True, capture_output=True)
+            result = subprocess.run([args.openssl, 'pkeyutl', '-sign', '-rawin', '-inkey', args.key,
+                                     '-in', str(manifest), '-out', str(signature)], capture_output=True)
+            assert result.returncode == 0, (
+                f"{args.openssl} failed to sign the manifest: {result.stderr.decode(errors='replace')}"
+            )
             return manifest, signature
 
         def run(operation, value=None, success=True, message=None, updater=None, tamper=False, machine=False,

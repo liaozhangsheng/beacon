@@ -60,7 +60,7 @@ ylt::expected<InstallLock, Error> InstallLock::acquire(const std::filesystem::pa
     if (descriptor < 0)
         return ylt::unexpected<Error>{unavailable(path)};
     InstallLock lock(descriptor);
-    struct stat information{};
+    struct stat information = {};
     if (fstat(descriptor, &information) != 0 || !S_ISREG(information.st_mode))
         return ylt::unexpected<Error>{unavailable(path)};
     if (flock(descriptor, (exclusive ? LOCK_EX : LOCK_SH) | LOCK_NB) != 0)
