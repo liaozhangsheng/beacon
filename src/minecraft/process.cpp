@@ -2,6 +2,7 @@
 #include <beacon/io/file.hpp>
 
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <fstream>
 #include <string_view>
@@ -14,10 +15,12 @@
     #include <shellapi.h>
 #elif defined(__APPLE__)
     #include <sys/sysctl.h>
+    #include <unistd.h>
 #elif defined(BEACON_HAVE_X11)
     #include <X11/Xatom.h>
     #include <X11/Xlib.h>
     #include <cstdlib>
+    #include <unistd.h>
 #endif
 
 namespace beacon {
@@ -53,14 +56,64 @@ std::optional<std::filesystem::path> minecraft_game_directory(std::span<const st
     return minecraft ? directory : std::nullopt;
 }
 
-std::optional<std::filesystem::path> foreground_minecraft_directory() {
-    std::vector<std::string> arguments;
+namespace {
+
+// The process that owns the focused window, or 0 when there is none or it is Beacon itself.
+std::uint64_t foreground_process() {
 #if defined(_WIN32)
     DWORD pid = 0;
     GetWindowThreadProcessId(GetForegroundWindow(), &pid);
-    if (pid == 0 || pid == GetCurrentProcessId())
-        return std::nullopt;
-    auto process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    return pid == GetCurrentProcessId() ? 0 : pid;
+#elif defined(__APPLE__)
+    const auto pid = foreground_process_id();
+    return pid <= 0 || pid == getpid() ? 0 : static_cast<std::uint64_t>(pid);
+#elif defined(BEACON_HAVE_X11)
+    // Native Wayland deliberately does not expose other applications' focused windows.
+    const auto session = std::getenv("XDG_SESSION_TYPE");
+    if (session && std::string_view(session) == "wayland")
+        return 0;
+    // Polled several times a second, so keep one connection instead of reconnecting each time.
+    static Display* display = nullptr;
+    if (display == nullptr)
+        display = XOpenDisplay(nullptr);
+    if (display == nullptr)
+        return 0;
+    XSync(display, False);
+    const auto previous_handler = XSetErrorHandler([](Display*, XErrorEvent*) {
+        return 0;
+    });
+    const auto property = [&](Window window, const char* name, Atom type) -> unsigned long {
+        Atom actual_type = None;
+        int format = 0;
+        unsigned long count = 0, remaining = 0;
+        unsigned char* data = nullptr;
+        const auto atom = XInternAtom(display, name, True);
+        if (atom == None)
+            return 0;
+        const auto result = XGetWindowProperty(display, window, atom, 0, 1, False, type, &actual_type, &format, &count,
+                                               &remaining, &data);
+        const auto value = result == Success && actual_type == type && format == 32 && count == 1 && data
+                               ? *reinterpret_cast<unsigned long*>(data)
+                               : 0;
+        if (data)
+            XFree(data);
+        return value;
+    };
+    const auto window = property(DefaultRootWindow(display), "_NET_ACTIVE_WINDOW", XA_WINDOW);
+    const auto pid = window ? property(window, "_NET_WM_PID", XA_CARDINAL) : 0;
+    XSync(display, False);
+    XSetErrorHandler(previous_handler);
+    return pid == static_cast<unsigned long>(getpid()) ? 0 : pid;
+#else
+    return 0;
+#endif
+}
+
+// The command line of a process, already split into arguments.
+std::optional<std::vector<std::string>> process_arguments([[maybe_unused]] const std::uint64_t pid) {
+    std::vector<std::string> arguments;
+#if defined(_WIN32)
+    auto process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, static_cast<DWORD>(pid));
     if (!process)
         return std::nullopt;
     const auto query = reinterpret_cast<decltype(&NtQueryInformationProcess)>(
@@ -90,10 +143,7 @@ std::optional<std::filesystem::path> foreground_minecraft_directory() {
         arguments.push_back(path_to_utf8(std::filesystem::path(argv[i])));
     LocalFree(argv);
 #elif defined(__APPLE__)
-    const auto pid = foreground_process_id();
-    if (pid <= 0)
-        return std::nullopt;
-    int mib[] = {CTL_KERN, KERN_PROCARGS2, pid};
+    int mib[] = {CTL_KERN, KERN_PROCARGS2, static_cast<int>(pid)};
     std::size_t bytes = 0;
     if (sysctl(mib, 3, nullptr, &bytes, nullptr, 0) != 0 || bytes <= sizeof(int) || bytes > 1024 * 1024)
         return std::nullopt;
@@ -115,42 +165,9 @@ std::optional<std::filesystem::path> foreground_minecraft_directory() {
         cursor = next + 1;
     }
 #elif defined(BEACON_HAVE_X11)
-    // Native Wayland deliberately does not expose other applications' focused windows.
-    const auto session = std::getenv("XDG_SESSION_TYPE");
-    if (session && std::string_view(session) == "wayland")
-        return std::nullopt;
-    auto* display = XOpenDisplay(nullptr);
-    if (!display)
-        return std::nullopt;
-    XSync(display, False);
-    const auto previous_handler = XSetErrorHandler([](Display*, XErrorEvent*) {
-        return 0;
-    });
-    const auto property = [&](Window window, const char* name, Atom type) -> unsigned long {
-        Atom actual_type = None;
-        int format = 0;
-        unsigned long count = 0, remaining = 0;
-        unsigned char* data = nullptr;
-        const auto atom = XInternAtom(display, name, True);
-        if (atom == None)
-            return 0;
-        const auto result = XGetWindowProperty(display, window, atom, 0, 1, False, type, &actual_type, &format, &count,
-                                               &remaining, &data);
-        const auto value = result == Success && actual_type == type && format == 32 && count == 1 && data
-                               ? *reinterpret_cast<unsigned long*>(data)
-                               : 0;
-        if (data)
-            XFree(data);
-        return value;
-    };
-    const auto window = property(DefaultRootWindow(display), "_NET_ACTIVE_WINDOW", XA_WINDOW);
-    const auto pid = window ? property(window, "_NET_WM_PID", XA_CARDINAL) : 0;
-    XSync(display, False);
-    XSetErrorHandler(previous_handler);
-    XCloseDisplay(display);
-    if (!pid)
-        return std::nullopt;
     std::ifstream input("/proc/" + std::to_string(pid) + "/cmdline", std::ios::binary);
+    if (!input)
+        return std::nullopt;
     std::string argument;
     std::size_t bytes = 0;
     while (std::getline(input, argument, '\0')) {
@@ -162,11 +179,30 @@ std::optional<std::filesystem::path> foreground_minecraft_directory() {
 #else
     return std::nullopt;
 #endif
-    auto directory = minecraft_game_directory(arguments);
-    std::error_code error;
-    if (!directory || !std::filesystem::is_directory(*directory / "saves", error) || error)
+    return arguments;
+}
+
+}  // namespace
+
+std::optional<std::filesystem::path> foreground_minecraft_directory() {
+    // Polled several times a second from the UI loop. A command line does not change, so it is
+    // parsed only when focus moves to another process; failed reads are retried on the next poll.
+    static std::uint64_t parsed_process = 0;
+    static std::optional<std::filesystem::path> parsed_directory;
+    const auto pid = foreground_process();
+    if (pid == 0)
         return std::nullopt;
-    return directory;
+    if (pid != parsed_process) {
+        const auto arguments = process_arguments(pid);
+        if (!arguments)
+            return std::nullopt;
+        parsed_process = pid;
+        parsed_directory = minecraft_game_directory(*arguments);
+    }
+    std::error_code error;
+    if (!parsed_directory || !std::filesystem::is_directory(*parsed_directory / "saves", error) || error)
+        return std::nullopt;
+    return parsed_directory;
 }
 
 }  // namespace beacon
