@@ -525,10 +525,10 @@ int desktop_smoke_test(const std::filesystem::path& asset_root) {
                                                                        .snapshot = std::move(snapshot),
                                                                        .localization = localization,
                                                                        .layout = layout});
+    SdlSession session;
+    if (!session.ready())
+        return 1;
     {
-        SdlSession session;
-        if (!session.ready())
-            return 1;
         ProgressViewModel view;
         view.update(*state);
         // Transparent windows are backend-specific; the smoke test only covers the

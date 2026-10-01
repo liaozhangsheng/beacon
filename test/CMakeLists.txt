@@ -31,7 +31,7 @@ if(TARGET beacon_update)
         ${PROJECT_SOURCE_DIR}/test/update_package_test.py)
 
     find_program(BEACON_OPENSSL_EXECUTABLE openssl HINTS "${OPENSSL_ROOT_DIR}" ENV OPENSSL_ROOT_DIR
-        PATH_SUFFIXES bin REQUIRED)
+        PATH_SUFFIXES bin NO_CMAKE_PATH NO_CMAKE_ENVIRONMENT_PATH REQUIRED)
     add_executable(beacon_https_probe https_probe.cpp)
     target_link_libraries(beacon_https_probe PRIVATE beacon_update)
     beacon_warnings(beacon_https_probe)
