@@ -46,17 +46,33 @@ Beacon 是一个面向 Minecraft 速通的进度追踪器。它读取本地存�
 
 设置中的“自动探测”默认开启。开启后，切换到 Minecraft 窗口，Beacon 会从该进程的 `--gameDir` 启动参数读取游戏目录，并在其 `saves` 下沿用活跃世界发现逻辑。未探测到有效目录时保留当前路径。支持 Windows、macOS 和启用 X11 支持的 Linux 构建；Wayland 请手动填写目录。相对路径或未传入 `--gameDir` 的启动方式暂不支持。
 
+### 快捷操作
+
+| 操作 | 方式 |
+| --- | --- |
+| 重开本轮（清除手动标记并重新读取存档，不修改存档） | `Ctrl+R`（macOS 上 `Ctrl+R` 或 `Cmd+R`） |
+| 手动标记完成 / 撤销手动标记 | 按住 `Ctrl` 左键 / 右键点击图标（macOS 为 `Cmd`） |
+| 移动或缩放 Overlay | 拖动 Overlay / 拖动其边缘 |
+| 关闭设置窗口 | `Esc` |
+
+设置窗口底部也列出了这些提示。
+
 ### 数据与异常恢复
 
-Beacon 只读取选中的 Minecraft 存档。设置保存在程序目录下的 `config/settings.json`，头像缓存仍保存在各平台的应用数据目录下的 `cache/avatars/`。
+Beacon 只读取选中的 Minecraft 存档。设置保存在安装目录（`beacon` 启动器所在目录）下的 `config/settings.json`，头像缓存仍保存在各平台的应用数据目录下的 `cache/avatars/`。
 
 程序会高频检查当前世界，并定期扫描其他世界的变化。如果 Minecraft 正在写入文件，Beacon 会保留上次有效进度，显示数据过期状态并自动重试。无关世界损坏或无法访问时，程序会单独提示，不会阻断当前追踪。
+
+### 独立更新
+
+支持更新的完整发布包会在启动时后台检查一次签名更新。发现新版本后，主窗口左下角“设置”旁会出现“更新到 <版本>”按钮；点击即可退出 Beacon 并应用更新，更新后需要手动重新启动 Beacon。也可以关闭 Beacon 后手动运行 `updater/beacon-updater --check` 再运行 `--apply`；Windows 使用 `updater\beacon-updater.exe`。程序与资源分别更新，未变化的资源不会重复下载；模板和用户设置不由更新器管理。每个版本安装在上一版本旁边并原子切换。切换前失败时当前版本保持不变；`--rollback` 可回到上一个可用版本。
 
 ## 开发者指南
 
 ### 环境要求
 
 - C++20 编译器
+- 独立更新器使用仓库内置的 YLT/coro_http 客户端，并需要 OpenSSL 和 libarchive 开发库（macOS：`brew install libarchive`；Ubuntu：`libarchive-dev`）
 - CMake 3.21 或更高版本
 - 支持子模块的 Git
 - 由平台原生包管理器提供的 OpenSSL 和 Catch2；SDL3 可以由原生包管理器提供，
@@ -106,6 +122,18 @@ cmake -S . -B build-core -G Ninja \
   -DBEACON_BUILD_DESKTOP=OFF
 cmake --build build-core --parallel
 ```
+
+### 更新包与签名
+
+生成 Ed25519 发布密钥，并在构建配置中嵌入公钥：
+
+```sh
+openssl genpkey -algorithm ED25519 -out release-private.pem
+openssl pkey -in release-private.pem -pubout -out release-public.pem
+cmake -S . -B build -DBEACON_UPDATE_PUBLIC_KEY_FILE=/absolute/path/release-public.pem
+```
+
+私钥不得提交到仓库或放入安装包。使用 GitHub Actions 发布时，将公钥 PEM 保存到仓库变量 `BEACON_UPDATE_PUBLIC_KEY`，将私钥 PEM 保存到 Secret `BEACON_UPDATE_SIGNING_KEY`。CI 用 [`scripts/package_updates.py`](scripts/package_updates.py) 处理 CPack ZIP，生成程序组件、资源组件、发布清单和带版本元数据的完整包，再对清单签名。发布时使用生成的完整包；原始 CPack 包缺少更新所需的元数据。未嵌入公钥的构建会拒绝更新，但仍可回滚；未配置签名私钥时，CI 只发布完整包，不发布更新清单。
 
 ### 测试与格式检查
 

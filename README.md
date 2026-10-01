@@ -50,17 +50,33 @@ The bundled templates currently include:
 
 The **自动探测 (Auto detect)** setting is on by default. When enabled, focusing Minecraft reads its process’s `--gameDir` argument and uses the existing active-world discovery under `saves`. Failed detection keeps the current directory. Supported on Windows, macOS, and Linux builds with X11 support; use a manual directory on Wayland. Relative paths and launches without `--gameDir` are not supported.
 
+### Shortcuts
+
+| Action | Shortcut |
+| --- | --- |
+| Restart the run (clear manual marks and re-read the save; the save itself is not modified) | `Ctrl+R` (on macOS, `Ctrl+R` or `Cmd+R`) |
+| Mark a goal done / undo a manual mark | `Ctrl`+left / right click its icon (`Cmd` on macOS) |
+| Move or resize the overlay | Drag the overlay / drag its edges |
+| Close settings | `Esc` |
+
+The same tips are listed at the bottom of the settings window.
+
 ### Data and recovery behavior
 
-Beacon only reads the selected Minecraft save. Settings are stored next to the executable under `config/settings.json`; the avatar cache remains in the platform-specific application data directory under `cache/avatars/`.
+Beacon only reads the selected Minecraft save. Settings are stored in the installation directory (next to the `beacon` launcher) under `config/settings.json`; the avatar cache remains in the platform-specific application data directory under `cache/avatars/`.
 
 The active world is checked frequently; other worlds are scanned periodically for changes. If Minecraft is still writing a file, Beacon keeps the last valid progress, reports the stale data state, and retries. A damaged or inaccessible unrelated world is reported without stopping the active tracker.
+
+### Standalone updates
+
+Update-ready full packages check for signed updates in the background once at startup. If a newer version is available, an **更新到 &lt;version&gt;** (Update to) button appears next to Settings at the bottom left of the main window; click it to exit Beacon and apply the update. Beacon does not restart automatically. You can also close Beacon and run `updater/beacon-updater --check` followed by `--apply` (`updater\beacon-updater.exe` on Windows). Runtime and assets update separately; unchanged assets are not downloaded again. Templates and user settings are never managed by the updater. Each version is installed beside the previous one and selected atomically. Failures before the switch leave the current version untouched; `--rollback` returns to the previous usable version.
 
 ## For developers
 
 ### Requirements
 
 - A C++20 compiler
+- OpenSSL and libarchive development libraries for the standalone updater (macOS: `brew install libarchive`; Ubuntu: `libarchive-dev`)
 - CMake 3.21 or newer
 - Git with submodule support
 - OpenSSL and Catch2 from the platform's native package manager; SDL3 from the
@@ -110,6 +126,18 @@ cmake -S . -B build-core -G Ninja \
   -DBEACON_BUILD_DESKTOP=OFF
 cmake --build build-core --parallel
 ```
+
+### Update packages and signing
+
+Generate an Ed25519 release key pair and embed the public key when configuring the build:
+
+```sh
+openssl genpkey -algorithm ED25519 -out release-private.pem
+openssl pkey -in release-private.pem -pubout -out release-public.pem
+cmake -S . -B build -DBEACON_UPDATE_PUBLIC_KEY_FILE=/absolute/path/release-public.pem
+```
+
+Keep the private key out of the repository and installation packages. For GitHub Actions releases, set the repository variable `BEACON_UPDATE_PUBLIC_KEY` to the public-key PEM and the secret `BEACON_UPDATE_SIGNING_KEY` to the private-key PEM. CI runs [`scripts/package_updates.py`](scripts/package_updates.py) on the CPack ZIP to produce runtime and assets components, a release manifest, and a full package with version metadata, then signs the manifest. Publish the generated full package; raw CPack archives lack the metadata required for updates. Builds without a public key reject updates; rollback remains available. Without a signing key, CI publishes full packages without update manifests.
 
 ### Tests and formatting
 
