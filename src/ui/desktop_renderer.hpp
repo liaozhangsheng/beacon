@@ -2,6 +2,7 @@
 
 #include <beacon/app/persistence.hpp>
 #include <beacon/app/runtime.hpp>
+#include <beacon/ui/update_notice.hpp>
 
 #include <SDL3/SDL.h>
 
@@ -32,6 +33,8 @@ public:
     [[nodiscard]] SDL_Renderer* renderer() const;
 
     [[nodiscard]] std::uint64_t refresh_delay_ms() const;
+    // True while the mouse holds a widget or window, which should track the pointer at the display rate.
+    [[nodiscard]] bool pointer_held() const;
 
     [[nodiscard]] bool overlay_transparent() const;
     bool set_overlay_transparent(bool enabled);
@@ -42,7 +45,7 @@ public:
     void render(const std::shared_ptr<const PublishedState>& state, const std::optional<Error>& runtime_error,
                 Settings* settings = nullptr, std::optional<Error>* settings_error = nullptr,
                 const std::vector<std::filesystem::path>* template_options = nullptr, bool* apply_settings = nullptr,
-                Runtime* runtime = nullptr);
+                Runtime* runtime = nullptr, UpdateNotice* update_notice = nullptr);
 
 private:
     class Impl;

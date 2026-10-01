@@ -17,9 +17,6 @@ struct PlayerCard {
     std::string avatar;
 };
 
-std::optional<std::string> download_profile_asset(const std::string& url, std::size_t max_bytes,
-                                                  std::stop_token stop = {});
-
 PlayerCard fetch_player_card(std::string uuid, const std::filesystem::path& data_root, std::stop_token stop = {});
 
 // Owns the one-at-a-time UI profile refresh and keeps network work off the frame loop.

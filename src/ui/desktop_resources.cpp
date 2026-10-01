@@ -12,6 +12,14 @@
 #include <unordered_set>
 
 namespace beacon {
+namespace {
+
+bool is_animation(const std::filesystem::path& path) {
+    const auto extension = path.extension();
+    return extension == ".gif" || extension == ".GIF";
+}
+
+}  // namespace
 
 WindowRenderer::Impl::Impl(const std::string& title, const WindowSettings& settings, const bool overlay,
                            const std::filesystem::path& asset_root, const ProgressViewModel& view, const float scale,
@@ -58,18 +66,19 @@ void WindowRenderer::Impl::prepare_profile(const std::shared_ptr<const PlayerCar
 }
 
 void WindowRenderer::Impl::prepare_template(const std::shared_ptr<const PublishedState>& state) {
-    if (state && compiled_.get() != state->compiled.get()) {
-        const bool had_template = compiled_ != nullptr;
-        const bool changed_rules = !compiled_ || !compiled_->same_rules(*state->compiled);
-        compiled_ = state->compiled;
-        if (changed_rules) {
-            completion_.reset(state->snapshot.results.size());
-            glow_brightness_.clear();
-            completion_started_.reset();
-        }
-        auto icons = icon_file_stamps(*compiled_);
-        if (had_template && icons && *icons == icon_files_)
-            return;
+    if (!state || compiled_.get() == state->compiled.get())
+        return;
+    const bool had_template = compiled_ != nullptr;
+    const bool changed_rules = !compiled_ || !compiled_->same_rules(*state->compiled);
+    compiled_ = state->compiled;
+    if (changed_rules) {
+        completion_.reset(state->snapshot.results.size());
+        glow_brightness_.clear();
+        completion_started_.reset();
+    }
+    const auto images = node_images(*compiled_);
+    auto icons = icon_file_stamps(*compiled_);
+    if (!had_template || !icons || *icons != icon_files_) {
         icon_files_ = icons ? std::move(*icons) : IconFiles{};
         atlas_texture_.reset();
         atlas_regions_.clear();
@@ -80,27 +89,45 @@ void WindowRenderer::Impl::prepare_template(const std::shared_ptr<const Publishe
         glow_texture_ = nullptr;
         glow_brightness_.clear();
         std::vector<std::filesystem::path> atlas_paths;
-        for (const auto& presentation : state->compiled->presentation_by_node) {
-            if (presentation) {
-                if (!presentation->icon_path.empty()) {
-                    atlas_paths.push_back(path_from_utf8(presentation->icon_path));
-                }
-                if (!presentation->frame_obtained_path.empty()) {
-                    atlas_paths.push_back(path_from_utf8(presentation->frame_obtained_path));
-                }
-                if (!presentation->frame_unobtained_path.empty()) {
-                    atlas_paths.push_back(path_from_utf8(presentation->frame_unobtained_path));
-                }
-                if ((glow_texture_ == nullptr) && !presentation->frame_obtained_path.empty()) {
-                    glow_texture_ = assets_->texture(path_from_utf8(presentation->frame_obtained_path).parent_path() /
-                                                     "frame_glow.png");
-                    if (glow_texture_ != nullptr) {
-                        SDL_SetTextureBlendMode(glow_texture_, SDL_BLENDMODE_ADD);
-                    }
+        for (const auto& node : images) {
+            for (const auto* path : {&node.icon, &node.frame_obtained, &node.frame_unobtained}) {
+                if (!path->empty())
+                    atlas_paths.push_back(*path);
+            }
+            if (glow_texture_ == nullptr && !node.frame_obtained.empty()) {
+                glow_texture_ = assets_->texture(frame_glow_path(node.frame_obtained));
+                if (glow_texture_ != nullptr) {
+                    SDL_SetTextureBlendMode(glow_texture_, SDL_BLENDMODE_ADD);
                 }
             }
         }
         build_atlas(atlas_paths);
+    }
+    // Unchanged image files can still be assigned to different nodes.
+    resolve_node_sprites(images);
+}
+
+void WindowRenderer::Impl::resolve_node_sprites(const std::vector<NodeImages>& images) {
+    const auto sprite = [&](const std::filesystem::path& path) {
+        Sprite result;
+        if (path.empty())
+            return result;
+        if (is_animation(path)) {
+            result.animation = path;
+        } else if (const auto found = atlas_regions_.find(path); found != atlas_regions_.end()) {
+            result = {.texture = atlas_texture_.get(), .uv_min = found->second.uv_min, .uv_max = found->second.uv_max};
+        } else {
+            // Images that did not fit the atlas keep their own texture.
+            result.texture = assets_->texture(path);
+        }
+        return result;
+    };
+    node_sprites_.clear();
+    node_sprites_.reserve(images.size());
+    for (const auto& node : images) {
+        node_sprites_.push_back({.icon = sprite(node.icon),
+                                 .frame_obtained = sprite(node.frame_obtained),
+                                 .frame_unobtained = sprite(node.frame_unobtained)});
     }
 }
 
@@ -118,13 +145,11 @@ void WindowRenderer::Impl::build_atlas(const std::vector<std::filesystem::path>&
     float y = padding;
     float row_height = 0.0F;
     for (const auto& path : paths) {
-        // Icon paths are canonicalized while loading the template. Avoid normalizing and
-        // allocating another path on every frame when looking them up in the atlas.
-        const auto key = path;
-        if (path.extension() == ".gif" || path.extension() == ".GIF") {
+        // Icon paths are canonicalized while loading the template, so they are atlas keys as is.
+        if (is_animation(path)) {
             continue;
         }
-        if (!seen.emplace(key).second) {
+        if (!seen.emplace(path).second) {
             continue;
         }
         auto* const texture = assets_->texture(path);
@@ -139,7 +164,7 @@ void WindowRenderer::Impl::build_atlas(const std::vector<std::filesystem::path>&
             y += row_height + padding;
             row_height = 0.0F;
         }
-        sources.push_back({key, texture, {x, y, width, height}});
+        sources.push_back({path, texture, {x, y, width, height}});
         x += width + padding;
         row_height = std::max(row_height, height);
     }

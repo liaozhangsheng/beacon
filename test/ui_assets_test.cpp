@@ -50,9 +50,15 @@ TEST_CASE("progress text draws centered lines and returns the height used by the
     constexpr float center = 100.25F;
     constexpr float top = 50.25F;
     REQUIRE(beacon::draw_progress_text(draw, "AA\nAA", center, top, IM_COL32_WHITE, 100) == 2);
-    REQUIRE(draw->VtxBuffer.Size == 16);
-    CHECK(draw->VtxBuffer[8].pos.x == Catch::Approx(draw->VtxBuffer[0].pos.x));
-    CHECK(draw->VtxBuffer[8].pos.y - draw->VtxBuffer[0].pos.y == Catch::Approx(ImGui::GetFontSize()));
+    // Each line draws its shadow first, then the text: [shadow 1, text 1, shadow 2, text 2].
+    REQUIRE(draw->VtxBuffer.Size == 32);
+    CHECK(draw->VtxBuffer[24].pos.x == Catch::Approx(draw->VtxBuffer[8].pos.x));
+    CHECK(draw->VtxBuffer[24].pos.y - draw->VtxBuffer[8].pos.y == Catch::Approx(ImGui::GetFontSize()));
+    const float shadow = beacon::text_shadow_offset(ImGui::GetFont(), ImGui::GetFontSize());
+    CHECK(shadow > 0.0F);
+    CHECK(draw->VtxBuffer[0].pos.x - draw->VtxBuffer[8].pos.x == Catch::Approx(shadow));
+    CHECK(draw->VtxBuffer[0].pos.y - draw->VtxBuffer[8].pos.y == Catch::Approx(shadow));
+    CHECK(draw->VtxBuffer[0].col == beacon::text_shadow_color(IM_COL32_WHITE));
     for (const auto& [text, count] : {std::pair{"", 1U}, {"\n", 2U}, {"AA\n", 2U}, {"AA\r\nAA", 2U}, {"\r", 1U}}) {
         CAPTURE(text);
         CHECK(beacon::draw_progress_text(draw, text, center, top, IM_COL32_WHITE, 100) == count);

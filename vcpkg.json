@@ -2,6 +2,10 @@
   "name": "beacon",
   "version-string": "0.2.0",
   "dependencies": [
+    {
+      "name": "libarchive",
+      "default-features": false
+    },
     "openssl",
     "sdl3"
   ],

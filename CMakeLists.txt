@@ -99,11 +99,25 @@ endif()
 beacon_warnings(beacon_runtime)
 
 option(BEACON_BUILD_DESKTOP "Build the SDL desktop application" ON)
+# A separate executable and dependency directory lets Beacon replace its runtime
+# without replacing libraries currently loaded by the updater.
+option(BEACON_BUILD_UPDATER "Build the standalone signed-update client" ${BEACON_BUILD_DESKTOP})
+
+# Beacon holds this lock while running, so it is needed even without the updater.
+add_library(beacon_install_lock STATIC src/update/lock.cpp)
+target_link_libraries(beacon_install_lock PUBLIC beacon_core)
+beacon_warnings(beacon_install_lock)
+
+include(cmake/patch.cmake)
+if(BEACON_BUILD_DESKTOP OR BEACON_BUILD_UPDATER)
+    include(cmake/http.cmake)
+endif()
+if(BEACON_BUILD_UPDATER)
+    include(cmake/updater.cmake)
+endif()
+
 if(BEACON_BUILD_DESKTOP)
-    set(YLT_ENABLE_SSL ON CACHE BOOL "" FORCE)
-    add_subdirectory(3rdparty/yalantinglibs EXCLUDE_FROM_ALL)
     find_package(SDL3 3.2 REQUIRED CONFIG)
-    find_package(OpenSSL REQUIRED)
 
     set(SDLIMAGE_INSTALL OFF CACHE BOOL "" FORCE)
     set(SDLIMAGE_SAMPLES OFF CACHE BOOL "" FORCE)
@@ -112,23 +126,8 @@ if(BEACON_BUILD_DESKTOP)
     set(SDLIMAGE_WEBP OFF CACHE BOOL "" FORCE)
     add_subdirectory(3rdparty/SDL_image EXCLUDE_FROM_ALL)
 
-    # Patch build-tree copies; keep submodule checkouts untouched.
-    function(beacon_patch source output patch)
-        configure_file("${PROJECT_SOURCE_DIR}/${source}" "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/${output}" COPYONLY)
-        execute_process(
-            COMMAND git apply --unidiff-zero "${PROJECT_SOURCE_DIR}/cmake/patches/${patch}"
-            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/thirdparty"
-            RESULT_VARIABLE result
-            ERROR_VARIABLE error
-        )
-        if(NOT result EQUAL 0)
-            message(FATAL_ERROR "Cannot apply ${patch}: ${error}")
-        endif()
-    endfunction()
     beacon_patch(3rdparty/imgui/backends/imgui_impl_sdlrenderer3.cpp
         imgui_impl_sdlrenderer3.cpp imgui-sdlrenderer3.patch)
-    beacon_patch(3rdparty/yalantinglibs/include/ylt/standalone/cinatra/coro_http_client.hpp
-        cinatra/coro_http_client.hpp cinatra-client.patch)
 
     add_library(beacon_imgui STATIC
         3rdparty/imgui/imgui.cpp
@@ -144,25 +143,8 @@ if(BEACON_BUILD_DESKTOP)
 
     add_library(beacon_profile STATIC src/ui/profile.cpp)
     target_include_directories(beacon_profile PUBLIC ${PROJECT_SOURCE_DIR}/include)
-    target_link_libraries(beacon_profile PRIVATE beacon_runtime beacon_io jsoncpp_static yalantinglibs::yalantinglibs)
-    get_target_property(BEACON_YLT_INCLUDES yalantinglibs INTERFACE_INCLUDE_DIRECTORIES)
-    # Keep vendor headers in the same search class so the patched copy wins.
-    target_include_directories(beacon_profile SYSTEM PRIVATE ${BEACON_YLT_INCLUDES})
+    target_link_libraries(beacon_profile PRIVATE beacon_runtime beacon_io jsoncpp_static beacon_http)
     target_include_directories(beacon_profile PRIVATE ${PROJECT_SOURCE_DIR}/3rdparty/jsoncpp/include)
-    target_include_directories(beacon_profile SYSTEM BEFORE PRIVATE
-        ${CMAKE_CURRENT_BINARY_DIR}/thirdparty
-        ${PROJECT_SOURCE_DIR}/3rdparty/yalantinglibs/include/ylt/standalone/cinatra
-    )
-    target_include_directories(beacon_profile BEFORE PRIVATE ${PROJECT_SOURCE_DIR}/cmake/compat)
-    if(WIN32)
-        target_link_libraries(beacon_profile PRIVATE ws2_32 dbghelp)
-    endif()
-    if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND YLT_ENABLE_IBV)
-        find_path(BEACON_NUMA_INCLUDE_DIR numa.h REQUIRED)
-        find_library(BEACON_NUMA_LIBRARY numa REQUIRED)
-        target_include_directories(beacon_profile PRIVATE ${BEACON_NUMA_INCLUDE_DIR})
-        target_link_libraries(beacon_profile PRIVATE ${BEACON_NUMA_LIBRARY})
-    endif()
     beacon_warnings(beacon_profile)
 
     add_executable(beacon
@@ -178,6 +160,7 @@ if(BEACON_BUILD_DESKTOP)
         src/ui/widgets.cpp
     )
     target_link_libraries(beacon PRIVATE
+        beacon_install_lock
         beacon_profile
         beacon_resources
         beacon_imgui
@@ -208,9 +191,31 @@ if(BEACON_BUILD_DESKTOP)
             $<TARGET_FILE_DIR:beacon>/.agents/skills/beacon-custom-template/SKILL.md
     )
 
+    # Installed layout: the launcher and user data live in
+    # the installation root; each program version is a complete directory
+    # under versions/, selected by .beacon-current.
+    set(BEACON_PROGRAM_DIR "versions/${PROJECT_VERSION}")
+
+    add_executable(beacon-launcher src/launcher/main.cpp)
+    target_include_directories(beacon-launcher PRIVATE ${PROJECT_SOURCE_DIR}/include)
+    set_target_properties(beacon-launcher PROPERTIES
+        OUTPUT_NAME beacon
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/launcher"
+    )
+    if(WIN32)
+        set_target_properties(beacon-launcher PROPERTIES WIN32_EXECUTABLE TRUE)
+    endif()
+    if(MINGW)
+        target_link_options(beacon-launcher PRIVATE -municode -static-libgcc -static-libstdc++)
+    endif()
+    beacon_warnings(beacon-launcher)
+    install(TARGETS beacon-launcher RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/.beacon-current" "${PROJECT_VERSION}\n")
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/.beacon-current" DESTINATION ${CMAKE_INSTALL_BINDIR})
+
     if(APPLE)
         install(TARGETS beacon
-            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            RUNTIME DESTINATION ${BEACON_PROGRAM_DIR}
         )
         set(BEACON_RUNTIME_SEARCH_DIRS
             "$<TARGET_FILE_DIR:SDL3::SDL3>;$<TARGET_FILE_DIR:OpenSSL::SSL>;$<TARGET_FILE_DIR:OpenSSL::Crypto>"
@@ -227,12 +232,12 @@ if(BEACON_BUILD_DESKTOP)
             "${VCPKG_INSTALLED_DIR}/*/bin/*crypto*.dll"
         )
         install(TARGETS beacon
-            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            RUNTIME DESTINATION ${BEACON_PROGRAM_DIR}
         )
         install(FILES
             "$<TARGET_RUNTIME_DLLS:beacon>"
             ${BEACON_OPENSSL_RUNTIME_DLLS}
-            DESTINATION ${CMAKE_INSTALL_BINDIR}
+            DESTINATION ${BEACON_PROGRAM_DIR}
         )
     else()
         set(BEACON_RUNTIME_POST_EXCLUDE_REGEXES)
@@ -243,7 +248,7 @@ if(BEACON_BUILD_DESKTOP)
         endif()
         install(TARGETS beacon
             RUNTIME_DEPENDENCY_SET beacon_runtime_dependencies
-            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            RUNTIME DESTINATION ${BEACON_PROGRAM_DIR}
         )
         install(RUNTIME_DEPENDENCY_SET beacon_runtime_dependencies
             POST_EXCLUDE_REGEXES
@@ -256,18 +261,18 @@ if(BEACON_BUILD_DESKTOP)
                 "$<TARGET_FILE_DIR:SDL3::SDL3>"
                 "$<TARGET_FILE_DIR:OpenSSL::SSL>"
                 "$<TARGET_FILE_DIR:OpenSSL::Crypto>"
-            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-            LIBRARY DESTINATION ${CMAKE_INSTALL_BINDIR}
+            RUNTIME DESTINATION ${BEACON_PROGRAM_DIR}
+            LIBRARY DESTINATION ${BEACON_PROGRAM_DIR}
         )
         if(UNIX AND NOT APPLE)
             install(FILES "$<TARGET_FILE:SDL3::SDL3>"
-                DESTINATION ${CMAKE_INSTALL_BINDIR}
+                DESTINATION ${BEACON_PROGRAM_DIR}
                 RENAME "libSDL3.so.0"
             )
         endif()
     endif()
     install(DIRECTORY "${PROJECT_SOURCE_DIR}/assets/"
-        DESTINATION "${CMAKE_INSTALL_BINDIR}/assets"
+        DESTINATION "${BEACON_PROGRAM_DIR}/assets"
     )
     install(DIRECTORY "${PROJECT_SOURCE_DIR}/templates/"
         DESTINATION "${CMAKE_INSTALL_BINDIR}/templates"
@@ -280,23 +285,23 @@ if(BEACON_BUILD_DESKTOP)
         DESTINATION "${CMAKE_INSTALL_BINDIR}"
     )
     install(FILES "${PROJECT_SOURCE_DIR}/3rdparty/SDL_image/LICENSE.txt"
-        DESTINATION "${CMAKE_INSTALL_BINDIR}"
+        DESTINATION "${BEACON_PROGRAM_DIR}"
         RENAME "SDL_image-LICENSE.txt"
     )
     install(FILES "${PROJECT_SOURCE_DIR}/3rdparty/imgui/LICENSE.txt"
-        DESTINATION "${CMAKE_INSTALL_BINDIR}"
+        DESTINATION "${BEACON_PROGRAM_DIR}"
         RENAME "ImGui-LICENSE.txt"
     )
     install(FILES "${PROJECT_SOURCE_DIR}/3rdparty/jsoncpp/LICENSE"
-        DESTINATION "${CMAKE_INSTALL_BINDIR}"
+        DESTINATION "${BEACON_PROGRAM_DIR}"
         RENAME "JsonCpp-LICENSE"
     )
     install(FILES "${PROJECT_SOURCE_DIR}/3rdparty/yalantinglibs/LICENSE"
-        DESTINATION "${CMAKE_INSTALL_BINDIR}"
+        DESTINATION "${BEACON_PROGRAM_DIR}"
         RENAME "yalantinglibs-LICENSE"
     )
     install(FILES "${PROJECT_SOURCE_DIR}/3rdparty/yalantinglibs/NOTICE"
-        DESTINATION "${CMAKE_INSTALL_BINDIR}"
+        DESTINATION "${BEACON_PROGRAM_DIR}"
         RENAME "yalantinglibs-NOTICE"
     )
 

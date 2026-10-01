@@ -55,6 +55,17 @@ struct TemplateResources {
     std::shared_ptr<const Layout> layout;
 };
 
+// The image files a node draws; paths it does not use are empty.
+struct NodeImages {
+    std::filesystem::path icon;
+    std::filesystem::path frame_obtained;
+    std::filesystem::path frame_unobtained;
+};
+// Indexed by node, like CompiledTemplate::presentation_by_node.
+std::vector<NodeImages> node_images(const CompiledTemplate& compiled);
+// Each frame set has a glow texture beside its obtained frame.
+std::filesystem::path frame_glow_path(const std::filesystem::path& frame_obtained);
+
 using IconFiles = std::vector<std::pair<std::filesystem::path, FileStamp>>;
 ylt::expected<IconFiles, Error> icon_file_stamps(const CompiledTemplate& compiled);
 

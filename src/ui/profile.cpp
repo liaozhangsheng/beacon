@@ -1,10 +1,9 @@
 #include <beacon/ui/profile.hpp>
 #include <beacon/core/model.hpp>
 #include <beacon/io/file.hpp>
+#include <beacon/http/client.hpp>
 #include <beacon/minecraft/adapter.hpp>
 #include "../core/json.hpp"
-
-#include <ylt/coro_http/coro_http_client.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -51,13 +50,13 @@ std::optional<PlayerCard> read_cached_avatar(const std::string& uuid, const std:
         if (!std::filesystem::is_regular_file(path, file_ec) || file_ec || path.extension() != ".png") {
             continue;
         }
-        const auto filename = path.filename().string();
+        const auto filename = path_to_utf8(path.filename());
         if (!filename.starts_with(prefix)) {
             continue;
         }
         auto avatar = read_bounded_file(path, "cached avatar", max_avatar_bytes);
         if (avatar && !avatar->empty()) {
-            return PlayerCard{.name = path.stem().string().substr(prefix.size()), .avatar = std::move(*avatar)};
+            return PlayerCard{.name = path_to_utf8(path.stem()).substr(prefix.size()), .avatar = std::move(*avatar)};
         }
     }
     return std::nullopt;
@@ -77,80 +76,16 @@ void write_cached_avatar(const std::string& uuid, const PlayerCard& card, const 
     }
 }
 
-}  // namespace
-
 std::optional<std::string> download_profile_asset(const std::string& url, const std::size_t max_bytes,
                                                   const std::stop_token stop) {
-    // URI parsing and TLS verification must use the same, unambiguous hostname.
-    if (url.size() > max_string_bytes || !std::all_of(url.begin(), url.end(), [](unsigned char c) {
-            return c > 32 && c < 127;
-        })) {
+    auto body = http::get_text(
+        url, http::Limits{.max_bytes = max_bytes, .timeout_seconds = 20, .connect_timeout_seconds = 10}, stop);
+    if (!body)
         return std::nullopt;
-    }
-    coro_http::uri_t uri;
-    if (!uri.parse_from(url.c_str()) || uri.schema != "https" || uri.host.empty() || !uri.uinfo.empty()) {
-        return std::nullopt;
-    }
-    if (stop.stop_requested())
-        return std::nullopt;
-    // Run I/O on the existing profile worker. Do not start the global hardware-sized pool.
-    asio::io_context context;
-    asio::ip::tcp::resolver resolver(context);
-    coro_http::coro_http_client client(context.get_executor());
-    if (!client.init_ssl(asio::ssl::verify_peer, "", std::string(uri.host))) {
-        return std::nullopt;
-    }
-    client.set_max_http_body_size(static_cast<std::int64_t>(max_bytes));
-    client.add_header("User-Agent", "Beacon/0.1");
-    client.set_conn_timeout(std::chrono::seconds(10));
-    client.set_req_timeout(std::chrono::seconds(10));
-    bool cancelled = false;
-    std::optional<std::string> result;
-    asio::steady_timer deadline(context, std::chrono::seconds(20));
-    const auto cancel = [&] {
-        cancelled = true;
-        resolver.cancel();
-        client.close();
-    };
-    deadline.async_wait([&](const std::error_code& error) {
-        if (!error)
-            cancel();
-    });
-    {
-        std::stop_callback on_stop(stop, [&] {
-            asio::post(context, cancel);
-        });
-        const auto request = [&]() -> async_simple::coro::Lazy<void> {
-            // Own the resolver so cancellation also covers DNS, before a socket exists.
-            auto [error, resolved] =
-                co_await coro_io::async_io<std::pair<std::error_code, asio::ip::tcp::resolver::results_type>>(
-                    [&](auto&& callback) {
-                        resolver.async_resolve(uri.get_host(), uri.get_port(), std::move(callback));
-                    },
-                    resolver);
-            if (error || cancelled || stop.stop_requested())
-                co_return;
-            std::vector<asio::ip::tcp::endpoint> endpoints;
-            for (const auto& entry : resolved)
-                endpoints.push_back(entry.endpoint());
-            const auto connected = co_await client.connect(url, &endpoints);
-            if (connected.net_err || cancelled || stop.stop_requested())
-                co_return;
-            const auto response = co_await client.async_get(url);
-            if (!cancelled && !stop.stop_requested() && !response.net_err && response.status >= 200 &&
-                response.status < 300 && response.resp_body.size() <= max_bytes)
-                result = std::string(response.resp_body);
-        };
-        request().start([&](auto&&) {
-            deadline.cancel();
-        });
-        context.run();
-    }
-    // Drain a stop callback posted just as the request completed, before destroying the client.
-    context.restart();
-    context.poll();
-    return stop.stop_requested() ? std::nullopt : result;
+    return std::move(*body);
 }
+
+}  // namespace
 
 PlayerCard fetch_player_card(std::string uuid, const std::filesystem::path& data_root, const std::stop_token stop) {
     try {

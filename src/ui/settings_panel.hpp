@@ -24,9 +24,11 @@ private:
     bool render_source(Settings& settings, const std::vector<std::filesystem::path>* templates, ImVec2 content_size,
                        float label_width, bool* apply, UiAssets& assets);
     static bool render_appearance(Settings& settings, ImVec2 content_size, float label_width, UiAssets& assets);
+    static void render_tips(ImVec2 content_size);
     void render_actions(ImVec2 padding, bool* apply, UiAssets& assets);
 
     bool open_ = false;
+    std::optional<ImVec2> drag_grab_;
     std::array<char, max_string_bytes + 1> game_root_input_{};
     bool game_root_input_loaded_ = false;
     std::filesystem::path languages_template_path_;

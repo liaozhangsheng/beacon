@@ -17,8 +17,9 @@ class DesktopLoop {
 public:
     DesktopLoop(Runtime* runtime, Persistence* persistence, std::shared_ptr<const PublishedState> fixed_state,
                 const Settings& settings, const std::filesystem::path& asset_root,
-                const std::filesystem::path& data_root, const std::vector<std::filesystem::path>& templates = {},
-                int frame_limit = 0, std::optional<Error> initial_error = std::nullopt);
+                const std::filesystem::path& install_root, const std::filesystem::path& data_root,
+                const std::vector<std::filesystem::path>& templates = {}, int frame_limit = 0,
+                std::optional<Error> initial_error = std::nullopt);
     ~DesktopLoop();
     DesktopLoop(const DesktopLoop&) = delete;
     DesktopLoop& operator=(const DesktopLoop&) = delete;
@@ -34,10 +35,11 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
+// asset_root holds program resources; install_root holds the updater.
 int run_desktop(Runtime& runtime, Persistence& persistence, const Settings& settings,
-                const std::filesystem::path& asset_root, const std::filesystem::path& data_root,
-                const std::vector<std::filesystem::path>& templates = {}, int frame_limit = 0,
-                std::optional<Error> initial_error = std::nullopt);
+                const std::filesystem::path& asset_root, const std::filesystem::path& install_root,
+                const std::filesystem::path& data_root, const std::vector<std::filesystem::path>& templates = {},
+                int frame_limit = 0, std::optional<Error> initial_error = std::nullopt);
 int desktop_smoke_test(const std::filesystem::path& asset_root);
 
 }  // namespace beacon

@@ -5,13 +5,48 @@
 #include <beacon/ui/sizing.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <string>
+#include <utility>
 
 namespace beacon {
 namespace {
 
 std::string template_name(const std::filesystem::path& path) {
     return path_to_utf8(path.parent_path().filename());
+}
+
+// minecraft_book.png is 146x180 texels; the window keeps that shape so texels stay square.
+constexpr ImVec2 book_texels{146.0F, 180.0F};
+constexpr float minimum_book_scale = 3.5F;
+// Labels printed on the book's page.
+constexpr ImVec4 book_text_color{0.0F, 0.0F, 0.0F, 1.0F};
+
+void keep_book_proportions(ImGuiSizeCallbackData* data) {
+    const float current = data->CurrentSize.x / book_texels.x;
+    const float horizontal = data->DesiredSize.x / book_texels.x;
+    const float vertical = data->DesiredSize.y / book_texels.y;
+    // Follow whichever edge the user is dragging.
+    float scale = std::abs(horizontal - current) >= std::abs(vertical - current) ? horizontal : vertical;
+    const auto work = ImGui::GetMainViewport()->WorkSize;
+    const float maximum =
+        std::max(minimum_book_scale, std::min((work.x - 32.0F) / book_texels.x, (work.y - 32.0F) / book_texels.y));
+    // Whole framebuffer pixels per texel keep the nearest-sampled art even.
+    const float step = 1.0F / std::max(1.0F, ImGui::GetIO().DisplayFramebufferScale.y);
+    scale = std::clamp(std::floor(scale / step) * step, minimum_book_scale, std::max(minimum_book_scale, maximum));
+    data->DesiredSize = {book_texels.x * scale, book_texels.y * scale};
+}
+
+// Combo boxes are black vanilla fields: white text, and popups padded like the field itself.
+void push_combo_style() {
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        {ImGui::GetStyle().WindowPadding.x, ImGui::GetStyle().FramePadding.y});
+    ImGui::PushStyleColor(ImGuiCol_Text, {1.0F, 1.0F, 1.0F, 1.0F});
+}
+
+void pop_combo_style() {
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
 }
 
 void form_row(const char* label) {
@@ -27,6 +62,7 @@ void form_row(const char* label) {
 
 void SettingsPanel::open() {
     open_ = true;
+    drag_grab_.reset();
     game_root_input_loaded_ = false;
     languages_template_path_.clear();
     languages_.clear();
@@ -34,6 +70,7 @@ void SettingsPanel::open() {
 
 void SettingsPanel::close() {
     open_ = false;
+    drag_grab_.reset();
     game_root_input_loaded_ = false;
 }
 
@@ -54,55 +91,76 @@ void SettingsPanel::render(const ImGuiViewport* viewport, Settings& settings, st
         return;
     }
     ImGui::PushFont(nullptr, ui::settings_font_size);
-    constexpr ImVec2 settings_size{520.0F, 620.0F};
+    constexpr ImVec2 settings_size{book_texels.x * minimum_book_scale, book_texels.y * minimum_book_scale};
     const ImVec2 initial_padding{settings_size.x * (16.0F / 146.0F), settings_size.y * (12.0F / 180.0F)};
     ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing, {0.5F, 0.5F});
     ImGui::SetNextWindowSize(settings_size, ImGuiCond_Appearing);
-    ImGui::SetNextWindowSizeConstraints({520.0F, 620.0F}, {std::max(520.0F, viewport->WorkSize.x - 32.0F),
-                                                           std::max(620.0F, viewport->WorkSize.y - 32.0F)});
+    ImGui::SetNextWindowSizeConstraints(settings_size,
+                                        {std::max(settings_size.x, viewport->WorkSize.x - 32.0F),
+                                         std::max(settings_size.y, viewport->WorkSize.y - 32.0F)},
+                                        keep_book_proportions);
+    // Move before Begin so the book, its text and its widgets all draw at the new position this frame;
+    // moving mid-window leaves whatever was already drawn one frame behind.
+    if (drag_grab_ && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        const auto mouse = ImGui::GetIO().MousePos;
+        ImGui::SetNextWindowPos({mouse.x - drag_grab_->x, mouse.y - drag_grab_->y});
+    }
+    // Combos and color fields mimic the vanilla text field: black body, #A0A0A0 frame.
+    constexpr ImVec4 field_border{160.0F / 255.0F, 160.0F / 255.0F, 160.0F / 255.0F, 1.0F};
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0F);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, initial_padding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0F);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0F);
+    ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, 1.0F);
+    ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 0.0F);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, {0.0F, 0.0F, 0.0F, 0.0F});
-    ImGui::PushStyleColor(ImGuiCol_Text, {0.0F, 0.0F, 0.0F, 1.0F});
+    ImGui::PushStyleColor(ImGuiCol_Text, book_text_color);
     ImGui::PushStyleColor(ImGuiCol_TextDisabled, {0.25F, 0.25F, 0.25F, 1.0F});
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, {0.28F, 0.28F, 0.28F, 1.0F});
-    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, {0.40F, 0.40F, 0.40F, 1.0F});
-    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, {0.20F, 0.20F, 0.20F, 1.0F});
-    ImGui::PushStyleColor(ImGuiCol_PopupBg, {0.28F, 0.28F, 0.28F, 1.0F});
-    ImGui::PushStyleColor(ImGuiCol_Header, {0.40F, 0.40F, 0.40F, 1.0F});
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, {0.50F, 0.50F, 0.50F, 1.0F});
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, {0.32F, 0.32F, 0.32F, 1.0F});
-    ImGui::PushStyleColor(ImGuiCol_Button, {0.35F, 0.35F, 0.35F, 1.0F});
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {0.45F, 0.45F, 0.45F, 1.0F});
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, {0.25F, 0.25F, 0.25F, 1.0F});
+    ImGui::PushStyleColor(ImGuiCol_Border, field_border);
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, {0.0F, 0.0F, 0.0F, 1.0F});
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, {0.12F, 0.12F, 0.12F, 1.0F});
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, {0.0F, 0.0F, 0.0F, 1.0F});
+    ImGui::PushStyleColor(ImGuiCol_PopupBg, {0.0F, 0.0F, 0.0F, 1.0F});
+    ImGui::PushStyleColor(ImGuiCol_Header, {0.30F, 0.30F, 0.30F, 1.0F});
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, {0.40F, 0.40F, 0.40F, 1.0F});
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, {0.25F, 0.25F, 0.25F, 1.0F});
+    ImGui::PushStyleColor(ImGuiCol_Button, {0.0F, 0.0F, 0.0F, 1.0F});
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {0.12F, 0.12F, 0.12F, 1.0F});
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, {0.0F, 0.0F, 0.0F, 1.0F});
     ImGui::PushStyleColor(ImGuiCol_ResizeGrip, {0.0F, 0.0F, 0.0F, 0.0F});
     ImGui::PushStyleColor(ImGuiCol_ResizeGripHovered, {0.0F, 0.0F, 0.0F, 0.0F});
     ImGui::PushStyleColor(ImGuiCol_ResizeGripActive, {0.0F, 0.0F, 0.0F, 0.0F});
     ImGui::PushStyleColor(ImGuiCol_SeparatorHovered, {0.0F, 0.0F, 0.0F, 0.0F});
     ImGui::PushStyleColor(ImGuiCol_SeparatorActive, {0.0F, 0.0F, 0.0F, 0.0F});
     const auto restore_style = [] {
-        ImGui::PopStyleColor(18);
-        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor(19);
+        ImGui::PopStyleVar(6);
         ImGui::PopFont();
     };
     const bool window_visible = ImGui::Begin("设置##beacon", &open_,
                                              ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
                                                  ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings);
     if (!window_visible) {
+        drag_grab_.reset();
         ImGui::End();
         restore_style();
         return;
     }
     const auto window_min = ImGui::GetWindowPos();
     const auto window_size = ImGui::GetWindowSize();
-    const ImVec2 window_max{window_min.x + window_size.x, window_min.y + window_size.y};
     const ImVec2 padding{window_size.x * (16.0F / 146.0F), window_size.y * (12.0F / 180.0F)};
     const ImVec2 content_size{window_size.x - (padding.x * 2.0F), 0.0F};
-    ImGui::GetWindowDrawList()->AddImage(assets.ui("minecraft_book.png"), window_min, window_max);
+    const ImVec2 book_min{snap_to_pixel(window_min.x), snap_to_pixel(window_min.y)};
+    ImGui::GetWindowDrawList()->AddImage(assets.ui("minecraft_book.png"), book_min,
+                                         {book_min.x + window_size.x, book_min.y + window_size.y});
     ImGui::SetCursorPos({0.0F, 0.0F});
     ImGui::InvisibleButton("##settings-drag", {window_size.x, 44.0F});
-    if (ImGui::IsItemActive()) {
-        ImGui::SetWindowPos({window_min.x + ImGui::GetIO().MouseDelta.x, window_min.y + ImGui::GetIO().MouseDelta.y});
+    if (ImGui::IsItemActivated()) {
+        // Track the grab point rather than accumulating deltas, which truncated window positions would drop.
+        const auto mouse = ImGui::GetIO().MousePos;
+        drag_grab_ = ImVec2{mouse.x - window_min.x, mouse.y - window_min.y};
+    } else if (!ImGui::IsItemActive()) {
+        drag_grab_.reset();
     }
     ImGui::SetCursorPos(padding);
     ImGui::TextUnformatted("Beacon 设置");
@@ -140,6 +198,12 @@ void SettingsPanel::render(const ImGuiViewport* viewport, Settings& settings, st
         ImGui::SetCursorPosX(padding.x);
         ImGui::Text("无法保存：%s", (*error)->message.c_str());
     }
+    ImGui::SetCursorPosX(padding.x);
+    ImGui::Separator();
+    ImGui::SetCursorPosX(padding.x);
+    ImGui::TextUnformatted("操作提示");
+    ImGui::SetCursorPosX(padding.x);
+    render_tips(content_size);
     render_actions(padding, apply, assets);
     ImGui::End();
     restore_style();
@@ -160,6 +224,12 @@ bool SettingsPanel::render_source(Settings& settings, const std::vector<std::fil
     ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, label_width);
     ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch);
     bool changed = false;
+    // Template, language and auto-detect changes apply at once instead of waiting for Save.
+    const auto apply_now = [&] {
+        changed = true;
+        if (apply != nullptr)
+            *apply = true;
+    };
     refresh_languages(settings.template_path);
     form_row("模板：");
     if (templates != nullptr && !templates->empty()) {
@@ -171,9 +241,7 @@ bool SettingsPanel::render_source(Settings& settings, const std::vector<std::fil
             }
         }
         const auto selected_name = template_name((*templates)[selected]);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                            {ImGui::GetStyle().WindowPadding.x, ImGui::GetStyle().FramePadding.y});
-        ImGui::PushStyleColor(ImGuiCol_Text, {1.0F, 1.0F, 1.0F, 1.0F});
+        push_combo_style();
         if (ImGui::BeginCombo("##template", selected_name.c_str())) {
             for (int index = 0; index < static_cast<int>(templates->size()); ++index) {
                 const auto name = template_name((*templates)[index]);
@@ -182,17 +250,13 @@ bool SettingsPanel::render_source(Settings& settings, const std::vector<std::fil
                         settings.template_path = (*templates)[index];
                         settings.language.clear();
                         refresh_languages(settings.template_path);
-                        changed = true;
-                        if (apply != nullptr) {
-                            *apply = true;
-                        }
+                        apply_now();
                     }
                 }
             }
             ImGui::EndCombo();
         }
-        ImGui::PopStyleColor();
-        ImGui::PopStyleVar();
+        pop_combo_style();
     } else {
         ImGui::TextUnformatted("没有可用模板");
     }
@@ -204,41 +268,27 @@ bool SettingsPanel::render_source(Settings& settings, const std::vector<std::fil
             break;
         }
     }
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                        {ImGui::GetStyle().WindowPadding.x, ImGui::GetStyle().FramePadding.y});
-    ImGui::PushStyleColor(ImGuiCol_Text, {1.0F, 1.0F, 1.0F, 1.0F});
+    push_combo_style();
     const auto selected_language_name =
         selected_language == 0 ? std::string_view{"默认"} : std::string_view{languages_[selected_language - 1]};
     if (ImGui::BeginCombo("##language", selected_language_name.data())) {
         if (ImGui::Selectable("默认", selected_language == 0)) {
             settings.language.clear();
-            changed = true;
-            if (apply != nullptr) {
-                *apply = true;
-            }
+            apply_now();
         }
         for (int index = 0; index < static_cast<int>(languages_.size()); ++index) {
             const auto& language = languages_[index];
             if (ImGui::Selectable(language.c_str(), selected_language == index + 1)) {
                 settings.language = language;
-                changed = true;
-                if (apply != nullptr) {
-                    *apply = true;
-                }
+                apply_now();
             }
         }
         ImGui::EndCombo();
     }
-    ImGui::PopStyleColor();
-    ImGui::PopStyleVar();
+    pop_combo_style();
     form_row("自动识别游戏目录：");
-    if (textured_checkbox(assets.widget("checkbox.png"), assets.widget("checkbox_highlighted.png"),
-                          assets.widget("checkbox_selected.png"), assets.widget("checkbox_selected_highlighted.png"),
-                          "##auto-detect", "开启", &settings.auto_detect, false, {0.0F, 0.0F, 0.0F, 1.0F})) {
-        changed = true;
-        if (apply != nullptr)
-            *apply = true;
-    }
+    if (minecraft_checkbox(assets, "##auto-detect", "开启", &settings.auto_detect, false, book_text_color))
+        apply_now();
     form_row("游戏目录：");
     ImGui::BeginDisabled(settings.auto_detect);
     const bool game_root_changed =
@@ -261,10 +311,7 @@ bool SettingsPanel::render_appearance(Settings& settings, const ImVec2 content_s
     ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch);
     bool changed = false;
     const auto checkbox = [&](const char* id, const char* label, bool* value, const bool keep_selected) {
-        return textured_checkbox(assets.widget("checkbox.png"), assets.widget("checkbox_highlighted.png"),
-                                 assets.widget("checkbox_selected.png"),
-                                 assets.widget("checkbox_selected_highlighted.png"), id, label, value, keep_selected,
-                                 {0.0F, 0.0F, 0.0F, 1.0F});
+        return minecraft_checkbox(assets, id, label, value, keep_selected, book_text_color);
     };
     const auto slider = [&](const char* id, float* value, const float min_value, const float max_value) {
         return textured_slider(assets.widget("slider.png"), assets.widget("slider_handle.png"),
@@ -305,6 +352,40 @@ bool SettingsPanel::render_appearance(Settings& settings, const ImVec2 content_s
     return changed;
 }
 
+void SettingsPanel::render_tips(const ImVec2 content_size) {
+#if defined(__APPLE__)
+    // ImGui reads Cmd as Ctrl on macOS, so clicks use Cmd; Ctrl+R and Cmd+R both restart.
+    constexpr const char* click_key = "Cmd+点击图标";
+    constexpr const char* restart_key = "Ctrl/Cmd+R";
+#else
+    constexpr const char* click_key = "Ctrl+点击图标";
+    constexpr const char* restart_key = "Ctrl+R";
+#endif
+    const std::pair<const char*, const char*> tips[] = {
+        {restart_key, "重开本轮：清除手动标记并重读存档"},
+        {click_key, "左键手动完成，右键撤销"},
+        {"拖动 Overlay", "移动位置；拖动边缘调整大小"},
+        {"Esc", "关闭设置"},
+    };
+    // Tips are reference text, so pack the rows tighter than the form above.
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, {ImGui::GetStyle().CellPadding.x * 3.0F, 1.0F});
+    if (!ImGui::BeginTable("##tips", 2, ImGuiTableFlags_SizingFixedFit, content_size)) {
+        ImGui::PopStyleVar();
+        return;
+    }
+    ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed);
+    ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch);
+    for (const auto& [key, action] : tips) {
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted(key);
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TextDisabled("%s", action);
+    }
+    ImGui::EndTable();
+    ImGui::PopStyleVar();
+}
+
 void SettingsPanel::render_actions(const ImVec2 padding, bool* apply, UiAssets& assets) {
     ImGui::SetCursorPosX(padding.x);
     ImGui::Separator();
@@ -314,14 +395,11 @@ void SettingsPanel::render_actions(const ImVec2 padding, bool* apply, UiAssets& 
     ImGui::SetCursorPosY(std::max(ImGui::GetCursorPosY(), ImGui::GetWindowHeight() - padding.y - action_height));
     ImGui::SetCursorPosX((ImGui::GetWindowWidth() - actions_width) * 0.5F);
     ImGui::PushStyleColor(ImGuiCol_Text, {1.0F, 1.0F, 1.0F, 1.0F});
-    if (textured_button(assets.widget("button.png"), assets.widget("button_highlighted.png"), "##close", "关闭",
-                        {action_width, action_height})) {
+    if (minecraft_button(assets, "##close", "关闭", {action_width, action_height})) {
         close();
     }
     ImGui::SameLine();
-    if (textured_button(assets.widget("button.png"), assets.widget("button_highlighted.png"), "##save", "保存",
-                        {action_width, action_height}) &&
-        apply != nullptr) {
+    if (minecraft_button(assets, "##save", "保存", {action_width, action_height}) && apply != nullptr) {
         *apply = true;
     }
     ImGui::PopStyleColor();

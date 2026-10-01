@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numeric>
+#include <span>
 
 namespace beacon {
 
@@ -29,15 +30,6 @@ void WindowRenderer::Impl::prepare_layout(const std::shared_ptr<const PublishedS
     }
 }
 
-bool WindowRenderer::Impl::is_stats_group(const LayoutGroup& group, const PublishedState& state,
-                                          const std::span<const std::uint32_t> nodes) {
-    return group.source == LayoutSource::Nodes && !nodes.empty() && std::ranges::all_of(nodes, [&](const auto node) {
-               return node < state.compiled->graph.nodes.size() &&
-                      state.compiled->graph.nodes[node].op == RuleOp::Fact &&
-                      state.compiled->graph.nodes[node].fact_key.starts_with("stat/");
-           });
-}
-
 void WindowRenderer::Impl::draw_overlay_layout(const PublishedState& state, const ImVec2 origin, const ImVec2 available,
                                                const float body_height, const float overlay_scroll_speed,
                                                const bool scroll_right) {
@@ -53,15 +45,15 @@ void WindowRenderer::Impl::draw_overlay_layout(const PublishedState& state, cons
 
     float required_body_height = 1.0F;
     float max_padding = 0.0F;
+    std::vector<float> minimum_heights;
+    minimum_heights.reserve(groups.size());
     for (std::size_t group_index = 0; group_index < groups.size(); ++group_index) {
         const auto& group = groups[group_index];
-        const auto& layout_nodes = view_.overlay_groups[group_index];
-        const std::span<const std::uint32_t> nodes = layout_nodes;
-        const bool compact_collections = group.source == LayoutSource::Children;
-        const bool stats = is_stats_group(group, state, layout_nodes);
-        required_body_height = std::max(
-            required_body_height,
-            overlay_body_height_for_content(group, minimum_height(group, nodes, compact_collections, stats), scale_));
+        minimum_heights.push_back(minimum_height(group, view_.overlay_groups[group_index],
+                                                 group.source == LayoutSource::Children,
+                                                 view_.overlay_stats[group_index]));
+        required_body_height =
+            std::max(required_body_height, overlay_body_height_for_content(group, minimum_heights.back(), scale_));
         max_padding = std::max(max_padding, group.padding);
     }
     int window_width = 0;
@@ -79,16 +71,51 @@ void WindowRenderer::Impl::draw_overlay_layout(const PublishedState& state, cons
         SDL_SetWindowSize(context_.window(), window_width, minimum_window_height);
     }
     const float layout_body_height = std::max(body_height, required_body_height);
+    // Full-width groups stacked top to bottom share the spare height equally, so every row gap
+    // matches regardless of how the template splits its bands.
+    std::vector<std::pair<float, float>> stacked_bands;
+    const bool stacked = groups.size() > 1 &&
+                         std::ranges::all_of(groups,
+                                             [](const LayoutGroup& group) {
+                                                 return group.x <= 0.0F && group.width >= 1.0F;
+                                             }) &&
+                         std::ranges::is_sorted(groups, {}, &LayoutGroup::y);
+    if (stacked) {
+        std::vector<float> contents;
+        float content_total = 0.0F;
+        for (std::size_t group_index = 0; group_index < groups.size(); ++group_index) {
+            const auto& group = groups[group_index];
+            const bool compact = group.source == LayoutSource::Children;
+            // Compact rows draw bare icons inside an invisible frame; space them by what is visible.
+            const float hidden_frame = compact ? ui::progress_frame_for_icon(icon_size()) - icon_size() : 0.0F;
+            const auto content = minimum_heights[group_index] - hidden_frame + (from_icon(group.margin) * 2.0F);
+            contents.push_back(content);
+            content_total += content;
+        }
+        const float top = origin.y + from_icon(8.0F);
+        const float spare = std::max(0.0F, (origin.y + layout_body_height) - top - content_total);
+        const float share = spare / static_cast<float>(groups.size());
+        float y = top;
+        for (const auto content : contents) {
+            stacked_bands.emplace_back(y, content + share);
+            y += content + share;
+        }
+    }
     for (std::size_t group_index = 0; group_index < groups.size(); ++group_index) {
         const auto& group = groups[group_index];
         const auto& layout_nodes = view_.overlay_groups[group_index];
         std::span<const std::uint32_t> nodes = layout_nodes;
         auto* const draw = ImGui::GetWindowDrawList();
         const bool compact_collections = group.source == LayoutSource::Children;
-        const bool stats = is_stats_group(group, state, layout_nodes);
+        const bool stats = view_.overlay_stats[group_index];
         const bool scrollable = !stats;
-        const auto metrics = calculate_layout_metrics(group, true, nodes.size(), available.x, layout_body_height,
-                                                      origin.x, origin.y, scale_);
+        auto metrics = calculate_layout_metrics(group, true, nodes.size(), available.x, layout_body_height, origin.x,
+                                                origin.y, scale_);
+        if (stacked) {
+            const auto margin = from_icon(group.margin);
+            metrics.y = stacked_bands[group_index].first + margin;
+            metrics.configured_height = std::max(1.0F, stacked_bands[group_index].second - (margin * 2.0F));
+        }
         const float row_gap = metrics.gap;
         const float item_width = metrics.cell_width;
         const auto padding = from_icon(group.padding);
@@ -108,10 +135,11 @@ void WindowRenderer::Impl::draw_overlay_layout(const PublishedState& state, cons
         if (carousel && !carousel->items.empty() && overlay_scroll_speed != 0.0F) {
             continuous_animation_ = true;
         }
-        const float minimum_group_height = minimum_height(group, nodes, compact_collections, stats);
+        const float minimum_group_height = minimum_heights[group_index];
         const float height = std::max(1.0F, metrics.configured_height);
-        const float content_top =
-            metrics.y + padding + std::max(0.0F, (metrics.configured_height - minimum_group_height) * 0.5F);
+        const float content_top = metrics.y + padding +
+                                  (stacked ? (metrics.configured_height - minimum_group_height) * 0.5F
+                                           : std::max(0.0F, (metrics.configured_height - minimum_group_height) * 0.5F));
         float strip_offset = 0.0F;
         draw->PushClipRect({metrics.x, metrics.y}, {metrics.x + metrics.width, metrics.y + height}, true);
         ImDrawListSplitter splitter;
@@ -169,13 +197,15 @@ void WindowRenderer::Impl::draw_main_layout(const PublishedState& state, const I
         const bool collection_item = group.source == LayoutSource::Children;
         if (collection_item)
             ImGui::PushFont(nullptr, ui::font_size(scale_));
-        const bool stats = is_stats_group(group, state, nodes);
+        const bool stats = view_.main_stats[group_index];
         const auto metrics =
             calculate_layout_metrics(group, false, nodes.size(), available.x, body_height, origin.x, origin.y, scale_);
         const auto padding = from_icon(group.padding);
         const float height = metrics.configured_height;
-        draw->AddRect({metrics.x, metrics.y}, {metrics.x + metrics.width, metrics.y + height},
-                      IM_COL32(120, 120, 130, 255), 0.0, from_icon(2.0F));
+        // Inset each panel so neighbours read as separate slots with a gutter between them.
+        const float inset = from_icon(2.0F);
+        draw_inset_panel(draw, {metrics.x + inset, metrics.y + inset},
+                         {metrics.x + metrics.width - inset, metrics.y + height - inset}, from_icon(2.0F));
         const float content_top = metrics.y + padding;
         std::vector<ImVec2> collection_positions;
         if (collection_item) {
@@ -280,18 +310,8 @@ void WindowRenderer::Impl::draw_main_layout(const PublishedState& state, const I
             ImGui::PopFont();
     }
 
-    const float status_height = status_footer_height();
-    const float controls_height = from_icon(40.0F);
-    const float footer_height = status_height + controls_height;
-    const float footer_top = origin.y + available.y - footer_height;
-    const float footer_center_y = footer_top + status_height + (controls_height * 0.5F);
-    const float header_left = draw_main_controls(origin, footer_top, status_height);
-    ImGui::PushClipRect({header_left, footer_top + status_height}, {origin.x + available.x, origin.y + available.y},
-                        true);
-    ImGui::SetCursorScreenPos({origin.x, footer_center_y - from_icon(16.0F)});
-    draw_header(state);
-    ImGui::PopClipRect();
-    draw_status_footer(origin, available, footer_top);
+    const auto header = make_header(state);
+    draw_main_footer(&state, &header, origin, available);
 }
 
 void WindowRenderer::Impl::draw_responsive_layout(const PublishedState& state, const float overlay_scroll_speed,

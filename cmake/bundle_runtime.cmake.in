@@ -1,16 +1,23 @@
-# Resolve and relocate non-system libraries into the installed executable directory.
+# Resolve and relocate non-system libraries into the installed program directory.
 include(BundleUtilities)
 function(gp_item_default_embedded_path_override item path)
     set(${path} "@executable_path" PARENT_SCOPE)
 endfunction()
 set(BU_CHMOD_BUNDLE_ITEMS ON)
-set(BEACON_INSTALL_ROOT "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}")
-set(BEACON_EXECUTABLE "${BEACON_INSTALL_ROOT}/beacon@CMAKE_EXECUTABLE_SUFFIX@")
-fixup_bundle("${BEACON_EXECUTABLE}"
+set(BEACON_PROGRAM_ROOT "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/@BEACON_PROGRAM_DIR@")
+set(BEACON_EXECUTABLE "${BEACON_PROGRAM_ROOT}/beacon@CMAKE_EXECUTABLE_SUFFIX@")
+set(BEACON_FIXUP_ROOT "${BEACON_PROGRAM_ROOT}/.beacon-runtime-fixup")
+file(REMOVE_RECURSE "${BEACON_FIXUP_ROOT}")
+file(MAKE_DIRECTORY "${BEACON_FIXUP_ROOT}")
+file(COPY_FILE "${BEACON_EXECUTABLE}" "${BEACON_FIXUP_ROOT}/beacon@CMAKE_EXECUTABLE_SUFFIX@")
+fixup_bundle("${BEACON_FIXUP_ROOT}/beacon@CMAKE_EXECUTABLE_SUFFIX@"
     "" "@BEACON_RUNTIME_SEARCH_DIRS@")
+file(GLOB BEACON_FIXED_RUNTIME_ITEMS "${BEACON_FIXUP_ROOT}/*")
+file(COPY ${BEACON_FIXED_RUNTIME_ITEMS} DESTINATION "${BEACON_PROGRAM_ROOT}" FOLLOW_SYMLINK_CHAIN)
+file(REMOVE_RECURSE "${BEACON_FIXUP_ROOT}")
 
 if(APPLE)
-    file(GLOB libraries "${BEACON_INSTALL_ROOT}/*.dylib")
+    file(GLOB libraries "${BEACON_PROGRAM_ROOT}/*.dylib")
     foreach(binary IN LISTS libraries)
         execute_process(COMMAND codesign --force --sign - "${binary}" COMMAND_ERROR_IS_FATAL ANY)
     endforeach()

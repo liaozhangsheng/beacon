@@ -31,6 +31,9 @@ struct ProgressViewModel {
     std::vector<std::string> labels;
     std::vector<std::vector<std::uint32_t>> main_groups;
     std::vector<std::vector<std::uint32_t>> overlay_groups;
+    // Groups made only of stat/ counters, which show their values instead of completion.
+    std::vector<bool> main_stats;
+    std::vector<bool> overlay_stats;
     std::vector<std::vector<Collection>> main_collections;
     std::vector<std::vector<std::uint32_t>> overlay_collection_starts;
 

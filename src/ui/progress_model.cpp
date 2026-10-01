@@ -1,5 +1,7 @@
 #include <beacon/ui/progress.hpp>
 
+#include <algorithm>
+
 namespace beacon {
 
 bool is_complete(const PublishedState& state) {
@@ -41,6 +43,20 @@ void ProgressViewModel::update(const PublishedState& state) {
     };
     resolve_groups(state.layout->main, main_groups);
     resolve_groups(state.layout->overlay, overlay_groups);
+    const auto is_stats = [&](const LayoutGroup& group, const std::vector<std::uint32_t>& nodes) {
+        return group.source == LayoutSource::Nodes && !nodes.empty() &&
+               std::ranges::all_of(nodes, [&](const auto node) {
+                   const auto& rule = state.compiled->graph.nodes[node];
+                   return rule.op == RuleOp::Fact && rule.fact_key.starts_with("stat/");
+               });
+    };
+    const auto resolve_stats = [&](const auto& groups, const auto& nodes, auto& stats) {
+        stats.clear();
+        for (std::size_t index = 0; index < groups.size(); ++index)
+            stats.push_back(is_stats(groups[index], nodes[index]));
+    };
+    resolve_stats(state.layout->main, main_groups, main_stats);
+    resolve_stats(state.layout->overlay, overlay_groups, overlay_stats);
 
     const auto collections = [&](const LayoutGroup& group, const std::vector<std::uint32_t>& nodes) {
         std::vector<Collection> resolved;

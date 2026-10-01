@@ -29,7 +29,7 @@ if(NOT EXISTS "${beacon_executable}")
 endif()
 
 execute_process(
-    COMMAND "${CMAKE_COMMAND}" -E env SDL_VIDEODRIVER=dummy "${beacon_executable}" --smoke-test
+    COMMAND "${beacon_executable}" --smoke-test
     WORKING_DIRECTORY "${BEACON_INSTALL_DIR}/${BEACON_INSTALL_BINDIR}"
     RESULT_VARIABLE smoke_result
     OUTPUT_VARIABLE smoke_output

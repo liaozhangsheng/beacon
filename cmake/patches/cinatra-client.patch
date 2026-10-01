@@ -1,15 +1,258 @@
 --- a/cinatra/coro_http_client.hpp
 +++ b/cinatra/coro_http_client.hpp
-@@ -192 +192 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
+@@ -2,0 +3 @@
++#include <array>
+@@ -8,0 +10 @@
++#include <functional>
+@@ -105,0 +108 @@
++  std::function<bool(std::string_view)> resp_body_sink;
+@@ -192 +195 @@
 -    if (socket_ == nullptr || socket_->has_closed_)
 +    if (socket_ == nullptr)
-@@ -235 +235 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
+@@ -204,0 +208,3 @@
++  // Runs after the default verify paths are loaded and before the stream is created.
++  std::function<void(asio::ssl::context &)> ssl_context_setup;
++
+@@ -225,0 +232,2 @@
++      if (ssl_context_setup)
++        ssl_context_setup(*ssl_ctx_);
+@@ -235 +243 @@
 -        ssl_ctx_->set_verify_callback(
 +        socket_->ssl_stream_->set_verify_callback(
-@@ -1668 +1668 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
+@@ -1505 +1513,2 @@
+-    socket_t(ioc_t &&ioc) : impl_(std::forward<ioc_t>(ioc)) {}
++    socket_t(ioc_t &&ioc)
++        : impl_(std::forward<ioc_t>(ioc)), head_buf_(64U * 1024U) {}
+@@ -1649,0 +1659,62 @@
++  }
++
++  static std::error_code write_response_sink(
++      const std::function<bool(std::string_view)> &sink,
++      std::string_view chunk) {
++    try {
++      if (sink(chunk))
++        return {};
++    }
++    catch (...) {
++    }
++    return std::make_error_code(std::errc::io_error);
++  }
++
++  async_simple::coro::Lazy<std::error_code> handle_fixed_sink(
++      const std::function<bool(std::string_view)> &sink,
++      int64_t content_len) {
++    if (content_len < 0 || max_http_body_len_ < 0 ||
++        static_cast<uint64_t>(content_len) >
++            static_cast<uint64_t>(max_http_body_len_))
++      co_return std::make_error_code(std::errc::value_too_large);
++
++    std::array<char, 64U * 1024U> buffer{};
++    uint64_t remaining = static_cast<uint64_t>(content_len);
++    uint64_t total = 0;
++    while (remaining > 0) {
++      if (head_buf_.size() > 0) {
++        const size_t amount = (std::min)(
++            {remaining, static_cast<uint64_t>(head_buf_.size()),
++             static_cast<uint64_t>(buffer.size())});
++        const char *data_ptr =
++            asio::buffer_cast<const char *>(head_buf_.data());
++        if (auto ec = write_response_sink(sink, {data_ptr, amount}); ec)
++          co_return ec;
++        head_buf_.consume(amount);
++        remaining -= amount;
++        total += amount;
++        continue;
++      }
++
++      const size_t amount =
++          static_cast<size_t>((std::min)(remaining,
++                                         static_cast<uint64_t>(buffer.size())));
++      auto [ec, size] = co_await async_read(asio::buffer(buffer), amount);
++      if (size > amount)
++        co_return std::make_error_code(std::errc::protocol_error);
++      if (size > 0) {
++        if (size > static_cast<size_t>(max_http_body_len_ - total))
++          co_return std::make_error_code(std::errc::value_too_large);
++        if (auto sink_ec =
++                write_response_sink(sink, {buffer.data(), size});
++            sink_ec)
++          co_return sink_ec;
++        total += size;
++        remaining -= size;
++      }
++      if (ec)
++        co_return ec;
++      if (size != amount)
++        co_return std::make_error_code(std::errc::io_error);
++    }
++    co_return std::error_code{};
+@@ -1651,0 +1723,95 @@
++  async_simple::coro::Lazy<std::error_code> handle_chunked_sink(
++      resp_data &data, const std::function<bool(std::string_view)> &sink,
++      asio::streambuf &body_buf) {
++    if (max_http_body_len_ < 0)
++      co_return std::make_error_code(std::errc::value_too_large);
++
++    constexpr size_t sink_buffer_size = 64U * 1024U;
++    std::array<char, sink_buffer_size> buffer{};
++    const uint64_t limit = static_cast<uint64_t>(max_http_body_len_);
++    uint64_t total = 0;
++    std::error_code ec{};
++    size_t size = 0;
++    while (true) {
++      if (std::tie(ec, size) = co_await async_read_until(body_buf, CRCF);
++          ec)
++        co_return ec;
++
++      const char *data_ptr =
++          asio::buffer_cast<const char *>(body_buf.data());
++      const auto chunk_size =
++          hex_to_int(std::string_view(data_ptr, size - CRCF.size()));
++      body_buf.consume(size);
++      if (chunk_size < 0 ||
++          static_cast<uint64_t>(chunk_size) > limit - total)
++        co_return std::make_error_code(std::errc::value_too_large);
++
++      if (chunk_size == 0) {
++        if (body_buf.size() < CRCF.size()) {
++          std::tie(ec, size) =
++              co_await async_read(body_buf, CRCF.size() - body_buf.size());
++          if (ec)
++            co_return ec;
++        }
++        if (body_buf.size() < CRCF.size())
++          co_return std::make_error_code(std::errc::io_error);
++        data_ptr = asio::buffer_cast<const char *>(body_buf.data());
++        if (data_ptr[0] != '\r' || data_ptr[1] != '\n')
++          co_return std::make_error_code(std::errc::protocol_error);
++        body_buf.consume(CRCF.size());
++        data.eof = true;
++        co_return std::error_code{};
++      }
++
++      uint64_t remaining = static_cast<uint64_t>(chunk_size);
++      while (remaining > 0) {
++        const size_t amount = static_cast<size_t>(
++            (std::min)(remaining, static_cast<uint64_t>(buffer.size())));
++        if (body_buf.size() > 0) {
++          const size_t available = (std::min)(amount, body_buf.size());
++          data_ptr = asio::buffer_cast<const char *>(body_buf.data());
++          if (auto sink_ec =
++                  write_response_sink(sink, {data_ptr, available});
++              sink_ec)
++            co_return sink_ec;
++          body_buf.consume(available);
++          remaining -= available;
++          total += available;
++          continue;
++        }
++
++        std::tie(ec, size) =
++            co_await async_read(asio::buffer(buffer), amount);
++        if (size > amount)
++          co_return std::make_error_code(std::errc::protocol_error);
++        if (size > 0) {
++          if (size > static_cast<size_t>(limit - total))
++            co_return std::make_error_code(std::errc::value_too_large);
++          if (auto sink_ec =
++                  write_response_sink(sink, {buffer.data(), size});
++              sink_ec)
++            co_return sink_ec;
++          remaining -= size;
++          total += size;
++        }
++        if (ec)
++          co_return ec;
++        if (size != amount)
++          co_return std::make_error_code(std::errc::io_error);
++      }
++
++      if (body_buf.size() < CRCF.size()) {
++        std::tie(ec, size) =
++            co_await async_read(body_buf, CRCF.size() - body_buf.size());
++        if (ec)
++          co_return ec;
++      }
++      if (body_buf.size() < CRCF.size())
++        co_return std::make_error_code(std::errc::io_error);
++      data_ptr = asio::buffer_cast<const char *>(body_buf.data());
++      if (data_ptr[0] != '\r' || data_ptr[1] != '\n')
++        co_return std::make_error_code(std::errc::protocol_error);
++      body_buf.consume(CRCF.size());
++    }
++  }
++
+@@ -1653 +1819 @@
+-                                size_t header_size) {
++                                size_t header_size, bool sink_mode) {
+@@ -1668 +1834,5 @@
 -    if (parser_.body_len() > max_http_body_len_ || parser_.body_len() < 0)
-+    if (parser_.is_multipart() || parser_.body_len() > max_http_body_len_ || parser_.body_len() < 0)
-@@ -1976,2 +1976,5 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
++    const bool discard_body =
++        sink_mode && (parser.status() < 200 || parser.status() >= 300);
++    if (!discard_body &&
++        (parser_.is_multipart() || parser_.body_len() > max_http_body_len_ ||
++         parser_.body_len() < 0))
+@@ -1695 +1865,2 @@
+-      ec = handle_header(data, parser_, size);
++      ec = handle_header(data, parser_, size,
++                         static_cast<bool>(ctx.resp_body_sink));
+@@ -1700,0 +1872,9 @@
++      if (ctx.resp_body_sink &&
++          (data.status < 200 || data.status >= 300)) {
++        redirect_uri_.clear();
++        if (parser_.is_location())
++          redirect_uri_ = parser_.get_header_value("Location");
++        is_keep_alive = false;
++        head_buf_.consume(head_buf_.size());
++        co_return data;
++      }
+@@ -1704,0 +1885,16 @@
++      if (ctx.resp_body_sink) {
++        const auto content_encoding =
++            parser_.get_header_value("Content-Encoding");
++        if (!content_encoding.empty() &&
++            (content_encoding.size() != 8 ||
++             !iequal0(content_encoding, "identity"))) {
++          ec = std::make_error_code(std::errc::protocol_error);
++          break;
++        }
++        if (!parser_.is_chunked() &&
++            parser_.get_header_value("Content-Length").empty()) {
++          ec = std::make_error_code(std::errc::protocol_error);
++          break;
++        }
++      }
++
+@@ -1714,5 +1910,4 @@
+-        if (head_buf_.size() > 0) {
+-          const char *data_ptr =
+-              asio::buffer_cast<const char *>(head_buf_.data());
+-          chunked_buf_.sputn(data_ptr, head_buf_.size());
+-          head_buf_.consume(head_buf_.size());
++        if (ctx.resp_body_sink) {
++          is_keep_alive = false;
++          ec = co_await handle_chunked_sink(data, ctx.resp_body_sink,
++                                            head_buf_);
+@@ -1720 +1915,9 @@
+-        ec = co_await handle_chunked(data, std::move(ctx));
++        else {
++          if (head_buf_.size() > 0) {
++            const char *data_ptr =
++                asio::buffer_cast<const char *>(head_buf_.data());
++            chunked_buf_.sputn(data_ptr, head_buf_.size());
++            head_buf_.consume(head_buf_.size());
++          }
++          ec = co_await handle_chunked(data, std::move(ctx));
++        }
+@@ -1736,0 +1940,7 @@
++      if (ctx.resp_body_sink) {
++        ec = co_await handle_fixed_sink(ctx.resp_body_sink,
++                                        parser_.body_len());
++        data.eof = !ec && head_buf_.size() == 0;
++        break;
++      }
++
+@@ -1976,2 +2186,5 @@
 -      if (chunk_size < 0) {
 -        CINATRA_LOG_DEBUG << "bad chunked size";
 +      if (chunk_size < 0 || max_http_body_len_ < 0 ||

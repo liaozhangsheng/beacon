@@ -72,18 +72,28 @@ void WindowRenderer::Impl::render(const std::shared_ptr<const PublishedState>& s
                                   const std::optional<Error>& runtime_error, Settings* settings,
                                   std::optional<Error>* settings_error,
                                   const std::vector<std::filesystem::path>* template_options, bool* apply_settings,
-                                  Runtime* runtime) {
+                                  Runtime* runtime, UpdateNotice* update_notice) {
     context_.make_current();
     if (settings != nullptr) {
         const auto requested_scale = overlay_ ? settings->overlay_window_scale : settings->main_window_scale;
         set_scale(std::clamp(requested_scale, min_window_scale, max_window_scale));
     }
     manual_runtime_ = runtime;
+    update_notice_ = overlay_ ? nullptr : update_notice;
     continuous_animation_ = false;
     assets_->begin_frame();
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
+    if (!overlay_ && manual_runtime_ != nullptr && !ImGui::GetIO().WantTextInput) {
+        bool restart = ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_R);
+#if defined(__APPLE__)
+        // ImGui maps Cmd to Ctrl on macOS; also accept the physical Ctrl key.
+        restart = restart || ImGui::IsKeyChordPressed(ImGuiMod_Super | ImGuiKey_R);
+#endif
+        if (restart)
+            restart_run();
+    }
 
     if (overlay_ && state) {
         completion_.update(*state);
@@ -103,6 +113,28 @@ void WindowRenderer::Impl::render(const std::shared_ptr<const PublishedState>& s
     const auto flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                        ImGuiWindowFlags_NoBringToFrontOnFocus | (overlay_ ? ImGuiWindowFlags_NoBackground : 0);
     ImGui::PushFont(nullptr, ui::font_size(scale_));
+    if (update_notice_ != nullptr && !update_notice_->version.empty()) {
+        // Keep both footer buttons reachable; messages and the header shrink to fit.
+        const float controls_width = from_icon(96.0F) + ImGui::GetStyle().ItemSpacing.x + update_button_width();
+        const float required_width =
+            controls_width + (from_icon(8.0F) * 2.0F) + (ImGui::GetStyle().WindowPadding.x * 2.0F);
+        const int minimum_width = static_cast<int>(std::ceil(required_width));
+        const float required_height =
+            from_icon(80.0F) + ImGui::GetTextLineHeight() + (ImGui::GetStyle().WindowPadding.y * 2.0F);
+        const int minimum_height = static_cast<int>(std::ceil(required_height));
+        int current_width = 0;
+        int current_height = 0;
+        SDL_GetWindowMinimumSize(context_.window(), &current_width, &current_height);
+        if (current_width != minimum_width || current_height != minimum_height) {
+            SDL_SetWindowMinimumSize(context_.window(), minimum_width, minimum_height);
+            int window_width = 0;
+            int window_height = 0;
+            SDL_GetWindowSize(context_.window(), &window_width, &window_height);
+            if (window_width < minimum_width || window_height < minimum_height)
+                SDL_SetWindowSize(context_.window(), std::max(window_width, minimum_width),
+                                  std::max(window_height, minimum_height));
+        }
+    }
     const bool transparent_background = overlay_ && (settings ? settings->overlay_transparent : overlay_transparent_);
     const auto background = [&] {
         if (transparent_background) {
@@ -135,6 +167,8 @@ void WindowRenderer::Impl::render(const std::shared_ptr<const PublishedState>& s
     continuous_animation_ |= (state && (completion_.any_active() || completion_view_ ||
                                         (completion_started_.has_value() && !completion_view_))) ||
                              ImGui::IsAnyItemActive() || ImGui::GetIO().WantTextInput;
+    // Window moves count too: ImGui makes the move an active item.
+    pointer_held_ = ImGui::IsAnyItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left);
     ImGui::Render();
     const auto& io = ImGui::GetIO();
     SDL_SetRenderScale(context_.renderer(), io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
@@ -149,6 +183,12 @@ void WindowRenderer::Impl::render(const std::shared_ptr<const PublishedState>& s
 }
 
 std::uint64_t WindowRenderer::Impl::refresh_delay_ms() const {
+    if (pointer_held_) {
+        // Anything under a held pointer moves with it; 30 fps visibly trails the cursor.
+        const auto* mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(context_.window()));
+        const float rate = mode != nullptr && mode->refresh_rate > 0.0F ? mode->refresh_rate : 60.0F;
+        return std::max<std::uint64_t>(1, static_cast<std::uint64_t>(1000.0F / rate));
+    }
     const auto now = SDL_GetTicks();
     if (continuous_animation_ || now < interactive_until_) {
         // VSync may queue a present without blocking; always keep a CPU frame budget.
@@ -160,6 +200,10 @@ std::uint64_t WindowRenderer::Impl::refresh_delay_ms() const {
 
 std::uint64_t WindowRenderer::refresh_delay_ms() const {
     return impl_->refresh_delay_ms();
+}
+
+bool WindowRenderer::pointer_held() const {
+    return impl_->pointer_held();
 }
 
 WindowRenderer::WindowRenderer(const std::string& title, const WindowSettings& settings, const bool overlay,
@@ -224,8 +268,9 @@ void WindowRenderer::render(const std::shared_ptr<const PublishedState>& state,
                             const std::optional<Error>& runtime_error, Settings* settings,
                             std::optional<Error>* settings_error,
                             const std::vector<std::filesystem::path>* template_options, bool* apply_settings,
-                            Runtime* runtime) {
-    impl_->render(state, runtime_error, settings, settings_error, template_options, apply_settings, runtime);
+                            Runtime* runtime, UpdateNotice* update_notice) {
+    impl_->render(state, runtime_error, settings, settings_error, template_options, apply_settings, runtime,
+                  update_notice);
 }
 
 }  // namespace beacon

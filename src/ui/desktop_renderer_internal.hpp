@@ -15,11 +15,11 @@
 #include <SDL3/SDL.h>
 #include <imgui.h>
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <optional>
-#include <span>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -46,18 +46,23 @@ public:
     void set_scale(float scale);
 
     [[nodiscard]] std::uint64_t refresh_delay_ms() const;
+    [[nodiscard]] bool pointer_held() const {
+        return pointer_held_;
+    }
 
     void process_event(const SDL_Event& event);
     void prepare(const std::shared_ptr<const PublishedState>& state,
                  const std::shared_ptr<const PlayerCard>& player_card);
     void render(const std::shared_ptr<const PublishedState>& state, const std::optional<Error>& runtime_error,
                 Settings* settings, std::optional<Error>* settings_error,
-                const std::vector<std::filesystem::path>* template_options, bool* apply_settings, Runtime* runtime);
+                const std::vector<std::filesystem::path>* template_options, bool* apply_settings, Runtime* runtime,
+                UpdateNotice* update_notice);
 
 private:
     void prepare_profile(const std::shared_ptr<const PlayerCard>& player_card);
     void prepare_template(const std::shared_ptr<const PublishedState>& state);
     void build_atlas(const std::vector<std::filesystem::path>& paths);
+    void resolve_node_sprites(const std::vector<NodeImages>& images);
     void prepare_layout(const std::shared_ptr<const PublishedState>& state);
     void update_progress_glows(const PublishedState& state);
     void draw_glow(ImDrawList* draw, ImVec2 frame_min, float frame_size, float brightness, float phase,
@@ -71,14 +76,64 @@ private:
     void draw_player_card(const PublishedState& state, float center_y) const;
     void draw_completion_progress(const ProgressStats& stats, const std::string& progress_text,
                                   const std::string& percentage_text, float center_y) const;
-    void draw_header(const PublishedState& state);
-    float draw_main_controls(ImVec2 origin, float footer_top, float status_height);
+
+    struct HeaderText {
+        std::string beacon;
+        std::string template_name;
+        std::string nickname;
+        std::string refreshed;
+        std::string igt;
+        std::string progress;
+        std::string percentage;
+        ProgressStats stats;
+
+        // Drawn left to right in this order, separated by "|".
+        enum Segment : std::size_t {
+            beacon_segment,
+            template_segment,
+            player_segment,
+            refreshed_segment,
+            igt_segment,
+            completion_segment,
+            segment_count,
+        };
+        std::array<float, segment_count> segment_widths{};
+        std::array<bool, segment_count> visible{};
+        float separator_width = 0.0F;
+
+        [[nodiscard]] float width() const;
+        [[nodiscard]] float minimum_width() const;
+        // Hides optional segments until the header fits in max_width.
+        void fit(float max_width);
+    };
+    [[nodiscard]] HeaderText make_header(const PublishedState& state) const;
+    // Right-aligns to right_edge in the main window; the overlay centers it instead.
+    void draw_header(const PublishedState& state, const HeaderText& header, float right_edge = 0.0F);
+    float draw_main_controls(ImVec2 origin, float center_y);
+    // One row: buttons, then the status message, then the right-aligned header.
+    void draw_main_footer(const PublishedState* state, const HeaderText* header, ImVec2 origin, ImVec2 available);
+    void restart_run();
     [[nodiscard]] float status_footer_height() const;
     void draw_status_footer(ImVec2 origin, ImVec2 available, float footer_top) const;
+    [[nodiscard]] float update_button_width() const;
 
     struct AtlasRegion {
         ImVec2 uv_min;
         ImVec2 uv_max;
+    };
+
+    // Where a node image is drawn from, resolved once per template instead of every frame.
+    struct Sprite {
+        SDL_Texture* texture = nullptr;
+        ImVec2 uv_min{0.0F, 0.0F};
+        ImVec2 uv_max{1.0F, 1.0F};
+        // GIFs change texture as they play, so they are fetched from UiAssets when drawn.
+        std::filesystem::path animation;
+    };
+    struct NodeSprites {
+        Sprite icon;
+        Sprite frame_obtained;
+        Sprite frame_unobtained;
     };
 
     struct ItemLayout {
@@ -99,8 +154,6 @@ private:
         bool collection_item = false;
     };
 
-    static bool is_stats_group(const LayoutGroup& group, const PublishedState& state,
-                               std::span<const std::uint32_t> nodes);
     void draw_node_icon(const PublishedState& state, ImDrawList* draw, std::uint32_t node, ImVec2 frame_position,
                         float frame_size, ImVec2 icon_position, float icon_size, bool show_frame, bool draw_glow,
                         ImU32 icon_tint = IM_COL32(255, 255, 255, 255), ImDrawListSplitter* splitter = nullptr) const;
@@ -128,6 +181,7 @@ private:
     bool ready_ = false;
     float scale_ = 1.0F;
     mutable bool continuous_animation_ = false;
+    bool pointer_held_ = false;
     std::uint64_t interactive_until_ = 0;
     WindowContext context_;
     mutable std::optional<UiAssets> assets_;
@@ -149,10 +203,15 @@ private:
     SDL_Texture* avatar_texture_ = nullptr;
     SdlTexturePtr atlas_texture_;
     std::unordered_map<std::filesystem::path, AtlasRegion> atlas_regions_;
+    std::vector<NodeSprites> node_sprites_;
     Runtime* manual_runtime_ = nullptr;
-    std::string control_message_;
     std::string footer_message_;
-    ImVec4 footer_color_{1.0F, 0.65F, 0.25F, 1.0F};
+    ImVec4 footer_color_{1.0F, 170.0F / 255.0F, 0.0F, 1.0F};
+    // Short-lived confirmation for keyboard actions, shown in place of the status message.
+    std::string feedback_message_;
+    ImVec4 feedback_color_{1.0F, 1.0F, 1.0F, 1.0F};
+    std::uint64_t feedback_until_ = 0;
+    UpdateNotice* update_notice_ = nullptr;
 };
 
 }  // namespace beacon

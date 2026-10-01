@@ -449,17 +449,31 @@ ylt::expected<TemplateResources, Error> load_template_resources(const std::files
                              .layout = std::make_shared<const Layout>(std::move(*layout))};
 }
 
+std::vector<NodeImages> node_images(const CompiledTemplate& compiled) {
+    std::vector<NodeImages> images(compiled.presentation_by_node.size());
+    for (std::size_t node = 0; node < images.size(); ++node) {
+        if (const auto& view = compiled.presentation_by_node[node]) {
+            images[node] = {.icon = path_from_utf8(view->icon_path),
+                            .frame_obtained = path_from_utf8(view->frame_obtained_path),
+                            .frame_unobtained = path_from_utf8(view->frame_unobtained_path)};
+        }
+    }
+    return images;
+}
+
+std::filesystem::path frame_glow_path(const std::filesystem::path& frame_obtained) {
+    return frame_obtained.parent_path() / "frame_glow.png";
+}
+
 ylt::expected<IconFiles, Error> icon_file_stamps(const CompiledTemplate& compiled) {
     std::vector<std::filesystem::path> paths;
-    for (const auto& view : compiled.presentation_by_node) {
-        if (!view)
-            continue;
-        for (const auto* path : {&view->icon_path, &view->frame_obtained_path, &view->frame_unobtained_path}) {
+    for (const auto& images : node_images(compiled)) {
+        for (const auto* path : {&images.icon, &images.frame_obtained, &images.frame_unobtained}) {
             if (!path->empty())
-                paths.emplace_back(path_from_utf8(*path));
+                paths.push_back(*path);
         }
-        if (!view->frame_obtained_path.empty())
-            paths.push_back(path_from_utf8(view->frame_obtained_path).parent_path() / "frame_glow.png");
+        if (!images.frame_obtained.empty())
+            paths.push_back(frame_glow_path(images.frame_obtained));
     }
     std::sort(paths.begin(), paths.end());
     paths.erase(std::unique(paths.begin(), paths.end()), paths.end());

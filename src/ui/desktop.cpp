@@ -3,6 +3,9 @@
 #include <beacon/ui/display.hpp>
 #include <beacon/ui/profile.hpp>
 #include <beacon/ui/progress.hpp>
+#include <beacon/io/file.hpp>
+#include <beacon/update/layout.hpp>
+#include <beacon/update/version.hpp>
 #include "desktop_renderer.hpp"
 
 #include <SDL3/SDL.h>
@@ -17,6 +20,13 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+
+#if defined(_WIN32)
+    #define NOMINMAX
+    #include <windows.h>
+#else
+    #include <unistd.h>
+#endif
 
 namespace beacon {
 namespace {
@@ -46,6 +56,36 @@ void raise_overlay_window(SDL_Window* window) {
         SDL_Log("Could not raise overlay window: %s", SDL_GetError());
 }
 
+SDL_Process* start_process(const std::vector<std::string>& arguments, const bool capture_stdout) {
+    std::vector<char*> argv;
+    argv.reserve(arguments.size() + 1);
+    for (const auto& argument : arguments)
+        argv.push_back(const_cast<char*>(argument.c_str()));
+    argv.push_back(nullptr);
+
+    const auto properties = SDL_CreateProperties();
+    if (properties == 0)
+        return nullptr;
+    bool configured = SDL_SetPointerProperty(properties, SDL_PROP_PROCESS_CREATE_ARGS_POINTER, argv.data()) &&
+                      SDL_SetBooleanProperty(properties, SDL_PROP_PROCESS_CREATE_BACKGROUND_BOOLEAN, !capture_stdout);
+    if (capture_stdout) {
+        configured = configured &&
+                     SDL_SetNumberProperty(properties, SDL_PROP_PROCESS_CREATE_STDOUT_NUMBER, SDL_PROCESS_STDIO_APP) &&
+                     SDL_SetNumberProperty(properties, SDL_PROP_PROCESS_CREATE_STDERR_NUMBER, SDL_PROCESS_STDIO_NULL);
+    }
+    auto* process = configured ? SDL_CreateProcessWithProperties(properties) : nullptr;
+    SDL_DestroyProperties(properties);
+    return process;
+}
+
+std::uint64_t current_process_id() {
+#if defined(_WIN32)
+    return GetCurrentProcessId();
+#else
+    return static_cast<std::uint64_t>(getpid());
+#endif
+}
+
 }  // namespace
 
 struct DesktopLoop::Impl {
@@ -54,12 +94,13 @@ public:
     static constexpr auto poll_interval = std::chrono::milliseconds(250);
 
     Impl(Runtime* runtime, Persistence* persistence, std::shared_ptr<const PublishedState> fixed_state,
-         const Settings& settings, const std::filesystem::path& asset_root, const std::filesystem::path& data_root,
-         const std::vector<std::filesystem::path>& template_options, const int frame_limit,
-         std::optional<Error> initial_error)
+         const Settings& settings, const std::filesystem::path& asset_root, const std::filesystem::path& install_root,
+         const std::filesystem::path& data_root, const std::vector<std::filesystem::path>& template_options,
+         const int frame_limit, std::optional<Error> initial_error)
         : runtime_(runtime), persistence_(persistence), fixed_state_(std::move(fixed_state)), asset_root_(asset_root),
-          data_root_(data_root), template_options_(template_options), current_settings_(settings),
-          applied_settings_(settings), frame_limit_(frame_limit), runtime_error_(std::move(initial_error)),
+          install_root_(install_root), data_root_(data_root), template_options_(template_options),
+          current_settings_(settings), applied_settings_(settings), frame_limit_(frame_limit),
+          runtime_error_(std::move(initial_error)),
           tracker_("Beacon Tracker", WindowSettings{}, false, asset_root_, view_, settings.main_window_scale),
           overlay_("Beacon Overlay", WindowSettings{.x = 120, .y = 120, .width = 1280, .height = 180}, true,
                    asset_root_, view_, settings.overlay_window_scale, settings.overlay_transparent,
@@ -81,7 +122,17 @@ public:
         else
             raise_overlay_window(SDL_GetWindowFromID(overlay_.id()));
         next_poll_ = next_tracker_frame_ = next_overlay_frame_ = Clock::now();
+        if (frame_limit_ == 0 && !fixed_state_)
+            start_update_check();
         ready_ = true;
+    }
+
+    ~Impl() {
+        if (update_check_ != nullptr) {
+            if (!SDL_WaitProcess(update_check_, false, nullptr))
+                SDL_KillProcess(update_check_, true);
+            SDL_DestroyProcess(update_check_);
+        }
     }
 
     [[nodiscard]] bool ready() const {
@@ -117,6 +168,7 @@ public:
         if (!ready_ || !running_)
             return false;
         const auto frame_started = Clock::now();
+        poll_update_check();
         if (runtime_ != nullptr && frame_started >= next_poll_) {
             next_poll_ = frame_started + poll_interval;
             if (applied_settings_.auto_detect && current_settings_.auto_detect) {
@@ -143,12 +195,22 @@ public:
         const auto tracker_flags = SDL_GetWindowFlags(SDL_GetWindowFromID(tracker_.id()));
         const bool tracker_visible = (tracker_flags & (SDL_WINDOW_HIDDEN | SDL_WINDOW_MINIMIZED)) == 0;
         if (tracker_visible && frame_started >= next_tracker_frame_) {
+            const auto render_started = Clock::now();
             tracker_.prepare(state, player_card);
             tracker_.render(state, runtime_error_, &current_settings_, &settings_error_, &template_options_,
-                            &apply_settings_, runtime_);
-            const auto minimum_delay = (tracker_flags & SDL_WINDOW_INPUT_FOCUS) != 0 ? 33ULL : 200ULL;
+                            &apply_settings_, runtime_, &update_notice_);
+            if (update_notice_.apply_requested) {
+                update_notice_.apply_requested = false;
+                start_update_apply();
+            }
+            // A held pointer (dragging the settings book, a slider) runs at the display rate; otherwise cap the
+            // tracker at 30 fps, or 5 fps in the background.
+            const auto minimum_delay = tracker_.pointer_held()                         ? 0ULL
+                                       : (tracker_flags & SDL_WINDOW_INPUT_FOCUS) != 0 ? 33ULL
+                                                                                       : 200ULL;
+            // Pace from the frame start so render time does not stretch the interval.
             next_tracker_frame_ =
-                Clock::now() +
+                render_started +
                 std::chrono::milliseconds(std::max<std::uint64_t>(minimum_delay, tracker_.refresh_delay_ms()));
         }
         if (overlay_.overlay_transparent() != current_settings_.overlay_transparent) {
@@ -242,10 +304,82 @@ public:
     }
 
 private:
+    void start_update_check() {
+        const auto updater = update::layout::updater_executable(install_root_);
+        const auto manifest = install_root_ / update::layout::current_pointer;
+        std::error_code ec;
+        if (!std::filesystem::is_regular_file(updater, ec) || ec)
+            return;
+        ec.clear();
+        if (!std::filesystem::is_regular_file(manifest, ec) || ec)
+            return;
+        update_program_ = updater;
+        update_check_ = start_process(
+            {path_to_utf8(updater), "--check", "--machine-check", "--root", path_to_utf8(install_root_)}, true);
+        if (update_check_ == nullptr)
+            SDL_Log("Startup update check could not start: %s", SDL_GetError());
+    }
+
+    void poll_update_check() {
+        int exit_code = 0;
+        if (update_check_ == nullptr || !SDL_WaitProcess(update_check_, false, &exit_code))
+            return;
+        std::size_t size = 0;
+        auto* output = static_cast<char*>(SDL_ReadProcess(update_check_, &size, nullptr));
+        SDL_DestroyProcess(update_check_);
+        update_check_ = nullptr;
+        if (output == nullptr) {
+            SDL_Log("Startup update check failed: %s", SDL_GetError());
+            return;
+        }
+        std::string response(output, size);
+        SDL_free(output);
+        if (exit_code != 0) {
+            SDL_Log("Startup update check failed with exit code %d", exit_code);
+            return;
+        }
+        trim_line_end(response);
+        constexpr std::string_view available = "BEACON_UPDATE_AVAILABLE\t";
+        constexpr std::string_view current = "BEACON_UPDATE_CURRENT\t";
+        const auto set_version = [&](const std::string_view prefix, const bool is_available) {
+            if (!response.starts_with(prefix))
+                return false;
+            const auto version = std::string_view(response).substr(prefix.size());
+            if (!update::parse_version(version))
+                return false;
+            if (is_available) {
+                update_notice_.version = version;
+                update_notice_.error.clear();
+                next_tracker_frame_ = Clock::now();
+            }
+            return true;
+        };
+        if (!set_version(available, true) && !set_version(current, false))
+            SDL_Log("Startup update check returned an invalid result");
+    }
+
+    void start_update_apply() {
+        if (update_notice_.version.empty())
+            return;
+        const auto process =
+            start_process({path_to_utf8(update_program_), "--apply", "--root", path_to_utf8(install_root_),
+                           "--wait-for-parent", std::to_string(current_process_id())},
+                          false);
+        if (process == nullptr) {
+            update_notice_.error = std::string("无法启动更新器：") + SDL_GetError();
+            SDL_Log("Could not start updater: %s", SDL_GetError());
+            next_tracker_frame_ = Clock::now();
+            return;
+        }
+        SDL_DestroyProcess(process);
+        running_ = false;
+    }
+
     Runtime* runtime_ = nullptr;
     Persistence* persistence_ = nullptr;
     std::shared_ptr<const PublishedState> fixed_state_;
     std::filesystem::path asset_root_;
+    std::filesystem::path install_root_;
     std::filesystem::path data_root_;
     const std::vector<std::filesystem::path>& template_options_;
     Settings current_settings_;
@@ -258,6 +392,9 @@ private:
     std::optional<Error> runtime_error_;
     std::optional<Error> settings_error_;
     bool apply_settings_ = false;
+    SDL_Process* update_check_ = nullptr;
+    std::filesystem::path update_program_;
+    UpdateNotice update_notice_;
     ProgressViewModel view_;
     WindowRenderer tracker_;
     WindowRenderer overlay_;
@@ -272,10 +409,11 @@ private:
 
 DesktopLoop::DesktopLoop(Runtime* runtime, Persistence* persistence, std::shared_ptr<const PublishedState> fixed_state,
                          const Settings& settings, const std::filesystem::path& asset_root,
-                         const std::filesystem::path& data_root, const std::vector<std::filesystem::path>& templates,
-                         const int frame_limit, std::optional<Error> initial_error)
-    : impl_(std::make_unique<Impl>(runtime, persistence, std::move(fixed_state), settings, asset_root, data_root,
-                                   templates, frame_limit, std::move(initial_error))) {}
+                         const std::filesystem::path& install_root, const std::filesystem::path& data_root,
+                         const std::vector<std::filesystem::path>& templates, const int frame_limit,
+                         std::optional<Error> initial_error)
+    : impl_(std::make_unique<Impl>(runtime, persistence, std::move(fixed_state), settings, asset_root, install_root,
+                                   data_root, templates, frame_limit, std::move(initial_error))) {}
 
 DesktopLoop::~DesktopLoop() = default;
 
@@ -302,7 +440,8 @@ bool DesktopLoop::iterate() {
 namespace {
 
 int run_loop(Runtime* runtime, Persistence* persistence, const std::shared_ptr<const PublishedState>& fixed_state,
-             const std::filesystem::path& asset_root, const std::filesystem::path& data_root, const Settings& settings,
+             const std::filesystem::path& asset_root, const std::filesystem::path& install_root,
+             const std::filesystem::path& data_root, const Settings& settings,
              const std::vector<std::filesystem::path>& template_options, int frame_limit,
              std::optional<Error> initial_error = std::nullopt) {
     constexpr int max_events_per_frame = 128;
@@ -312,8 +451,8 @@ int run_loop(Runtime* runtime, Persistence* persistence, const std::shared_ptr<c
         SDL_Log("Initialization failed: %s", SDL_GetError());
         return 1;
     }
-    DesktopLoop desktop(runtime, persistence, fixed_state, settings, asset_root, data_root, template_options,
-                        frame_limit, std::move(initial_error));
+    DesktopLoop desktop(runtime, persistence, fixed_state, settings, asset_root, install_root, data_root,
+                        template_options, frame_limit, std::move(initial_error));
     if (!desktop.ready()) {
         return 1;
     }
@@ -345,10 +484,10 @@ int run_loop(Runtime* runtime, Persistence* persistence, const std::shared_ptr<c
 }  // namespace
 
 int run_desktop(Runtime& runtime, Persistence& persistence, const Settings& settings,
-                const std::filesystem::path& asset_root, const std::filesystem::path& data_root,
-                const std::vector<std::filesystem::path>& templates, int frame_limit,
-                std::optional<Error> initial_error) {
-    return run_loop(&runtime, &persistence, {}, asset_root, data_root, settings, templates, frame_limit,
+                const std::filesystem::path& asset_root, const std::filesystem::path& install_root,
+                const std::filesystem::path& data_root, const std::vector<std::filesystem::path>& templates,
+                int frame_limit, std::optional<Error> initial_error) {
+    return run_loop(&runtime, &persistence, {}, asset_root, install_root, data_root, settings, templates, frame_limit,
                     std::move(initial_error));
 }
 
@@ -397,6 +536,26 @@ int desktop_smoke_test(const std::filesystem::path& asset_root) {
         WindowRenderer window("Refresh smoke", WindowSettings{}, true, asset_root, view, 1.0F, false);
         if (!window.ready())
             return 1;
+        WindowRenderer tracker("Update notification smoke", WindowSettings{.width = 80, .height = 140}, false,
+                               asset_root, view);
+        if (!tracker.ready())
+            return 1;
+        UpdateNotice notice{.version = "1234567890.1234567890.1234567890"};
+        Settings update_settings;
+        update_settings.main_window_scale = max_window_scale;
+        tracker.prepare({}, {});
+        tracker.render({}, {}, &update_settings, nullptr, nullptr, nullptr, nullptr, &notice);
+        int minimum_width = 0;
+        int tracker_width = 0;
+        SDL_GetWindowMinimumSize(SDL_GetWindowFromID(tracker.id()), &minimum_width, nullptr);
+        SDL_GetWindowSize(SDL_GetWindowFromID(tracker.id()), &tracker_width, nullptr);
+        if (minimum_width <= 80 || tracker_width < minimum_width) {
+            SDL_Log("Update notification did not keep its button visible in a narrow window");
+            return 1;
+        }
+        notice.error = "启动更新器失败，请重试";
+        tracker.prepare(state, {});
+        tracker.render(state, {}, &update_settings, nullptr, nullptr, nullptr, nullptr, &notice);
         window.prepare({}, {});
         window.render({}, {});
         if (window.refresh_delay_ms() != 1000) {
@@ -442,7 +601,7 @@ int desktop_smoke_test(const std::filesystem::path& asset_root) {
     Settings settings;
     settings.overlay_visible = true;
     settings.overlay_transparent = false;
-    return run_loop(nullptr, nullptr, state, asset_root, asset_root, settings, {}, 1);
+    return run_loop(nullptr, nullptr, state, asset_root, asset_root, asset_root, settings, {}, 1);
 }
 
 }  // namespace beacon

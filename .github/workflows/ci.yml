@@ -17,11 +17,14 @@ jobs:
         include:
           - name: Linux
             os: ubuntu-24.04
+            platform: linux-x64
           - name: Windows
             os: windows-2022
             triplet: x64-windows
+            platform: windows-x64
           - name: macOS
             os: macos-15
+            platform: macos-arm64
 
     steps:
       - name: Check out repository
@@ -48,7 +51,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes \
-            catch2 clang-format libssl-dev ninja-build pkg-config \
+            catch2 clang-format libarchive-dev libssl-dev ninja-build pkg-config \
             libasound2-dev libpulse-dev libfribidi-dev libjack-dev libsndio-dev \
             libaudio-dev \
             libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
@@ -82,7 +85,7 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          brew install catch2 llvm@18 openssl@3 sdl3
+          brew install catch2 libarchive llvm@18 openssl@3 sdl3
           brew_prefix="$(brew --prefix)"
           llvm_root="$(brew --prefix llvm@18)"
           openssl_root="$(brew --prefix openssl@3)"
@@ -107,6 +110,21 @@ jobs:
           runtime_dir="$(cygpath -m "$runtime_dir")"
           echo "$runtime_dir" >> "$GITHUB_PATH"
 
+      - name: Prepare update verification key
+        shell: bash
+        env:
+          BEACON_UPDATE_PUBLIC_KEY: ${{ vars.BEACON_UPDATE_PUBLIC_KEY }}
+        run: |
+          if [ -n "$BEACON_UPDATE_PUBLIC_KEY" ]; then
+            public_key="$RUNNER_TEMP/beacon-update-public-key.pem"
+            printf '%s\n' "$BEACON_UPDATE_PUBLIC_KEY" > "$public_key"
+            cmake_public_key="$public_key"
+            if [ "$RUNNER_OS" = "Windows" ]; then
+              cmake_public_key="$(cygpath -m "$public_key")"
+            fi
+            echo "BEACON_UPDATE_PUBLIC_KEY_FILE=$cmake_public_key" >> "$GITHUB_ENV"
+          fi
+
       - name: Configure
         shell: bash
         run: |
@@ -122,6 +140,9 @@ jobs:
               "-DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
               "-DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}"
             )
+          fi
+          if [ -n "${BEACON_UPDATE_PUBLIC_KEY_FILE:-}" ]; then
+            cmake_args+=("-DBEACON_UPDATE_PUBLIC_KEY_FILE=$BEACON_UPDATE_PUBLIC_KEY_FILE")
           fi
           cmake "${cmake_args[@]}"
 
@@ -142,11 +163,41 @@ jobs:
         shell: bash
         run: python test/package_smoke.py build/beacon-*.zip
 
+      - name: Build update packages
+        shell: bash
+        env:
+          RELEASE_BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
+        run: |
+          full_archive="$(find build -maxdepth 1 -type f -name 'beacon-*.zip' -print -quit)"
+          if [ -z "$full_archive" ]; then
+            echo 'CPack did not produce a full ZIP' >&2
+            exit 1
+          fi
+          version="$(sed -n 's/^set(CPACK_PACKAGE_VERSION "\([^"]*\)")$/\1/p' build/CPackConfig.cmake | head -n 1)"
+          if [ -z "$version" ]; then
+            echo 'CPack package version is missing' >&2
+            exit 1
+          fi
+          if [[ "$GITHUB_REF" == refs/tags/v* && "${GITHUB_REF_NAME#v}" != "$version" ]]; then
+            echo "Release tag ${GITHUB_REF_NAME} does not match CPack version $version" >&2
+            exit 1
+          fi
+          python scripts/package_updates.py \
+            --archive "$full_archive" \
+            --output build/update-artifacts \
+            --platform "${{ matrix.platform }}" \
+            --version "$version" \
+            --base-url "$RELEASE_BASE_URL"
+
+      - name: Test generated full package
+        shell: bash
+        run: python test/package_smoke.py build/update-artifacts/beacon-*.zip
+
       - name: Upload packages
         uses: actions/upload-artifact@v4
         with:
           name: beacon-${{ matrix.name }}
-          path: build/beacon-*.zip
+          path: build/update-artifacts/*
           if-no-files-found: error
 
   release:
@@ -163,6 +214,43 @@ jobs:
           pattern: beacon-*
           path: release-assets
           merge-multiple: true
+
+      - name: Sign manifests or remove unsigned manifests
+        shell: bash
+        env:
+          BEACON_UPDATE_SIGNING_KEY: ${{ secrets.BEACON_UPDATE_SIGNING_KEY }}
+          BEACON_UPDATE_PUBLIC_KEY: ${{ vars.BEACON_UPDATE_PUBLIC_KEY }}
+        run: |
+          if [ -n "$BEACON_UPDATE_SIGNING_KEY" ]; then
+            umask 077
+            signing_key="$RUNNER_TEMP/beacon-update-signing-key.pem"
+            public_key="$RUNNER_TEMP/beacon-update-public-key.pem"
+            derived_public_key="$RUNNER_TEMP/beacon-derived-public-key.pem"
+            configured_public_key="$RUNNER_TEMP/beacon-configured-public-key.pem"
+            trap 'rm -f -- "$signing_key" "$public_key" "$derived_public_key" "$configured_public_key"' EXIT
+            if [ -z "$BEACON_UPDATE_PUBLIC_KEY" ]; then
+              echo 'BEACON_UPDATE_SIGNING_KEY requires BEACON_UPDATE_PUBLIC_KEY' >&2
+              exit 1
+            fi
+            printf '%s\n' "$BEACON_UPDATE_SIGNING_KEY" > "$signing_key"
+            printf '%s\n' "$BEACON_UPDATE_PUBLIC_KEY" > "$public_key"
+            openssl pkey -in "$signing_key" -pubout -out "$derived_public_key"
+            openssl pkey -pubin -in "$public_key" -pubout -out "$configured_public_key"
+            if ! cmp -s "$derived_public_key" "$configured_public_key"; then
+              echo 'BEACON_UPDATE_SIGNING_KEY does not match BEACON_UPDATE_PUBLIC_KEY' >&2
+              exit 1
+            fi
+            for manifest in release-assets/release-*.json; do
+              [ -f "$manifest" ] || continue
+              openssl pkeyutl -sign -rawin -inkey "$signing_key" \
+                -in "$manifest" -out "$manifest.sig"
+              openssl pkeyutl -verify -rawin -pubin -inkey "$public_key" \
+                -in "$manifest" -sigfile "$manifest.sig"
+            done
+          else
+            find release-assets -type f -name 'release-*.json' -delete
+            find release-assets -type f -name 'release-*.json.sig' -delete
+          fi
 
       - name: Create GitHub release
         env:

@@ -1,6 +1,8 @@
 #include <beacon/ui/desktop.hpp>
 #include <beacon/ui/display.hpp>
 #include <beacon/io/file.hpp>
+#include <beacon/update/layout.hpp>
+#include <beacon/update/lock.hpp>
 
 #include <SDL3/SDL.h>
 #if defined(_WIN32)
@@ -14,6 +16,7 @@
 #include <iostream>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -23,6 +26,27 @@ namespace {
 int fail(const beacon::Error& error) {
     std::cerr << error.message << ": " << error.context << '\n';
     return 1;
+}
+
+void report_update_error(const std::string& message) {
+    std::cerr << message << '\n';
+#if defined(_WIN32)
+    // The Windows desktop executable has no console for recovery instructions.
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Beacon", message.c_str(), nullptr);
+#endif
+}
+
+// A background update has no console; its failure is reported on the next start.
+std::optional<beacon::Error> take_update_failure(const std::filesystem::path& root) {
+    const auto path = root / beacon::update::layout::failure_log;
+    std::error_code ec;
+    if (std::filesystem::symlink_status(path, ec).type() != std::filesystem::file_type::regular)
+        return std::nullopt;
+    auto text = beacon::read_bounded_file(path, "update failure log", 4096);
+    std::filesystem::remove(path, ec);
+    std::string detail = text ? std::move(*text) : "see updater/beacon-updater --check";
+    beacon::trim_line_end(detail);
+    return beacon::Error{.code = beacon::ErrorCode::Io, .message = "自动更新失败", .context = std::move(detail)};
 }
 
 std::filesystem::path default_game_root() {
@@ -98,17 +122,21 @@ ylt::expected<std::vector<std::filesystem::path>, beacon::Error> find_templates(
 }
 
 struct Application {
+    std::optional<beacon::update::InstallLock> install_lock;
     std::vector<std::filesystem::path> templates;
     std::unique_ptr<beacon::Persistence> persistence;
     std::unique_ptr<beacon::Runtime> runtime;
     std::unique_ptr<beacon::DesktopLoop> desktop;
     beacon::Settings settings;
     std::filesystem::path asset_root;
+    std::filesystem::path install_root;
     std::filesystem::path data_root;
     std::optional<beacon::Error> startup_error;
 };
 
+// Runs headless so the updater can check a prepared version from any session.
 int run_smoke_test() {
+    SDL_SetHintWithPriority(SDL_HINT_VIDEO_DRIVER, "dummy", SDL_HINT_OVERRIDE);
     auto* executable_root = SDL_GetBasePath();
     if (executable_root == nullptr) {
         std::cerr << "cannot locate executable directory: " << SDL_GetError() << '\n';
@@ -125,14 +153,24 @@ std::unique_ptr<Application> create_application(const int argc, int& status) {
         std::cerr << "cannot locate executable directory: " << SDL_GetError() << '\n';
         return {};
     }
+    // Program resources live next to the executable; user data (templates and
+    // settings) and the updater live in the installation root, which differs
+    // when this program runs from <root>/versions/<version>/.
     const auto asset_root = beacon::path_from_utf8(executable_root);
+    const auto install_root = beacon::update::layout::installation_root(asset_root);
     if (argc != 1) {
         std::cerr << "usage: beacon\n";
         status = 2;
         return {};
     }
 
-    auto templates = find_templates(asset_root);
+    auto install_lock = beacon::update::InstallLock::acquire(install_root, beacon::update::LockMode::Shared);
+    if (!install_lock) {
+        report_update_error(install_lock.error().message);
+        return {};
+    }
+
+    auto templates = find_templates(install_root);
     if (!templates) {
         status = fail(templates.error());
         return {};
@@ -146,9 +184,10 @@ std::unique_ptr<Application> create_application(const int argc, int& status) {
     SDL_free(preference_root);
 
     auto application = std::make_unique<Application>();
+    application->install_lock = std::move(*install_lock);
     application->templates = std::move(*templates);
-    application->persistence = std::make_unique<beacon::Persistence>(asset_root);
-    std::optional<beacon::Error> startup_error;
+    application->persistence = std::make_unique<beacon::Persistence>(install_root);
+    std::optional<beacon::Error> startup_error = take_update_failure(install_root);
     const auto remember_error = [&](beacon::Error error) {
         if (!startup_error)
             startup_error = std::move(error);
@@ -211,6 +250,7 @@ std::unique_ptr<Application> create_application(const int argc, int& status) {
     }
     application->settings = std::move(settings);
     application->asset_root = asset_root;
+    application->install_root = install_root;
     application->data_root = data_root;
     application->startup_error = std::move(startup_error);
     status = 0;
@@ -231,10 +271,10 @@ SDL_AppResult SDLCALL SDL_AppInit(void** appstate, const int argc, char** argv) 
     auto application = create_application(argc, status);
     if (!application)
         return SDL_APP_FAILURE;
-    application->desktop =
-        std::make_unique<beacon::DesktopLoop>(application->runtime.get(), application->persistence.get(), nullptr,
-                                              application->settings, application->asset_root, application->data_root,
-                                              application->templates, 0, std::move(application->startup_error));
+    application->desktop = std::make_unique<beacon::DesktopLoop>(
+        application->runtime.get(), application->persistence.get(), nullptr, application->settings,
+        application->asset_root, application->install_root, application->data_root, application->templates, 0,
+        std::move(application->startup_error));
     if (!application->desktop->ready())
         return SDL_APP_FAILURE;
     *appstate = application.release();
@@ -269,8 +309,8 @@ int main(int argc, char** argv) {
     if (!application)
         return status;
     return beacon::run_desktop(*application->runtime, *application->persistence, application->settings,
-                               application->asset_root, application->data_root, application->templates, 0,
-                               std::move(application->startup_error));
+                               application->asset_root, application->install_root, application->data_root,
+                               application->templates, 0, std::move(application->startup_error));
 }
 
 #endif
