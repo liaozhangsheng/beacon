@@ -8,15 +8,19 @@
 #include <iostream>
 #include <stop_token>
 #include <string>
+#include <string_view>
 #include <thread>
 
 int main(int argc, char** argv) {
     if (argc < 3 || argc > 5)
         return 2;
     const bool cancel = argc == 4;
+    const bool slow_response = std::string_view(argv[1]).ends_with("/slow");
     beacon::http::Limits limits{.max_bytes = std::stoull(argv[2]),
-                                .timeout_seconds = cancel ? 10 : 2,
-                                .connect_timeout_seconds = 1,
+                                .timeout_seconds = cancel          ? 10
+                                                   : slow_response ? 2
+                                                                   : 5,
+                                .connect_timeout_seconds = 3,
                                 .max_redirects = 3};
     if (argc == 5) {
         auto result = beacon::update::download_file(argv[1], argv[3], limits.max_bytes, argv[4], limits);
