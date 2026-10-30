@@ -154,7 +154,12 @@ jobs:
         run: cmake --build build --target format-check
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        shell: bash
+        run: |
+          ctest --test-dir build --output-on-failure
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            ctest --test-dir build -R '^beacon_https_security$' --repeat until-fail:10 --verbose
+          fi
 
       - name: Package
         run: cmake --build build --target package --config Release
