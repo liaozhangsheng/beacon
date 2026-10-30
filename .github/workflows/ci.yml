@@ -36,6 +36,13 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
+      - name: Set up Python for macOS diagnostics
+        if: runner.os == 'macOS'
+        id: diagnostic-python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14.7'
+
       - name: Bootstrap vcpkg
         if: runner.os == 'Windows'
         shell: bash
@@ -140,6 +147,9 @@ jobs:
               "-DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
               "-DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}"
             )
+          fi
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            cmake_args+=("-DPython3_EXECUTABLE=${{ steps.diagnostic-python.outputs.python-path }}")
           fi
           if [ -n "${BEACON_UPDATE_PUBLIC_KEY_FILE:-}" ]; then
             cmake_args+=("-DBEACON_UPDATE_PUBLIC_KEY_FILE=$BEACON_UPDATE_PUBLIC_KEY_FILE")
