@@ -1,4 +1,5 @@
 """Exercise the production HTTPS client locally: TLS, redirects, streaming, limits, cancellation and downloads."""
+import faulthandler
 import hashlib
 import http.server
 import os
@@ -106,10 +107,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 def run(probe, *arguments, environment=None, timeout=8):
+    print('RUN', *arguments, flush=True)
     return subprocess.run([probe, *map(str, arguments)], env=environment, capture_output=True, timeout=timeout)
 
 
 def main():
+    faulthandler.dump_traceback_later(20, repeat=True)
     probe, openssl = sys.argv[1:]
     size = len(PAYLOAD)
     digest = hashlib.sha256(PAYLOAD).hexdigest()
