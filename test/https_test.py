@@ -1,5 +1,4 @@
 """Exercise the production HTTPS client locally: TLS, redirects, streaming, limits, cancellation and downloads."""
-import faulthandler
 import hashlib
 import http.server
 import os
@@ -12,22 +11,26 @@ import sys
 import tempfile
 import threading
 import time
+from unittest.mock import patch
 
 PAYLOAD = b'beacon-update\0' * 20000
 
 
 def make_server(server_type, handler):
-    if not socket.has_dualstack_ipv6():
-        return server_type(('127.0.0.1', 0), handler)
+    dual_stack = socket.has_dualstack_ipv6()
 
-    class DualStackServer(server_type):
-        address_family = socket.AF_INET6
+    class LocalServer(server_type):
+        address_family = socket.AF_INET6 if dual_stack else socket.AF_INET
 
         def server_bind(self):
-            self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
-            super().server_bind()
+            if dual_stack:
+                self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+            # HTTPServer.server_bind() performs reverse DNS, which can stall macOS CI for a minute.
+            socketserver.TCPServer.server_bind(self)
+            self.server_name = 'localhost'
+            self.server_port = self.server_address[1]
 
-    return DualStackServer(('::', 0), handler)
+    return LocalServer(('::' if dual_stack else '127.0.0.1', 0), handler)
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -107,12 +110,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 def run(probe, *arguments, environment=None, timeout=8):
-    print('RUN', *arguments, flush=True)
     return subprocess.run([probe, *map(str, arguments)], env=environment, capture_output=True, timeout=timeout)
 
 
 def main():
-    faulthandler.dump_traceback_later(20, repeat=True)
     probe, openssl = sys.argv[1:]
     size = len(PAYLOAD)
     digest = hashlib.sha256(PAYLOAD).hexdigest()
@@ -204,4 +205,5 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    with patch('socket.getfqdn', side_effect=AssertionError('local test servers must not perform reverse DNS')):
+        main()
