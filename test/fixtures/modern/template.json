@@ -1,0 +1,19 @@
+{
+  "name_key": "template.modern_test",
+  "minecraft": {
+    "min_version": 3463, "max_version": 4903
+  },
+  "goals": [
+    {
+      "id": "complete",
+      "view": {
+        "name_key": "goal.complete"
+      },
+      "all": [
+        {"fact": "stat/minecraft:mined/minecraft:stone", "target": 3},
+        {"fact": "adv/minecraft:story/mine_stone"}
+      ]
+    }
+  ],
+  "completion_rule": "complete"
+}
