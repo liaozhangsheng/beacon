@@ -1,0 +1,24 @@
+{
+  "name": "beacon",
+  "version-string": "0.1.0",
+  "dependencies": [
+    {
+      "name": "libarchive",
+      "default-features": false
+    },
+    "openssl",
+    "sdl3",
+    {
+      "name": "freetype",
+      "default-features": false
+    }
+  ],
+  "features": {
+    "tests": {
+      "description": "Build the regression checks",
+      "dependencies": [
+        "catch2"
+      ]
+    }
+  }
+}
