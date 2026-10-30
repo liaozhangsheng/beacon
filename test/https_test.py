@@ -33,13 +33,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
-    def do_GET(self):
+    def handle(self):
         try:
-            self.respond()
+            super().handle()
         except (BrokenPipeError, ConnectionResetError, ssl.SSLError):
-            pass  # Expected when the client rejects a header or a limit, or cancels.
+            pass  # Expected when the client rejects a response or cancels a TLS handshake.
 
-    def respond(self):
+    def do_GET(self):
         redirects = {
             '/redirect': '/fixed',
             '/cross-host': f'https://127.0.0.1:{self.server.server_port}/fixed',
@@ -126,7 +126,8 @@ def main():
         destination = root / 'cache' / 'artifact.zip'
         with make_server(http.server.ThreadingHTTPServer, Handler) as server:
             server.release = threading.Event()
-            server.socket = context.wrap_socket(server.socket, server_side=True)
+            # Let each request thread perform TLS so accept() and shutdown() cannot stall on a handshake.
+            server.socket = context.wrap_socket(server.socket, server_side=True, do_handshake_on_connect=False)
             worker = threading.Thread(target=server.serve_forever, daemon=True)
             worker.start()
             base = f'https://localhost:{server.server_port}'
@@ -138,6 +139,11 @@ def main():
                       ('/broken-chunk', False), ('/encoded', False), ('/truncated', False),
                       ('/missing', False), ('/long-header', False), ('/slow', False)]
             try:
+                # A connection that never starts TLS must not block other requests or shutdown.
+                with socket.create_connection(('localhost', server.server_port), timeout=2):
+                    result = run(probe, base + '/fixed', size, environment=trusted)
+                    assert result.returncode == 0 and result.stdout == PAYLOAD, ('stalled TLS handshake', result.stderr)
+                print('PASS stalled TLS handshake isolation', flush=True)
                 for suffix, success in checks:
                     for file_mode in (False, True):
                         destination.unlink(missing_ok=True)

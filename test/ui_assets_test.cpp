@@ -11,6 +11,56 @@
 #include <memory>
 #include <algorithm>
 
+TEST_CASE("missing icons draw a tinted checkerboard without an image resource") {
+    const std::unique_ptr<ImGuiContext, decltype(&ImGui::DestroyContext)> context(ImGui::CreateContext(),
+                                                                                  ImGui::DestroyContext);
+    auto& io = ImGui::GetIO();
+    io.IniFilename = nullptr;
+    io.DisplaySize = {800, 600};
+    io.Fonts->AddFontDefault();
+    REQUIRE(io.Fonts->Build());
+    ImGui::NewFrame();
+    auto* draw = ImGui::GetForegroundDrawList();
+    for (const auto tint : {IM_COL32_WHITE, IM_COL32(100, 100, 100, 128)}) {
+        const int start = draw->VtxBuffer.Size;
+        beacon::draw_missing_icon(draw, {100.25F, 100.25F}, 20, tint);
+        // Sample each quadrant, including the tint used for muted items.
+        for (const auto offset : {ImVec2{5, 5}, ImVec2{15, 5}, ImVec2{5, 15}, ImVec2{15, 15}}) {
+            ImU32 color = 0;
+            for (int vertex = start; vertex < draw->VtxBuffer.Size; vertex += 4) {
+                const auto& min = draw->VtxBuffer[vertex].pos;
+                const auto& max = draw->VtxBuffer[vertex + 2].pos;
+                if (100.25F + offset.x > min.x && 100.25F + offset.x < max.x && 100.25F + offset.y > min.y &&
+                    100.25F + offset.y < max.y)
+                    color = draw->VtxBuffer[vertex].col;
+            }
+            const auto expected = offset.x == offset.y ? IM_COL32(255, 0, 255, 255) : IM_COL32(0, 0, 0, 255);
+            CHECK(color == (tint & expected));
+        }
+    }
+    ImGui::EndFrame();
+}
+
+TEST_CASE("missing and corrupt static or animated icons fail without scheduling animation frames") {
+    const beacon::test::TemporaryDirectory temporary;
+    const std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)> surface(
+        SDL_CreateSurface(32, 32, SDL_PIXELFORMAT_ARGB8888), SDL_DestroySurface);
+    REQUIRE(surface);
+    const std::unique_ptr<SDL_Renderer, decltype(&SDL_DestroyRenderer)> renderer(
+        SDL_CreateSoftwareRenderer(surface.get()), SDL_DestroyRenderer);
+    REQUIRE(renderer);
+    beacon::UiAssets assets(renderer.get(), temporary.path);
+    for (const auto name : {"missing.png", "corrupt.png", "missing.gif", "corrupt.gif"}) {
+        const auto path = temporary.path / name;
+        if (std::string_view(name).starts_with("corrupt"))
+            std::ofstream(path) << "not an image";
+        assets.begin_frame();
+        REQUIRE(assets.texture(path) == nullptr);
+        REQUIRE(assets.animated_frame(path, 0) == nullptr);
+        REQUIRE(assets.next_frame_ms() == UINT64_MAX);
+    }
+}
+
 TEST_CASE("item strikethrough crosses the icon and each visible label line") {
     const std::unique_ptr<ImGuiContext, decltype(&ImGui::DestroyContext)> context(ImGui::CreateContext(),
                                                                                   ImGui::DestroyContext);

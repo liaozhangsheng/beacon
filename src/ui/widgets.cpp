@@ -28,6 +28,17 @@ void add_exact_text(ImDrawList* draw, ImFont* font, const float font_size, const
 
 }  // namespace
 
+void draw_missing_icon(ImDrawList* draw, const ImVec2 position, const float size, const ImU32 tint) {
+    const ImVec2 middle{position.x + size * 0.5F, position.y + size * 0.5F};
+    const ImVec2 end{position.x + size, position.y + size};
+    const auto purple = tint & IM_COL32(255, 0, 255, 255);
+    const auto black = tint & IM_COL32(0, 0, 0, 255);
+    draw->AddRectFilled(position, middle, purple);
+    draw->AddRectFilled({middle.x, position.y}, {end.x, middle.y}, black);
+    draw->AddRectFilled({position.x, middle.y}, {middle.x, end.y}, black);
+    draw->AddRectFilled(middle, end, purple);
+}
+
 float text_shadow_offset(ImFont* font, const float font_size) {
     // Minecraft digits are seven font pixels tall; derive the pixel from the baked glyph.
     float pixel = font_size / 12.0F;

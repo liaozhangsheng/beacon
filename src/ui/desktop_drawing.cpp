@@ -184,7 +184,7 @@ void WindowRenderer::Impl::draw_node_icon(const PublishedState& state, ImDrawLis
     }
     const auto& sprites = node_sprites_[display_node];
     const auto draw_sprite = [&](const Sprite& sprite, const ImVec2 position, const float size,
-                                 const ImU32 tint = IM_COL32(255, 255, 255, 255)) {
+                                 const ImU32 tint = IM_COL32(255, 255, 255, 255), const bool fallback = false) {
         const auto clip_min = draw->GetClipRectMin();
         const auto clip_max = draw->GetClipRectMax();
         if (position.x + size < clip_min.x || position.x > clip_max.x || position.y + size < clip_min.y ||
@@ -195,6 +195,8 @@ void WindowRenderer::Impl::draw_node_icon(const PublishedState& state, ImDrawLis
         if (texture != nullptr)
             draw->AddImage(texture, position, {position.x + size, position.y + size}, sprite.uv_min, sprite.uv_max,
                            tint);
+        else if (fallback)
+            draw_missing_icon(draw, position, size, tint);
     };
     if (show_frame) {
         if (splitter)
@@ -209,7 +211,7 @@ void WindowRenderer::Impl::draw_node_icon(const PublishedState& state, ImDrawLis
     }
     if (splitter)
         splitter->SetCurrentChannel(draw, 2);
-    draw_sprite(sprites.icon, icon_position, icon_size, icon_tint);
+    draw_sprite(sprites.icon, icon_position, icon_size, icon_tint, true);
 }
 
 void WindowRenderer::Impl::draw_item(const PublishedState& state, const LayoutGroup& group, ImDrawList* draw,

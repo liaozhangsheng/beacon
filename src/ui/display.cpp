@@ -315,23 +315,10 @@ ylt::expected<void, Error> resolve_icon_paths(CompiledTemplate& compiled, const 
         if (!presentation) {
             continue;
         }
-        const auto original = presentation->icon_path;
-        if (!original.empty()) {
-            const auto invalid_icon = [&] {
-                return ylt::unexpected<Error>{resource_error(
-                    ErrorCode::Validation, "icon file is missing or outside the template directory", original)};
-            };
-            if (!valid_icon_reference(original)) {
-                return ylt::unexpected<Error>{
-                    resource_error(ErrorCode::Validation, "icon must be a normalized relative path", original)};
-            }
-
-            const auto icon = canonical_path(root, path_from_utf8(original));
-            if (!icon || !regular_file(*icon)) {
-                return invalid_icon();
-            }
-            presentation->icon_path = path_to_utf8(*icon);
-        }
+        const auto icon = valid_icon_reference(presentation->icon_path)
+                              ? canonical_path(root, path_from_utf8(presentation->icon_path))
+                              : std::nullopt;
+        presentation->icon_path = icon && regular_file(*icon) ? path_to_utf8(*icon) : std::string{};
 
         if (presentation->frame_type == Presentation::FrameType::None) {
             continue;

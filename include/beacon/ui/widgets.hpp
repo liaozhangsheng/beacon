@@ -100,6 +100,8 @@ void draw_nine_slice(ImDrawList* draw, SDL_Texture* texture, ImVec2 min, ImVec2 
                      ImU32 tint = IM_COL32_WHITE);
 // Recessed panel in the style of an inventory slot: dark top-left edge, light bottom-right edge.
 void draw_inset_panel(ImDrawList* draw, ImVec2 min, ImVec2 max, float unit);
+// Missing template icons use a purple-and-black checkerboard without an external texture.
+void draw_missing_icon(ImDrawList* draw, ImVec2 position, float size, ImU32 tint = IM_COL32_WHITE);
 
 // Minecraft-style text: a one-font-pixel drop shadow at a quarter of the text brightness.
 float text_shadow_offset(ImFont* font, float font_size);

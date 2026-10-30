@@ -184,7 +184,7 @@ templates/<name>/
 └── assets/         # 此模板使用的可选资源
 ```
 
-推荐将模板专用资源放在 `assets/` 下，也可以使用模板内部的其他目录。`view.icon` 必须填写相对于 `template.json` 所在目录的精确文件路径，例如 `"assets/apple.png"`。Beacon 不查询全局资源名，也不会自动补充扩展名，路径不能越出模板目录。模板加载时会检查所引用的文件是否存在；某项不需要图标时，可以省略 `icon` 或将其设为空字符串。复制整个模板目录即可一并分享其中的资源。
+推荐将模板专用资源放在 `assets/` 下，也可以使用模板内部的其他目录。`view.icon` 填写相对于 `template.json` 所在目录的精确文件路径，例如 `"assets/apple.png"`。Beacon 不查询全局资源名，也不会自动补充扩展名。省略图标、路径为空、文件缺失、图片无法读取（包括损坏的 GIF）、非法路径或符号链接越界时，统一显示紫黑棋盘格 missingno，不影响模板加载。程序不会加载模板目录外的文件作为图标。复制整个模板目录即可一并分享其中的资源。
 
 程序包只包含界面所需资源和字体。完整格式、校验规则和示例请参阅内置的 [`beacon-custom-template` skill](.agents/skills/beacon-custom-template/SKILL.md)。
 

@@ -375,9 +375,6 @@ struct Compiler {
             if (presentation.localization_key.empty()) {
                 diagnostics.add("view name_key must not be empty", child_path(view_path, "name_key"));
             }
-            if (!presentation.icon_path.empty() && !valid_icon_reference(presentation.icon_path)) {
-                diagnostics.add("icon must be a normalized relative path", child_path(view_path, "icon"));
-            }
             compiled.presentation_by_node[index] = std::move(presentation);
         }
 

@@ -239,8 +239,6 @@ TEST_CASE("template presentation compiles without changing rule identity") {
     REQUIRE(relabeled->same_rules(*compiled));
 
     const std::vector<std::string> invalid{
-        replace_once(std::string(presented_template), "icons/a.bmp", "../escape.png"),
-        replace_once(std::string(presented_template), "icons/a.bmp", "vender:block_a"),
         replace_once(std::string(presented_template), "\"name_key\":\"goal.shown\"",
                      "\"name_key\":\"goal.shown\",\"section\":\"future\""),
         replace_once(std::string(presented_template), "\"id\":\"shown\",", ""),
@@ -705,7 +703,7 @@ TEST_CASE("carousel directions stay mirrored through group gaps completion and r
     REQUIRE(left.items.front().node == 0);
 }
 
-TEST_CASE("icon resolution keeps resources inside the canonical template root") {
+TEST_CASE("unsafe icon paths use the placeholder without exposing files outside the template") {
     const beacon::test::TemporaryDirectory temporary;
     const auto& root = temporary.path;
     std::filesystem::create_directories(root / "icons");
@@ -724,13 +722,32 @@ TEST_CASE("icon resolution keeps resources inside the canonical template root") 
         std::ofstream output(outside);
         output << "outside";
     }
+    std::ofstream(root / "lang.json") << "{}";
+    std::ofstream(root / "layout.json") << R"({"main":[],"overlay":[]})";
+    std::vector<std::string> references{"../" + outside_directory.path.filename().generic_string() + "/outside.bmp",
+                                        outside.generic_string(),
+                                        "../escape.png",
+                                        "icons/../icons/a.bmp",
+                                        "icons//a.bmp",
+                                        "vender:block_a",
+                                        R"(C:\\outside.bmp)",
+                                        R"(\\\\server\\share\\outside.bmp)",
+                                        R"(icons\\a.bmp)",
+                                        R"(icons/a.bmp\u0000ignored)"};
     std::error_code ec;
     std::filesystem::create_symlink(outside, root / "icons/link.bmp", ec);
-    if (!ec) {
-        auto linked = beacon::compile_template_json(
-            replace_once(std::string(presented_template), "icons/a.bmp", "icons/link.bmp"));
-        REQUIRE(linked);
-        REQUIRE_FALSE(beacon::resolve_icon_paths(*linked, root, root));
+    if (!ec)
+        references.emplace_back("icons/link.bmp");
+    for (const auto& reference : references) {
+        CAPTURE(reference);
+        std::ofstream(root / "template.json")
+            << replace_once(std::string(presented_template), "icons/a.bmp", reference);
+        const auto resources = beacon::load_template_resources(root / "template.json", root);
+        REQUIRE(resources);
+        REQUIRE(resources->compiled->presentation_by_node[0]->icon_path.empty());
+        const auto stamps = beacon::icon_file_stamps(*resources->compiled);
+        REQUIRE(stamps);
+        REQUIRE(stamps->empty());
     }
 }
 
@@ -798,7 +815,8 @@ TEST_CASE("icons resolve only to exact files inside their own template") {
         auto missing =
             beacon::compile_template_json(replace_once(std::string(presented_template), "icons/a.bmp", reference));
         REQUIRE(missing);
-        REQUIRE_FALSE(beacon::resolve_icon_paths(*missing, first_root, program_assets.path));
+        REQUIRE(beacon::resolve_icon_paths(*missing, first_root, program_assets.path));
+        REQUIRE(missing->presentation_by_node[0]->icon_path.empty());
     }
 
     auto empty = beacon::compile_template_json(replace_once(std::string(presented_template), "icons/a.bmp", ""));
@@ -857,6 +875,22 @@ TEST_CASE("template resources load as one validated package") {
     REQUIRE(resources->layout->main.empty());
     REQUIRE(resources->layout->overlay.empty());
     REQUIRE(beacon::path_from_utf8(resources->compiled->presentation_by_node[0]->icon_path).is_absolute());
+
+    beacon::TemplateResourceLoader loader(root / "template.json", root, *resources);
+    std::filesystem::remove(root / "icons/a.bmp");
+    std::filesystem::create_directory(root / "icons/a.bmp");
+    const auto directory_icon = loader.load(root / "template.json", root, "");
+    REQUIRE(directory_icon);
+    REQUIRE(directory_icon->compiled->presentation_by_node[0]->icon_path.empty());
+    std::filesystem::remove(root / "icons/a.bmp");
+    const auto missing_icon = loader.load(root / "template.json", root, "");
+    REQUIRE(missing_icon);
+    REQUIRE(missing_icon->compiled->presentation_by_node[0]->icon_path.empty());
+    std::ofstream(root / "icons/a.bmp") << "restored";
+    const auto restored_icon = loader.load(root / "template.json", root, "");
+    REQUIRE(restored_icon);
+    REQUIRE(restored_icon->compiled != missing_icon->compiled);
+    REQUIRE_FALSE(restored_icon->compiled->presentation_by_node[0]->icon_path.empty());
 
     std::filesystem::create_directories(root / "langs");
     std::ofstream(root / "langs/en.json") << R"({"template.presentation":"English"})";
