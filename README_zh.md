@@ -7,6 +7,13 @@
 
 Beacon 是一个面向 Minecraft 速通的进度追踪器。它读取本地存档中的进度（Advancements）和统计数据，结合模板中的自定义规则，在主窗口和可选悬浮窗中实时展示目标的完成情况。你可以通过模板包配置自己的速通路线。
 
+<p align="center">
+  <img src="docs/overlay-zh.gif" alt="使用内置 1.16.1 模板的 Beacon 悬浮窗：未完成的进度和收集项滚动轮播，统计固定显示">
+</p>
+<p align="center">
+  <img src="docs/mainwindow.png" alt="使用内置 1.16.1 模板的 Beacon 主窗口：按分类排列的进度、收集清单、统计和状态栏" width="720">
+</p>
+
 ## 功能概览
 
 - **实时追踪进度**：自动发现世界和玩家，在游戏过程中刷新当前存档。

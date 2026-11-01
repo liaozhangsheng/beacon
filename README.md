@@ -11,6 +11,13 @@
 
 Beacon reads Minecraft save data and turns advancements, statistics, and custom rules into a live speedrun checklist. It provides a main window, an optional overlay, and a template package format for describing your own runs.
 
+<p align="center">
+  <img src="docs/overlay-en.gif" alt="The Beacon overlay with the bundled 1.16.1 template: unfinished advancements and collection entries scroll past while statistics stay fixed">
+</p>
+<p align="center">
+  <img src="docs/mainwindow.png" alt="The Beacon main window with the bundled 1.16.1 template: advancements by category, collection checklists, statistics, and the status bar" width="720">
+</p>
+
 ## Highlights
 
 - **Live advancement tracking** — discovers worlds and players, then refreshes the active save while you play.
