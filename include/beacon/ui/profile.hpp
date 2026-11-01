@@ -14,7 +14,8 @@ namespace beacon {
 
 struct PlayerCard {
     std::string name = "Steve";
-    std::string avatar;
+    // Raw skin PNG from Mojang's texture host; the renderer crops the head from it.
+    std::string skin;
 };
 
 PlayerCard fetch_player_card(std::string uuid, const std::filesystem::path& data_root, std::stop_token stop = {});

@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -16,10 +17,11 @@
 namespace beacon {
 namespace {
 
-constexpr std::size_t max_avatar_bytes = 4U * 1024U * 1024U;
+constexpr std::size_t max_skin_bytes = 4U * 1024U * 1024U;
+constexpr std::string_view skin_host = "textures.minecraft.net/";
 
-std::filesystem::path avatar_cache_directory(const std::filesystem::path& data_root) {
-    return data_root / "cache/avatars";
+std::filesystem::path skin_cache_directory(const std::filesystem::path& data_root) {
+    return data_root / "cache/skins";
 }
 
 std::string cache_component(std::string value) {
@@ -32,10 +34,10 @@ std::string cache_component(std::string value) {
     return value;
 }
 
-std::optional<PlayerCard> read_cached_avatar(const std::string& uuid, const std::filesystem::path& data_root) {
+std::optional<PlayerCard> read_cached_skin(const std::string& uuid, const std::filesystem::path& data_root) {
     const auto prefix = cache_component(uuid) + "_";
     std::error_code ec;
-    std::filesystem::directory_iterator files(avatar_cache_directory(data_root), ec);
+    std::filesystem::directory_iterator files(skin_cache_directory(data_root), ec);
     if (ec) {
         return std::nullopt;
     }
@@ -53,17 +55,17 @@ std::optional<PlayerCard> read_cached_avatar(const std::string& uuid, const std:
         if (!filename.starts_with(prefix)) {
             continue;
         }
-        auto avatar = read_bounded_file(path, "cached avatar", max_avatar_bytes);
-        if (avatar && !avatar->empty()) {
-            return PlayerCard{.name = path_to_utf8(path.stem()).substr(prefix.size()), .avatar = std::move(*avatar)};
+        auto skin = read_bounded_file(path, "cached skin", max_skin_bytes);
+        if (skin && !skin->empty()) {
+            return PlayerCard{.name = path_to_utf8(path.stem()).substr(prefix.size()), .skin = std::move(*skin)};
         }
     }
     return std::nullopt;
 }
 
-void write_cached_avatar(const std::string& uuid, const PlayerCard& card, const std::filesystem::path& data_root) {
+void write_cached_skin(const std::string& uuid, const PlayerCard& card, const std::filesystem::path& data_root) {
     std::error_code ec;
-    const auto directory = avatar_cache_directory(data_root);
+    const auto directory = skin_cache_directory(data_root);
     std::filesystem::create_directories(directory, ec);
     if (ec) {
         return;
@@ -71,7 +73,7 @@ void write_cached_avatar(const std::string& uuid, const PlayerCard& card, const 
     const auto path = directory / (cache_component(uuid) + "_" + cache_component(card.name) + ".png");
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
     if (output) {
-        output.write(card.avatar.data(), static_cast<std::streamsize>(card.avatar.size()));
+        output.write(card.skin.data(), static_cast<std::streamsize>(card.skin.size()));
     }
 }
 
@@ -84,6 +86,68 @@ std::optional<std::string> download_profile_asset(const std::string& url, const 
     return std::move(*body);
 }
 
+// Mojang's profile endpoint takes the undashed form; anything else is not an online-mode UUID.
+std::optional<std::string> undashed_uuid(std::string_view uuid) {
+    std::string result;
+    for (const auto character : uuid) {
+        if (character == '-')
+            continue;
+        if (!std::isxdigit(static_cast<unsigned char>(character)))
+            return std::nullopt;
+        result.push_back(character);
+    }
+    if (result.size() != 32)
+        return std::nullopt;
+    return result;
+}
+
+std::optional<std::string> decode_base64(std::string_view text) {
+    std::string result;
+    std::uint32_t buffer = 0;
+    int bits = 0;
+    for (const auto character : text) {
+        if (character == '=')
+            break;
+        int value = -1;
+        if (character >= 'A' && character <= 'Z')
+            value = character - 'A';
+        else if (character >= 'a' && character <= 'z')
+            value = character - 'a' + 26;
+        else if (character >= '0' && character <= '9')
+            value = character - '0' + 52;
+        else if (character == '+')
+            value = 62;
+        else if (character == '/')
+            value = 63;
+        if (value < 0)
+            return std::nullopt;
+        buffer = (buffer << 6U) | static_cast<std::uint32_t>(value);
+        bits += 6;
+        if (bits >= 8) {
+            bits -= 8;
+            result.push_back(static_cast<char>((buffer >> static_cast<unsigned>(bits)) & 0xFFU));
+        }
+    }
+    return result;
+}
+
+// Only Mojang's texture host is trusted, upgraded to HTTPS because the profile still lists http:// URLs.
+std::optional<std::string> skin_url(const Json::Value& textures) {
+    const auto& url = textures["textures"]["SKIN"]["url"];
+    if (!url.isString() || url.asString().size() > max_string_bytes)
+        return std::nullopt;
+    std::string_view value = url.asCString();
+    for (const std::string_view scheme : {"http://", "https://"}) {
+        if (value.starts_with(scheme)) {
+            value.remove_prefix(scheme.size());
+            break;
+        }
+    }
+    if (!value.starts_with(skin_host))
+        return std::nullopt;
+    return "https://" + std::string(value);
+}
+
 }  // namespace
 
 PlayerCard fetch_player_card(std::string uuid, const std::filesystem::path& data_root, const std::stop_token stop) {
@@ -91,34 +155,51 @@ PlayerCard fetch_player_card(std::string uuid, const std::filesystem::path& data
         if (stop.stop_requested() || !valid_player_id(uuid)) {
             return {};
         }
-        if (auto cached = read_cached_avatar(uuid, data_root)) {
+        // Earlier builds cached third-party head renders; skins replaced them.
+        std::error_code ec;
+        std::filesystem::remove_all(data_root / "cache/avatars", ec);
+        if (auto cached = read_cached_skin(uuid, data_root)) {
             return std::move(*cached);
         }
-        const auto profile =
-            download_profile_asset("https://playerdb.co/api/player/minecraft/" + uuid, max_json_bytes, stop);
+        const auto id = undashed_uuid(uuid);
+        if (!id) {
+            return {};
+        }
+        const auto profile = download_profile_asset("https://sessionserver.mojang.com/session/minecraft/profile/" + *id,
+                                                    max_json_bytes, stop);
         if (!profile) {
             return {};
         }
         auto root = parse_json(*profile, "player profile", "invalid player profile JSON");
-        if (!root) {
+        if (!root || !root->isObject() || !(*root)["name"].isString() || !(*root)["properties"].isArray()) {
             return {};
         }
-        const auto& player = (*root)["data"]["player"];
-        if (!player.isObject() || !player["username"].isString() || !player["avatar"].isString()) {
+        const auto name = (*root)["name"].asString();
+        if (name.empty() || name.size() > max_string_bytes || !valid_utf8(name)) {
             return {};
         }
-        const auto name = player["username"].asString();
-        const auto avatar_url = player["avatar"].asString();
-        if (name.empty() || name.size() > max_string_bytes || !valid_utf8(name) ||
-            !avatar_url.starts_with("https://") || avatar_url.size() > max_string_bytes) {
+        std::optional<std::string> url;
+        for (const auto& property : (*root)["properties"]) {
+            if (!property.isObject() || property["name"] != "textures" || !property["value"].isString())
+                continue;
+            const auto decoded = decode_base64(property["value"].asString());
+            if (!decoded)
+                break;
+            auto textures = parse_json(*decoded, "player textures", "invalid player textures JSON");
+            if (textures && textures->isObject())
+                url = skin_url(*textures);
+            break;
+        }
+        // Players on the default skin have no SKIN entry; the bundled avatar stands in for them.
+        if (!url) {
+            return PlayerCard{.name = name};
+        }
+        auto skin = download_profile_asset(*url, max_skin_bytes, stop);
+        if (!skin || stop.stop_requested()) {
             return {};
         }
-        auto avatar = download_profile_asset(avatar_url, max_avatar_bytes, stop);
-        if (!avatar || stop.stop_requested()) {
-            return {};
-        }
-        PlayerCard card{.name = name, .avatar = std::move(*avatar)};
-        write_cached_avatar(uuid, card, data_root);
+        PlayerCard card{.name = name, .skin = std::move(*skin)};
+        write_cached_skin(uuid, card, data_root);
         return card;
     } catch (...) {
         return {};

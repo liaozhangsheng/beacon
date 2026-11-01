@@ -63,7 +63,7 @@ The restart and manual-mark shortcuts are also listed at the bottom of the setti
 
 ### Data and recovery behavior
 
-Beacon reads save files without modifying them. Settings are stored next to the `beacon` launcher under `config/settings.json`; templates belong under `templates/` in that same directory. Installed program files and built-in assets live under `versions/<version>/`, separately from templates and settings. The avatar cache is stored in the platform-specific application data directory under `cache/avatars/`.
+Beacon reads save files without modifying them. Settings are stored next to the `beacon` launcher under `config/settings.json`; templates belong under `templates/` in that same directory. Installed program files and built-in assets live under `versions/<version>/`, separately from templates and settings. The skin cache is stored in the platform-specific application data directory under `cache/skins/`; skins are looked up through Mojang's session server.
 
 The active world is checked frequently; other worlds are scanned periodically for changes. If Minecraft is still writing a file, Beacon keeps the last successfully loaded state, indicates that the data could not be refreshed, and retries. A damaged or inaccessible world is reported without interrupting tracking of the active world.
 

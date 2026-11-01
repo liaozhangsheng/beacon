@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <unordered_set>
 
@@ -19,6 +20,48 @@ namespace {
 bool is_animation(const std::filesystem::path& path) {
     const auto extension = path.extension();
     return extension == ".gif" || extension == ".GIF";
+}
+
+// Builds the 8x8 head the game shows: the opaque face at (8,8) with the hat layer at (40,8) blended over it.
+SDL_Surface* skin_head(SDL_Surface* skin) {
+    if (skin->w != 64 || (skin->h != 64 && skin->h != 32))
+        return nullptr;
+    auto* const pixels = SDL_ConvertSurface(skin, SDL_PIXELFORMAT_RGBA32);
+    if (pixels == nullptr)
+        return nullptr;
+    auto* head = SDL_CreateSurface(8, 8, SDL_PIXELFORMAT_RGBA32);
+    if (head == nullptr || !SDL_LockSurface(pixels)) {
+        SDL_DestroySurface(head);
+        SDL_DestroySurface(pixels);
+        return nullptr;
+    }
+    const auto pixel = [](SDL_Surface* surface, const int x, const int y) {
+        return static_cast<std::uint8_t*>(surface->pixels) + (y * surface->pitch) + (x * 4);
+    };
+    // Legacy 64x32 skins often fill the hat with opaque colour; the game ignores such a hat.
+    bool hat = true;
+    if (skin->h == 32) {
+        hat = false;
+        for (int y = 0; y < 8 && !hat; ++y) {
+            for (int x = 0; x < 8 && !hat; ++x)
+                hat = pixel(pixels, 40 + x, 8 + y)[3] < 128;
+        }
+    }
+    for (int y = 0; y < 8; ++y) {
+        for (int x = 0; x < 8; ++x) {
+            auto* const out = pixel(head, x, y);
+            const auto* const face = pixel(pixels, 8 + x, 8 + y);
+            const auto* const top = pixel(pixels, 40 + x, 8 + y);
+            const int alpha = hat ? top[3] : 0;
+            for (int channel = 0; channel < 3; ++channel)
+                out[channel] =
+                    static_cast<std::uint8_t>(((top[channel] * alpha) + (face[channel] * (255 - alpha))) / 255);
+            out[3] = 255;
+        }
+    }
+    SDL_UnlockSurface(pixels);
+    SDL_DestroySurface(pixels);
+    return head;
 }
 
 }  // namespace
@@ -52,13 +95,17 @@ void WindowRenderer::Impl::prepare_profile(const std::shared_ptr<const PlayerCar
         player_card_ = player_card;
         remote_avatar_texture_.reset();
         avatar_texture_ = nullptr;
-        if (player_card_ && !player_card_->avatar.empty()) {
-            auto* io = SDL_IOFromConstMem(player_card_->avatar.data(), player_card_->avatar.size());
-            auto* surface = io == nullptr ? nullptr : IMG_Load_IO(io, true);
-            if (surface != nullptr) {
-                remote_avatar_texture_.reset(SDL_CreateTextureFromSurface(context_.renderer(), surface));
-                SDL_DestroySurface(surface);
+        if (player_card_ && !player_card_->skin.empty()) {
+            auto* io = SDL_IOFromConstMem(player_card_->skin.data(), player_card_->skin.size());
+            auto* skin = io == nullptr ? nullptr : IMG_Load_IO(io, true);
+            if (auto* head = skin == nullptr ? nullptr : skin_head(skin); head != nullptr) {
+                remote_avatar_texture_.reset(SDL_CreateTextureFromSurface(context_.renderer(), head));
+                if (remote_avatar_texture_ != nullptr)
+                    SDL_SetTextureScaleMode(remote_avatar_texture_.get(), SDL_SCALEMODE_NEAREST);
+                SDL_DestroySurface(head);
             }
+            if (skin != nullptr)
+                SDL_DestroySurface(skin);
         }
     }
     if (avatar_texture_ == nullptr) {
