@@ -173,7 +173,7 @@ private:
     void draw_overlay_layout(const PublishedState& state, ImVec2 origin, ImVec2 available, float body_height,
                              float overlay_scroll_speed, bool scroll_right);
     void draw_overlay_group(const PublishedState& state, std::size_t group_index, const LayoutMetrics& metrics,
-                            float minimum_group_height, bool stacked, float overlay_scroll_speed, bool scroll_right);
+                            float minimum_group_height, float overlay_scroll_speed, bool scroll_right);
     void draw_main_layout(const PublishedState& state, ImVec2 origin, ImVec2 available, float body_height);
     // Records the window height that fits a layout needing required_body_height of its body_height.
     void require_body_height(float body_height, float required_body_height);

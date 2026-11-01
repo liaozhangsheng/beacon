@@ -21,61 +21,31 @@ void WindowRenderer::Impl::draw_overlay_layout(const PublishedState& state, cons
                                                const float body_height, const float overlay_scroll_speed,
                                                const bool scroll_right) {
     const auto& groups = state.layout->overlay;
-    const bool stacked = stacks_full_width(groups);
     float required_body_height = 1.0F;
     std::vector<float> minimum_heights;
-    std::vector<float> contents;
     minimum_heights.reserve(groups.size());
     for (std::size_t group_index = 0; group_index < groups.size(); ++group_index) {
         const auto& group = groups[group_index];
         minimum_heights.push_back(overlay_group_min_height(group, !view_.overlay_groups[group_index].empty(),
                                                            view_.overlay_progress[group_index], ImGui::GetFontSize(),
                                                            scale_));
-        if (stacked) {
-            // Compact rows draw bare icons inside an invisible frame; space them by what is visible.
-            const float hidden_frame = group.source == LayoutSource::Collections
-                                           ? ui::progress_frame_for_icon(icon_size()) - icon_size()
-                                           : 0.0F;
-            contents.push_back(minimum_heights.back() - hidden_frame + (from_icon(group.margin) * 2.0F));
-        } else {
-            required_body_height =
-                std::max(required_body_height, body_height_for_content(group, minimum_heights.back(), scale_));
-        }
+        required_body_height =
+            std::max(required_body_height, body_height_for_content(group, minimum_heights.back(), scale_));
     }
-    // Groups sit below a fixed top gap; stacked rows keep their configured proportions, so the minimum grows
-    // until every row fits its content.
-    const float stack_top = from_icon(8.0F);
-    const auto stack = stacked ? stack_layout_rows(groups, contents) : LayoutStack{};
-    if (stacked)
-        required_body_height = std::max(required_body_height, stack_layout_min_height(stack.contents, stack.weights));
-    require_body_height(body_height, stack_top + required_body_height);
-    const float layout_body_height = std::max(body_height - stack_top, required_body_height);
-    // Full-width groups stacked top to bottom split the body by their configured heights, with the space their
-    // y positions leave as empty rows.
-    std::vector<LayoutBand> bands;
-    if (stacked)
-        bands = stack_layout_bands(stack.contents, stack.weights, origin.y + stack_top,
-                                   origin.y + stack_top + layout_body_height);
+    require_body_height(body_height, required_body_height);
     for (std::size_t group_index = 0; group_index < groups.size(); ++group_index) {
-        const auto& group = groups[group_index];
-        auto metrics = calculate_layout_metrics(group, true, view_.overlay_groups[group_index].size(), available.x,
-                                                layout_body_height, origin.x, origin.y + stack_top, scale_);
-        if (!bands.empty()) {
-            const auto margin = from_icon(group.margin);
-            const auto& band = bands[stack.group_bands[group_index]];
-            metrics.y = band.y + margin;
-            metrics.configured_height = std::max(1.0F, band.height - (margin * 2.0F));
-        }
-        draw_overlay_group(state, group_index, metrics, minimum_heights[group_index], !bands.empty(),
-                           overlay_scroll_speed, scroll_right);
+        const auto metrics =
+            calculate_layout_metrics(groups[group_index], true, view_.overlay_groups[group_index].size(), available.x,
+                                     body_height, origin.x, origin.y, scale_);
+        draw_overlay_group(state, group_index, metrics, minimum_heights[group_index], overlay_scroll_speed,
+                           scroll_right);
     }
     draw_status_footer(origin, available);
 }
 
 void WindowRenderer::Impl::draw_overlay_group(const PublishedState& state, const std::size_t group_index,
                                               const LayoutMetrics& metrics, const float minimum_group_height,
-                                              const bool stacked, const float overlay_scroll_speed,
-                                              const bool scroll_right) {
+                                              const float overlay_scroll_speed, const bool scroll_right) {
     const auto& group = state.layout->overlay[group_index];
     const std::span<const std::uint32_t> nodes = view_.overlay_groups[group_index];
     auto* const draw = ImGui::GetWindowDrawList();
@@ -101,9 +71,8 @@ void WindowRenderer::Impl::draw_overlay_group(const PublishedState& state, const
         frame_schedule_.every(animation_frame_ms());
     }
     const float height = std::max(1.0F, metrics.configured_height);
-    const float content_top = metrics.y + padding +
-                              (stacked ? (metrics.configured_height - minimum_group_height) * 0.5F
-                                       : std::max(0.0F, (metrics.configured_height - minimum_group_height) * 0.5F));
+    const float content_top =
+        metrics.y + padding + std::max(0.0F, (metrics.configured_height - minimum_group_height) * 0.5F);
     float strip_offset = 0.0F;
     draw->PushClipRect({metrics.x, metrics.y}, {metrics.x + metrics.width, metrics.y + height}, true);
     ImDrawListSplitter splitter;

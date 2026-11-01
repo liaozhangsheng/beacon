@@ -815,52 +815,6 @@ TEST_CASE("layout spacing defaults match the built-in geometry") {
     CHECK(overlay.collection == 48.0F);
 }
 
-TEST_CASE("full-width overlay bands split height by weight") {
-    const beacon::LayoutGroup top{.y = 0, .width = 1};
-    const beacon::LayoutGroup bottom{.y = 0.5F, .width = 1};
-    CHECK(beacon::stacks_full_width({top, bottom}));
-    CHECK_FALSE(beacon::stacks_full_width({top}));
-    CHECK_FALSE(beacon::stacks_full_width({bottom, top}));
-    CHECK_FALSE(beacon::stacks_full_width({top, beacon::LayoutGroup{.y = 0.5F, .width = 0.5F}}));
-
-    const std::vector<float> contents{10, 30};
-    const std::vector<float> equal{1, 1};
-    const auto bands = beacon::stack_layout_bands(contents, equal, 5, 65);
-    REQUIRE(bands.size() == 2);
-    CHECK(bands[0].y == 5);
-    CHECK(bands[0].height == 30);
-    CHECK(bands[1].y == 35);
-    CHECK(bands[1].height == 30);
-    // Content taller than the body keeps its height instead of shrinking.
-    const auto crowded = beacon::stack_layout_bands(contents, equal, 0, 20);
-    CHECK(crowded[0].height == 10);
-    CHECK(crowded[1].y == 10);
-    CHECK(crowded[1].height == 30);
-    const std::vector<float> weighted{1, 3};
-    const auto tall = beacon::stack_layout_bands(contents, weighted, 0, 80);
-    CHECK(tall[0].height == 20);
-    CHECK(tall[1].y == 20);
-    CHECK(tall[1].height == 60);
-    // A band too small for its content keeps the content height; the others split the rest by weight.
-    const std::vector<float> inverted{3, 1};
-    const auto pinned = beacon::stack_layout_bands(contents, inverted, 0, 80);
-    CHECK(pinned[0].height == 50);
-    CHECK(pinned[1].height == 30);
-    CHECK(beacon::stack_layout_min_height(contents, equal) == 60);
-    CHECK(beacon::stack_layout_min_height(contents, weighted) == 40);
-    CHECK(beacon::stack_layout_bands({}, {}, 0, 20).empty());
-
-    // Space before, between and after the groups' y positions becomes empty rows.
-    const std::vector<beacon::LayoutGroup> spaced{{.y = 0.25F, .height = 0.25F}, {.y = 0.5F, .height = 0.25F}};
-    const auto stack = beacon::stack_layout_rows(spaced, contents);
-    CHECK(stack.contents == std::vector<float>{0, 10, 30, 0});
-    CHECK(stack.weights == std::vector<float>{0.25F, 0.25F, 0.25F, 0.25F});
-    CHECK(stack.group_bands == std::vector<std::size_t>{1, 2});
-    CHECK(beacon::stack_layout_rows(
-              std::vector<beacon::LayoutGroup>{{.y = 0, .height = 0.5F}, {.y = 0.5F, .height = 0.5F}}, contents)
-              .group_bands == std::vector<std::size_t>{0, 1});
-}
-
 TEST_CASE("collection grids place members below the header and in widening columns") {
     // Three rows, two reserved for the parent: member 0 sits under it, the rest fill the next column.
     const std::vector<float> widths{10, 40, 25, 5};
