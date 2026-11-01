@@ -72,10 +72,15 @@ enum class RuleOp : std::uint8_t {
 
 struct Presentation {
     enum class FrameType : std::uint8_t { None, Task, Goal, Challenge };
+    // What an item shows: itself, its current stage, or its children in turn.
+    enum class Show : std::uint8_t { Self, Stages, Cycle };
 
     std::string localization_key;
     std::string icon_path;
+    // Draws Minecraft's enchantment glint over the icon.
+    bool enchanted = false;
     FrameType frame_type = FrameType::None;
+    Show show = Show::Self;
     std::string frame_obtained_path;
     std::string frame_unobtained_path;
 

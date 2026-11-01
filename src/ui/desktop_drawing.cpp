@@ -45,7 +45,7 @@ void WindowRenderer::Impl::draw_glow(ImDrawList* draw, const ImVec2 frame_min, c
     if (center.x + extent < clip_min.x || center.x - extent > clip_max.x || center.y + extent < clip_min.y ||
         center.y - extent > clip_max.y)
         return;
-    continuous_animation_ = true;
+    frame_schedule_.every(soft_animation_ms);
     const double time = glow_.time;
     const double angle = (time * 0.25) + phase;
     const float half_size = frame_size * scale;
@@ -128,11 +128,6 @@ void WindowRenderer::Impl::set_completion_view(const bool complete) {
     }
     completion_view_ = complete;
     fireworks_.reset();
-    if (complete) {
-        SDL_SetWindowMinimumSize(context_.window(), 1, 1);
-    } else {
-        SDL_SetWindowMinimumSize(context_.window(), 1, overlay_min_height(0.0F, scale_));
-    }
 }
 
 void WindowRenderer::Impl::draw_completion_view(const PublishedState& state) {
@@ -183,12 +178,20 @@ void WindowRenderer::Impl::draw_node_icon(const PublishedState& state, ImDrawLis
         return;
     }
     const auto& sprites = node_sprites_[display_node];
-    const auto draw_sprite = [&](const Sprite& sprite, const ImVec2 position, const float size,
-                                 const ImU32 tint = IM_COL32(255, 255, 255, 255), const bool fallback = false) {
+    // The item keeps its own frame while its icon comes from a stage or alternative.
+    const auto has_frame = [](const NodeSprites& candidate) {
+        return candidate.frame_obtained.texture != nullptr || !candidate.frame_obtained.animation.empty();
+    };
+    const auto& frames = node < node_sprites_.size() && has_frame(node_sprites_[node]) ? node_sprites_[node] : sprites;
+    const auto visible = [&](const ImVec2 position, const float size) {
         const auto clip_min = draw->GetClipRectMin();
         const auto clip_max = draw->GetClipRectMax();
-        if (position.x + size < clip_min.x || position.x > clip_max.x || position.y + size < clip_min.y ||
-            position.y > clip_max.y)
+        return position.x + size >= clip_min.x && position.x <= clip_max.x && position.y + size >= clip_min.y &&
+               position.y <= clip_max.y;
+    };
+    const auto draw_sprite = [&](const Sprite& sprite, const ImVec2 position, const float size,
+                                 const ImU32 tint = IM_COL32(255, 255, 255, 255), const bool fallback = false) {
+        if (!visible(position, size))
             return;
         auto* const texture =
             sprite.animation.empty() ? sprite.texture : assets_->animated_frame(sprite.animation, SDL_GetTicks());
@@ -201,8 +204,8 @@ void WindowRenderer::Impl::draw_node_icon(const PublishedState& state, ImDrawLis
     if (show_frame) {
         if (splitter)
             splitter->SetCurrentChannel(draw, 0);
-        draw_sprite(state.snapshot.results[node].done ? sprites.frame_obtained : sprites.frame_unobtained,
-                    frame_position, frame_size);
+        draw_sprite(state.snapshot.results[node].done ? frames.frame_obtained : frames.frame_unobtained, frame_position,
+                    frame_size);
     }
     if (draw_glow) {
         if (splitter)
@@ -212,6 +215,14 @@ void WindowRenderer::Impl::draw_node_icon(const PublishedState& state, ImDrawLis
     if (splitter)
         splitter->SetCurrentChannel(draw, 2);
     draw_sprite(sprites.icon, icon_position, icon_size, icon_tint, true);
+    if (sprites.glint.empty() || !visible(icon_position, icon_size))
+        return;
+    if (auto* const glint = glint_->overlay(sprites.glint, SDL_GetTicks()); glint != nullptr) {
+        frame_schedule_.step(EnchantmentGlint::frame_ms);
+        // The icon tint also dims the glint on muted entries.
+        draw->AddImage(glint, icon_position, {icon_position.x + icon_size, icon_position.y + icon_size}, {0.0F, 0.0F},
+                       {1.0F, 1.0F}, icon_tint);
+    }
 }
 
 void WindowRenderer::Impl::draw_item(const PublishedState& state, const LayoutGroup& group, ImDrawList* draw,
@@ -220,7 +231,13 @@ void WindowRenderer::Impl::draw_item(const PublishedState& state, const LayoutGr
         return;
     }
     const auto& result = state.snapshot.results[index];
-    const auto display_node = item.stats ? stat_display_node(index, *state.compiled, state.snapshot.results) : index;
+    const auto now = SDL_GetTicks();
+    const auto shown = item_display(index, *state.compiled, state.snapshot.results, now);
+    if (shown.cycling)
+        frame_schedule_.step(item_cycle_ms);
+    const bool progress = shows_progress(shown.value, *state.compiled);
+    // Overlay statistics glow once reached; other overlay items get the completion cover.
+    const bool glow = item.draw_glow || (overlay_ && progress);
     // Item styles only apply to collection entries; everything else draws plainly.
     static constexpr ItemStyle plain{};
     const auto& style = !item.collection_item ? plain : result.done ? group.item_style.done : group.item_style.pending;
@@ -232,8 +249,7 @@ void WindowRenderer::Impl::draw_item(const PublishedState& state, const LayoutGr
         ImGui::IsMouseHoveringRect(hit_min, {hit_min.x + hit_size, hit_min.y + hit_size})) {
         const bool left = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
         if (left || ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
-            const auto target =
-                item.stats ? stat_manual_node(index, left, *state.compiled, state.snapshot.results) : index;
+            const auto target = item_manual_node(index, left, *state.compiled, state.snapshot.results, now);
             if (target)
                 (void)manual_runtime_->manual_operation(*target, left);
         }
@@ -241,20 +257,20 @@ void WindowRenderer::Impl::draw_item(const PublishedState& state, const LayoutGr
     // Muted collection entries stay legible but recede: gray text, icon at roughly 40% brightness.
     const bool muted = style.emphasis == ItemEmphasis::Muted;
     const auto foreground = muted ? IM_COL32(128, 128, 128, 255) : IM_COL32(245, 245, 245, 255);
-    draw_node_icon(state, draw, index, display_node, {item.frame_x, item.frame_y}, item.frame_size,
-                   {item.icon_x, item.icon_y}, item.icon_size, item.show_frame, item.draw_glow,
+    draw_node_icon(state, draw, index, shown.icon, {item.frame_x, item.frame_y}, item.frame_size,
+                   {item.icon_x, item.icon_y}, item.icon_size, item.show_frame, glow,
                    muted ? IM_COL32(100, 100, 100, 255) : IM_COL32_WHITE, &splitter);
     splitter.SetCurrentChannel(draw, 3);
 
-    const auto& label = view_.labels[display_node];
-    if (group.source != LayoutSource::Children) {
-        const float label_y = overlay_ ? item.cell_y + item.cell_height + from_icon(2.0F)
-                                       : item.cell_y + item.frame_size + from_icon(4.0F);
+    const auto& label = view_.labels[shown.label];
+    if (group.source != LayoutSource::Collections) {
+        const float label_gap = group_spacing(group, scale_).label;
+        const float label_y = (overlay_ ? item.cell_y + item.cell_height : item.cell_y + item.frame_size) + label_gap;
         const float title_wrap_width = item.frame_size + item.icon_size;
         auto line_count = draw_progress_text(draw, label, item.cell_x + (item.cell_width * 0.5F), label_y, foreground,
                                              title_wrap_width);
-        if (item.stats) {
-            const auto progress = format_rule_progress(state.snapshot.results[display_node]);
+        if (progress) {
+            const auto progress = format_rule_progress(state.snapshot.results[shown.value]);
             draw_progress_text(draw, progress, item.cell_x + (item.cell_width * 0.5F),
                                label_y + (ImGui::GetFontSize() * line_count), foreground);
             ++line_count;
@@ -263,7 +279,7 @@ void WindowRenderer::Impl::draw_item(const PublishedState& state, const LayoutGr
             const float cover_width = item.frame_size + item.icon_size;
             completion_.draw_cover(
                 draw, index, {item.cell_x + ((item.cell_width - cover_width) * 0.5F), item.cell_y},
-                {cover_width, item.cell_height + from_icon(6.0F) + (ImGui::GetFontSize() * line_count)});
+                {cover_width, item.cell_height + label_gap + from_icon(4.0F) + (ImGui::GetFontSize() * line_count)});
         }
     } else if (item.collection_item) {
         const auto label_y = item.cell_y + ((item.frame_size - ImGui::GetFontSize()) * 0.5F);

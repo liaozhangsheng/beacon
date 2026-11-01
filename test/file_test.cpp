@@ -57,19 +57,109 @@ TEST_CASE("filesystem paths round-trip through UTF-8") {
     REQUIRE(beacon::path_to_utf8(beacon::path_from_utf8(value)) == value);
 }
 
-TEST_CASE("settings persistence preserves UTF-8 filesystem paths") {
+TEST_CASE("settings files may leave out everything but the paths") {
     const beacon::test::TemporaryDirectory directory;
     beacon::Persistence persistence(directory.path);
-    beacon::Settings settings;
-    settings.game_root = beacon::path_from_utf8("用户/存档");
-    settings.template_path = beacon::path_from_utf8("模板/template.json");
+    std::filesystem::create_directories(directory.path / "config");
+    const auto write = [&](const std::string& json) {
+        std::ofstream(directory.path / "config/settings.json", std::ios::trunc) << json;
+        return persistence.load_settings();
+    };
+    const auto minimal = write(R"({"game_root":"game","template_path":"template.json","overlay_scroll_speed":90})");
+    REQUIRE(minimal);
+    REQUIRE(*minimal);
+    auto expected = beacon::Settings{.game_root = "game", .template_path = "template.json"};
+    expected.overlay_scroll_speed = 90.0F;
+    const auto& loaded = **minimal;
+    CHECK(loaded.game_root == expected.game_root);
+    CHECK(loaded.auto_detect == expected.auto_detect);
+    CHECK(loaded.ui_language == expected.ui_language);
+    CHECK(loaded.main_window_scale == expected.main_window_scale);
+    CHECK(loaded.main_window_background_color == expected.main_window_background_color);
+    CHECK(loaded.overlay_window_background_color == expected.overlay_window_background_color);
+    CHECK(loaded.overlay_scroll_speed == 90.0F);
+    CHECK(loaded.overlay_visible == expected.overlay_visible);
 
+    CHECK_FALSE(write(R"({"template_path":"template.json"})"));
+    CHECK_FALSE(write(R"({"game_root":"game"})"));
+    CHECK_FALSE(write(R"({"game_root":"game","template_path":"template.json","auto_detect":"yes"})"));
+    CHECK_FALSE(write(R"({"game_root":"game","template_path":"template.json","theme":"dark"})"));
+    CHECK_FALSE(write(R"({"game_root":"game","template_path":"template.json","overlay_window_scale":9})"));
+}
+
+TEST_CASE("settings round-trip validates fields and ranges") {
+    const beacon::test::TemporaryDirectory temporary;
+    const auto& root = temporary.path;
+    beacon::Persistence persistence(root);
+    beacon::Settings settings;
+    settings.game_root = root / beacon::path_from_utf8("用户/存档");
+    settings.template_path = beacon::path_from_utf8("模板/template.json");
+    settings.language = "en";
+    settings.ui_language = "en";
+    settings.auto_detect = false;
+    settings.overlay_visible = false;
+    settings.overlay_transparent = true;
+    settings.main_window_background_color = {0.1F, 0.2F, 0.3F};
+    settings.overlay_window_background_color = {0.4F, 0.5F, 0.6F};
+    settings.overlay_scroll_speed = 120.0F;
+    settings.overlay_scroll_right = true;
+    settings.main_window_scale = 0.75F;
+    settings.overlay_window_scale = 1.5F;
     REQUIRE(persistence.save_settings(settings));
+
     const auto loaded = persistence.load_settings();
     REQUIRE(loaded);
     REQUIRE(*loaded);
     REQUIRE((**loaded).game_root == settings.game_root);
     REQUIRE((**loaded).template_path == settings.template_path);
+    REQUIRE((**loaded).language == settings.language);
+    REQUIRE((**loaded).ui_language == settings.ui_language);
+    REQUIRE((**loaded).auto_detect == settings.auto_detect);
+    REQUIRE((**loaded).overlay_visible == settings.overlay_visible);
+    REQUIRE((**loaded).overlay_transparent == settings.overlay_transparent);
+    REQUIRE((**loaded).main_window_background_color == settings.main_window_background_color);
+    REQUIRE((**loaded).overlay_window_background_color == settings.overlay_window_background_color);
+    REQUIRE((**loaded).overlay_scroll_speed == settings.overlay_scroll_speed);
+    REQUIRE((**loaded).overlay_scroll_right == settings.overlay_scroll_right);
+    REQUIRE((**loaded).main_window_scale == settings.main_window_scale);
+    REQUIRE((**loaded).overlay_window_scale == settings.overlay_window_scale);
+
+    settings.language = std::string("en\0ignored", 10);
+    REQUIRE_FALSE(persistence.save_settings(settings));
+    settings.language = "en";
+    settings.overlay_window_background_color = {0.0F, 1.0F, 0.0F};
+    REQUIRE(persistence.save_settings(settings));
+    REQUIRE((**persistence.load_settings()).overlay_window_background_color ==
+            settings.overlay_window_background_color);
+
+    settings.main_window_scale = 0.25F;
+    REQUIRE_FALSE(persistence.save_settings(settings));
+}
+
+TEST_CASE("settings persistence recovers from backup") {
+    const beacon::test::TemporaryDirectory temporary;
+    const auto& root = temporary.path;
+    beacon::Persistence persistence(root);
+    beacon::Settings settings;
+    settings.game_root = root / ".minecraft";
+    settings.template_path = root / "template.json";
+    REQUIRE(persistence.save_settings(settings));
+    settings.game_root = root / "changed";
+    REQUIRE(persistence.save_settings(settings));
+    for (const auto invalid : {"{}", "[]", "[1]", "null", "42", "true", "\"invalid\""}) {
+        CAPTURE(invalid);
+        std::ofstream(root / "config/settings.json", std::ios::trunc) << invalid;
+        const auto recovered_settings = persistence.load_settings();
+        REQUIRE(recovered_settings);
+        REQUIRE(*recovered_settings);
+        REQUIRE((**recovered_settings).game_root == root / ".minecraft");
+        REQUIRE(persistence.save_settings(settings));
+    }
+    std::ofstream(root / "config/settings.json", std::ios::trunc) << "[]";
+    std::ofstream(root / "config/settings.json.bak", std::ios::trunc) << "[1]";
+    const auto invalid = persistence.load_settings();
+    REQUIRE_FALSE(invalid);
+    REQUIRE(invalid.error().code == beacon::ErrorCode::Validation);
 }
 
 TEST_CASE("concurrent settings saves preserve complete primary and backup files") {
@@ -201,33 +291,4 @@ TEST_CASE("Minecraft process arguments select only an explicit absolute game dir
         std::vector<std::string>{"java", "net.minecraft.client.main.Main", "--gameDir", "relative"}));
     REQUIRE_FALSE(beacon::minecraft_game_directory(
         std::vector<std::string>{"java", "net.minecraft.client.main.Main", "--gameDir", std::string("/tmp/a\0b", 8)}));
-}
-
-TEST_CASE("auto detection defaults to enabled when absent from settings files") {
-    const beacon::test::TemporaryDirectory directory;
-    beacon::Persistence persistence(directory.path);
-    beacon::Settings settings;
-    settings.game_root = directory.path;
-    settings.template_path = directory.path / "template.json";
-    REQUIRE(persistence.save_settings(settings));
-    const auto path = directory.path / "config/settings.json";
-    auto json = beacon::read_bounded_file(path, "settings");
-    REQUIRE(json);
-    const auto field = json->find("  \"auto_detect\" : true,\n");
-    REQUIRE(field != std::string::npos);
-    json->erase(field, std::string("  \"auto_detect\" : true,\n").size());
-    {
-        std::ofstream output(path);
-        output << *json;
-    }
-    const auto loaded = persistence.load_settings();
-    REQUIRE(loaded);
-    REQUIRE(*loaded);
-    REQUIRE((**loaded).auto_detect);
-    json->insert(1, "\"auto_detect\":\"yes\",");
-    {
-        std::ofstream output(path);
-        output << *json;
-    }
-    REQUIRE_FALSE(persistence.load_settings());
 }

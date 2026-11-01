@@ -24,24 +24,6 @@ Error error(ErrorCode code, std::string message, std::string context) {
     return {.code = code, .message = std::move(message), .context = std::move(context)};
 }
 
-std::string pointer_token(std::string_view token) {
-    std::string escaped;
-    for (const char character : token) {
-        if (character == '~') {
-            escaped += "~0";
-        } else if (character == '/') {
-            escaped += "~1";
-        } else {
-            escaped += character;
-        }
-    }
-    return escaped;
-}
-
-std::string child_path(const std::string& path, std::string_view child) {
-    return path + '/' + pointer_token(child);
-}
-
 }  // namespace
 
 bool valid_utf8(std::string_view text) {
@@ -133,22 +115,6 @@ std::optional<Error> check_string(const Json::Value& value, const std::string& p
     return std::nullopt;
 }
 
-std::optional<Error> reject_unknown_fields(const Json::Value& object, const std::string& path,
-                                           std::initializer_list<std::string_view> allowed) {
-    for (const auto& name : object.getMemberNames()) {
-        if (name.size() > max_string_bytes) {
-            return error(ErrorCode::SecurityLimit, "field name exceeds the byte limit", child_path(path, name));
-        }
-        if (!valid_utf8(name)) {
-            return error(ErrorCode::Validation, "field name is not valid UTF-8", path);
-        }
-        if (std::find(allowed.begin(), allowed.end(), name) == allowed.end()) {
-            return error(ErrorCode::Validation, "unknown field '" + name + "'", child_path(path, name));
-        }
-    }
-    return std::nullopt;
-}
-
 std::optional<Error> validate_rule_shape(const Json::Value& value, const std::string& path, std::size_t& node_count);
 
 std::optional<Error> validate_children(const Json::Value& children, const std::string& path, std::size_t& node_count) {
@@ -181,7 +147,7 @@ std::optional<Error> validate_rule_shape(const Json::Value& value, const std::st
         if (!view.isObject()) {
             return error(ErrorCode::Validation, "expected an object", view_path);
         }
-        if (auto failure = reject_unknown_fields(view, view_path, {"name_key", "icon", "type"})) {
+        if (auto failure = reject_unknown_fields(view, view_path, {"name_key", "icon", "enchanted", "type", "show"})) {
             return failure;
         }
         if (!view.isMember("name_key")) {
@@ -195,10 +161,18 @@ std::optional<Error> validate_rule_shape(const Json::Value& value, const std::st
                 return failure;
             }
         }
+        if (view.isMember("enchanted") && !view["enchanted"].isBool()) {
+            return error(ErrorCode::Validation, "expected a boolean", child_path(view_path, "enchanted"));
+        }
         if (view.isMember("type") &&
             (!view["type"].isString() || (view["type"].asString() != "task" && view["type"].asString() != "goal" &&
                                           view["type"].asString() != "challenge"))) {
             return error(ErrorCode::Validation, "type must be task, goal, or challenge", child_path(view_path, "type"));
+        }
+        if (view.isMember("show") &&
+            (!view["show"].isString() || (view["show"].asString() != "self" && view["show"].asString() != "stages" &&
+                                          view["show"].asString() != "cycle"))) {
+            return error(ErrorCode::Validation, "show must be self, stages, or cycle", child_path(view_path, "show"));
         }
     }
 
@@ -366,6 +340,7 @@ struct Compiler {
             Presentation presentation;
             presentation.localization_key = view["name_key"].asString();
             presentation.icon_path = view.isMember("icon") ? view["icon"].asString() : std::string{};
+            presentation.enchanted = view.get("enchanted", false).asBool();
             if (view.isMember("type")) {
                 const auto type = view["type"].asString();
                 presentation.frame_type = type == "goal"        ? Presentation::FrameType::Goal
@@ -432,6 +407,24 @@ struct Compiler {
                  completed_node.target > static_cast<std::int64_t>(completed_node.children.size()))) {
                 diagnostics.add("Count target must be between 1 and its child count",
                                 child_path(child_path(path, "count"), "target"));
+            }
+        }
+        if (auto& presentation = compiled.presentation_by_node[index]) {
+            const auto op = compiled.graph.nodes[index].op;
+            const auto& view = value["view"];
+            presentation->show = op == RuleOp::Prefix ? Presentation::Show::Stages : Presentation::Show::Self;
+            if (view.isMember("show")) {
+                const auto show = view["show"].asString();
+                presentation->show = show == "stages"  ? Presentation::Show::Stages
+                                     : show == "cycle" ? Presentation::Show::Cycle
+                                                       : Presentation::Show::Self;
+            }
+            const auto show_path = child_path(child_path(path, "view"), "show");
+            if (presentation->show == Presentation::Show::Stages && op != RuleOp::Prefix && op != RuleOp::All) {
+                diagnostics.add("show stages requires a prefix or all rule", show_path);
+            } else if (presentation->show == Presentation::Show::Cycle && op != RuleOp::All && op != RuleOp::Any &&
+                       op != RuleOp::Count) {
+                diagnostics.add("show cycle requires an all, any, or count rule", show_path);
             }
         }
         return index;

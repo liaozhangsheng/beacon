@@ -1,6 +1,5 @@
 """Run an extracted package through its launcher without the build's library search paths."""
 import os
-import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -36,6 +35,9 @@ with tempfile.TemporaryDirectory(prefix='beacon-package-') as directory:
     skill = root / '.agents' / 'skills' / 'beacon-custom-template' / 'SKILL.md'
     if not skill.is_file():
         raise RuntimeError(f'Bundled template skill is missing: {skill}')
+    for required in ('template.json', 'lang.json', 'langs/en.json', 'layout.json'):
+        if not (root / 'templates' / '1.16.1' / required).is_file():
+            raise RuntimeError(f'Bundled 1.16.1 template file is missing: {required}')
     environment = dict(os.environ)
     for key in ('LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH', 'DYLD_FALLBACK_LIBRARY_PATH'):
         environment.pop(key, None)
@@ -54,20 +56,6 @@ with tempfile.TemporaryDirectory(prefix='beacon-package-') as directory:
                    env=environment, check=True, timeout=30)
     # Normal startup must still find user templates/settings when the pointer is
     # missing. Unlike --smoke-test, this runs installation-root discovery.
-    # Packages ship no templates, so provide the user template startup requires.
-    user_template = root / 'templates' / 'smoke'
-    user_template.mkdir(parents=True)
-    user_assets = user_template / 'icons'
-    user_assets.mkdir()
-    shutil.copyfile(Path(__file__).parent / 'fixtures/resources/template-icon.png', user_assets / 'goal.png')
-    (user_template / 'template.json').write_text(
-        '{"name_key":"template.smoke","minecraft":{"min_version":0,"max_version":99999999},'
-        '"goals":[{"id":"goal","fact":"a","view":{"name_key":"goal.smoke","icon":"icons/goal.png"}}],'
-        '"completion_rule":"goal"}')
-    (user_template / 'lang.json').write_text('{"template.smoke":"Smoke","goal.smoke":"Goal"}')
-    (user_template / 'layout.json').write_text(
-        '{"main":[{"id":"main","source":"nodes","nodes":["goal"],"exclude":[],'
-        '"x":0,"y":0,"width":1,"height":1,"margin":0,"padding":0}],"overlay":[]}')
     pointers[0].unlink()
     startup_environment = dict(environment, SDL_VIDEODRIVER='dummy', HOME=directory,
                                APPDATA=directory, XDG_DATA_HOME=directory)

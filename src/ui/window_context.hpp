@@ -9,8 +9,6 @@
 
 namespace beacon {
 
-int overlay_min_height(float extra_padding = 0.0F, float scale = 1.0F);
-
 class WindowContext {
 public:
     WindowContext(const std::string& title, const WindowSettings& settings, bool overlay, float scale = 1.0F,

@@ -48,16 +48,6 @@ SDL_HitTestResult overlay_hit_test(SDL_Window* window, const SDL_Point* point, v
 
 }  // namespace
 
-int overlay_min_height(const float extra_padding, const float scale) {
-    const auto frame_size = ui::progress_frame_size(scale);
-    const auto font_size = ui::font_size(scale);
-    const float row_content = frame_size + (frame_size * 2.0F);
-    constexpr float title_and_progress_lines = 5.0F;
-    const float row_gaps_and_padding = frame_size;
-    return static_cast<int>(std::ceil(row_content + (font_size * title_and_progress_lines) + row_gaps_and_padding +
-                                      (ui::from_icon(extra_padding, scale) * 2.0F)));
-}
-
 WindowContext::WindowContext(const std::string& title, const WindowSettings& settings, const bool overlay,
                              const float scale, const bool overlay_transparent, const bool initially_visible)
     : overlay_(overlay), scale_(scale) {
@@ -72,13 +62,9 @@ WindowContext::WindowContext(const std::string& title, const WindowSettings& set
     const auto visibility_flags = initially_visible ? 0u : SDL_WINDOW_HIDDEN;
     const auto flags =
         SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_RESIZABLE | visibility_flags | (overlay ? overlay_flags : 0);
-    const int height = overlay ? std::max(settings.height, overlay_min_height(0.0F, scale)) : settings.height;
-    window_ = SDL_CreateWindow(title.c_str(), settings.width, height, flags);
+    window_ = SDL_CreateWindow(title.c_str(), settings.width, settings.height, flags);
     if (window_ == nullptr)
         return;
-    if (overlay && !SDL_SetWindowMinimumSize(window_, 0, overlay_min_height(0.0F, scale))) {
-        SDL_Log("Overlay minimum size unavailable: %s", SDL_GetError());
-    }
     if (overlay && !SDL_SetWindowHitTest(window_, overlay_hit_test, &scale_)) {
         SDL_Log("Overlay hit testing unavailable: %s", SDL_GetError());
     }

@@ -1,17 +1,19 @@
 #include <beacon/ui/display.hpp>
 #include <beacon/io/file.hpp>
+#include <beacon/ui/sizing.hpp>
 #include "../core/json.hpp"
 
 #include <json/json.h>
 
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
 #include <filesystem>
 #include <array>
 #include <memory>
 #include <optional>
 #include <string>
+#include <tuple>
+#include <utility>
 
 namespace beacon {
 namespace {
@@ -22,20 +24,9 @@ Error resource_error(ErrorCode code, std::string message, std::string context) {
     return {.code = code, .message = std::move(message), .context = std::move(context)};
 }
 
-bool exact_layout_group_fields(const Json::Value& value) {
-    if (!value.isObject())
-        return false;
-    constexpr std::array<std::string_view, 10> fields{"id", "source", "nodes",  "exclude", "x",
-                                                      "y",  "width",  "height", "margin",  "padding"};
-    const auto optional_count = (value.isMember("children") ? 1 : 0) + (value.isMember("item_style") ? 1 : 0);
-    return value.size() == fields.size() + optional_count && std::ranges::all_of(fields, [&](const auto field) {
-               return value.isMember(std::string(field));
-           });
-}
-
-std::optional<Error> read_item_styles(const Json::Value& value, ItemStyles& styles, const std::string& group) {
+std::optional<Error> read_item_styles(const Json::Value& value, ItemStyles& styles, const std::string& path) {
     const auto invalid = [&] {
-        return resource_error(ErrorCode::Validation, "invalid item_style", group);
+        return resource_error(ErrorCode::Validation, "invalid item_style", path);
     };
     if (!value.isObject())
         return invalid();
@@ -73,19 +64,39 @@ std::optional<Error> read_item_styles(const Json::Value& value, ItemStyles& styl
     return std::nullopt;
 }
 
-void normalize_layout_groups(std::vector<LayoutGroup>& groups) {
-    float max_right = 0.0F;
-    float max_bottom = 0.0F;
-    for (const auto& group : groups) {
-        max_right = std::max(max_right, group.x + group.width);
-        max_bottom = std::max(max_bottom, group.y + group.height);
+// Reads a number in [0, max_layout_coordinate] into output; an absent field keeps output's default.
+std::optional<Error> read_amount(const Json::Value& object, const std::string_view name, const std::string& path,
+                                 float& output, const bool positive = false) {
+    const std::string key(name);
+    if (!object.isMember(key))
+        return std::nullopt;
+    const auto& value = object[key];
+    if (!value.isNumeric() || !std::isfinite(value.asDouble()) || value.asDouble() < 0.0 ||
+        (positive && value.asDouble() == 0.0) || value.asDouble() > max_layout_coordinate)
+        return resource_error(ErrorCode::Validation, "layout value is outside its limit", child_path(path, name));
+    output = static_cast<float>(value.asDouble());
+    return std::nullopt;
+}
+
+std::optional<Error> read_spacing(const Json::Value& value, LayoutSpacing& spacing, const bool overlay,
+                                  const LayoutSource source, const std::string& path) {
+    if (!value.isObject())
+        return resource_error(ErrorCode::Validation, "spacing must be an object", path);
+    // Rows only exist in the main window, and collection gaps only between collections.
+    const bool collections = source == LayoutSource::Collections;
+    const auto failure = overlay ? collections ? reject_unknown_fields(value, path, {"item", "label", "collection"})
+                                               : reject_unknown_fields(value, path, {"item", "label"})
+                         : collections ? reject_unknown_fields(value, path, {"item", "row", "label", "collection"})
+                                       : reject_unknown_fields(value, path, {"item", "row", "label"});
+    if (failure)
+        return failure;
+    for (const auto& [name, field] :
+         {std::pair{"item", &spacing.item}, std::pair{"row", &spacing.row}, std::pair{"label", &spacing.label},
+          std::pair{"collection", &spacing.collection}}) {
+        if (auto invalid = read_amount(value, name, path, *field))
+            return invalid;
     }
-    for (auto& group : groups) {
-        group.x /= max_right;
-        group.y /= max_bottom;
-        group.width /= max_right;
-        group.height /= max_bottom;
-    }
+    return std::nullopt;
 }
 
 ylt::expected<std::unordered_map<std::string, std::string>, Error> localization_map(std::string_view json,
@@ -144,134 +155,173 @@ ylt::expected<Localization, Error> compile_localization_json(std::string_view de
     return result;
 }
 
+LayoutSpacing default_spacing(const bool overlay, const LayoutSource source) {
+    const bool collections = source == LayoutSource::Collections;
+    // Overlay collection icons sit one icon apart and their collections 48 apart; main collection entries
+    // use 16-wide columns and a 32 row step for their 26-tall frames; labels hug their frames.
+    if (overlay)
+        return {.item = collections ? ui::source_icon_size : 0.0F, .label = 2.0F, .collection = 48.0F};
+    return collections ? LayoutSpacing{.item = 16.0F, .row = 6.0F, .label = 3.0F} : LayoutSpacing{.label = 4.0F};
+}
+
 ylt::expected<Layout, Error> compile_layout_json(std::string_view json, const CompiledTemplate& compiled) {
     auto root = beacon::parse_json(json, "layout.json", "invalid resource JSON");
     if (!root) {
         return ylt::unexpected<Error>{std::move(root.error())};
     }
-    if (!root->isObject() || !exact_json_fields(*root, {"main", "overlay"}) || !(*root)["main"].isArray() ||
-        !(*root)["overlay"].isArray() || (*root)["main"].size() + (*root)["overlay"].size() > max_rule_nodes) {
-        return ylt::unexpected<Error>{resource_error(ErrorCode::Validation, "invalid layout root", "layout.json")};
-    }
+    const std::string root_path = "layout.json";
+    if (!root->isObject())
+        return ylt::unexpected<Error>{resource_error(ErrorCode::Validation, "invalid layout root", root_path)};
+    if (auto failure = reject_unknown_fields(*root, root_path, {"main", "overlay"}))
+        return ylt::unexpected<Error>{std::move(*failure)};
 
     Layout result;
     std::size_t group_count = 0;
-    const auto compile_groups = [&](const auto& self, const Json::Value& values, std::vector<LayoutGroup>& groups,
-                                    const double parent_x, const double parent_y, const double parent_width,
-                                    const double parent_height, const bool normalize_children) -> std::optional<Error> {
-        double max_right = 1.0;
-        double max_bottom = 1.0;
-        if (normalize_children) {
-            for (const auto& value : values) {
-                if (value.isObject() && value["x"].isNumeric() && value["width"].isNumeric() &&
-                    value["y"].isNumeric() && value["height"].isNumeric()) {
-                    max_right = std::max(max_right, value["x"].asDouble() + value["width"].asDouble());
-                    max_bottom = std::max(max_bottom, value["y"].asDouble() + value["height"].asDouble());
+    const auto read_ids = [&](const Json::Value& ids, const std::string& path, std::vector<std::string>& output,
+                              const bool require_rule) -> std::optional<Error> {
+        if (!ids.isArray())
+            return resource_error(ErrorCode::Validation, "expected an array of rule IDs", path);
+        if (ids.size() > max_rule_nodes)
+            return resource_error(ErrorCode::SecurityLimit, "layout group exceeds the node limit", path);
+        for (Json::ArrayIndex index = 0; index < ids.size(); ++index) {
+            const auto id_path = child_path(path, std::to_string(index));
+            if (!ids[index].isString())
+                return resource_error(ErrorCode::Validation, "layout group node must be a string", id_path);
+            auto id = ids[index].asString();
+            if (id.empty() || id.size() > max_string_bytes || !valid_utf8(id))
+                return resource_error(ErrorCode::Validation, "invalid layout group node", id_path);
+            if (require_rule && !compiled.graph.index_by_id.contains(id)) {
+                if (result.warnings.size() < max_diagnostics) {
+                    result.warnings.push_back(
+                        resource_error(ErrorCode::Validation, "layout references an unknown rule ID", id));
                 }
+                continue;
             }
+            output.push_back(std::move(id));
         }
-        for (Json::ArrayIndex index = 0; index < values.size(); ++index) {
-            if (++group_count > max_rule_nodes) {
-                return resource_error(ErrorCode::SecurityLimit, "layout exceeds the group limit", "layout.json");
-            }
-            const auto& value = values[index];
-            const auto valid_fields = exact_layout_group_fields(value);
-            if (!valid_fields || !value["source"].isString() || !value["nodes"].isArray() ||
-                !value["exclude"].isArray() || !value["x"].isNumeric() || !value["y"].isNumeric() ||
-                !value["width"].isNumeric() || !value["height"].isNumeric() || !value["id"].isString() ||
-                !value["margin"].isNumeric() || !value["padding"].isNumeric()) {
-                return resource_error(ErrorCode::Validation, "invalid layout group", std::to_string(index));
-            }
-            const auto x = parent_x + value["x"].asDouble() / max_right * parent_width;
-            const auto y = parent_y + value["y"].asDouble() / max_bottom * parent_height;
-            const auto width = value["width"].asDouble() / max_right * parent_width;
-            const auto height = value["height"].asDouble() / max_bottom * parent_height;
-            const auto margin = value["margin"].asDouble();
-            const auto padding = value["padding"].asDouble();
-            const auto id = value["id"].asString();
-            const auto source_name = value["source"].asString();
-            if (id.empty() || id.size() > max_string_bytes || !valid_utf8(id) ||
-                source_name.size() > max_string_bytes || !valid_utf8(source_name) || !std::isfinite(x) ||
-                !std::isfinite(y) || !std::isfinite(width) || !std::isfinite(height) || !std::isfinite(margin) ||
-                !std::isfinite(padding) || margin < 0 || padding < 0 || margin > max_layout_coordinate ||
-                padding > max_layout_coordinate || x < 0 || y < 0 || width <= 0 || height <= 0 ||
-                x > max_layout_coordinate - width || y > max_layout_coordinate - height) {
-                return resource_error(ErrorCode::Validation, "layout group value is outside its limit",
-                                      std::to_string(index));
-            }
-            LayoutSource source;
-            if (source_name == "nodes")
-                source = LayoutSource::Nodes;
-            else if (source_name == "prefix")
-                source = LayoutSource::Prefix;
-            else if (source_name == "children")
-                source = LayoutSource::Children;
-            else
-                return resource_error(ErrorCode::Validation, "unknown layout source", source_name);
+        return std::nullopt;
+    };
+    const auto read_group = [&](const Json::Value& value, const std::string& path,
+                                const bool overlay) -> ylt::expected<LayoutGroup, Error> {
+        const auto fail = [](Error error) {
+            return ylt::unexpected<Error>{std::move(error)};
+        };
+        if (!value.isObject())
+            return fail(resource_error(ErrorCode::Validation, "layout group must be an object", path));
+        if (auto failure =
+                reject_unknown_fields(value, path,
+                                      {"id", "x", "y", "width", "height", "margin", "padding", "nodes", "prefix",
+                                       "collections", "children", "exclude", "spacing", "item_style", "scroll"}))
+            return fail(std::move(*failure));
 
-            LayoutGroup group{.id = id,
-                              .source = source,
-                              .nodes = {},
-                              .exclude = {},
-                              .x = static_cast<float>(x),
-                              .y = static_cast<float>(y),
-                              .width = static_cast<float>(width),
-                              .height = static_cast<float>(height),
-                              .margin = static_cast<float>(margin),
-                              .padding = static_cast<float>(padding)};
-            if (value.isMember("item_style")) {
-                if (source != LayoutSource::Children || &groups != &result.main)
-                    return resource_error(ErrorCode::Validation, "item_style requires main source children", id);
-                if (auto failure = read_item_styles(value["item_style"], group.item_style, id))
-                    return failure;
-            }
-            const auto read_ids = [&](const Json::Value& ids, std::vector<std::string>& output,
-                                      bool require_rule) -> std::optional<Error> {
-                if (ids.size() > max_rule_nodes) {
-                    return resource_error(ErrorCode::SecurityLimit, "layout group exceeds the node limit", group.id);
-                }
-                for (Json::ArrayIndex node_index = 0; node_index < ids.size(); ++node_index) {
-                    if (!ids[node_index].isString()) {
-                        return resource_error(ErrorCode::Validation, "layout group node must be a string", group.id);
-                    }
-                    const auto id = ids[node_index].asString();
-                    if (id.empty() || id.size() > max_string_bytes || !valid_utf8(id)) {
-                        return resource_error(ErrorCode::Validation, "invalid layout group node", group.id);
-                    }
-                    if (require_rule && !compiled.graph.index_by_id.contains(id)) {
-                        if (result.warnings.size() < max_diagnostics) {
-                            result.warnings.push_back(
-                                resource_error(ErrorCode::Validation, "layout references an unknown rule ID", id));
-                        }
-                        continue;
-                    }
-                    output.push_back(id);
-                }
-                return std::nullopt;
-            };
-            const bool exact_ids = source == LayoutSource::Nodes || source == LayoutSource::Children;
-            if (auto failure = read_ids(value["nodes"], group.nodes, exact_ids))
-                return failure;
-            if (auto failure = read_ids(value["exclude"], group.exclude, true))
-                return failure;
-            groups.push_back(std::move(group));
-            if (value.isMember("children")) {
-                if (!value["children"].isArray())
-                    return resource_error(ErrorCode::Validation, "invalid nested layout", id);
-                if (auto failure = self(self, value["children"], groups, x, y, width, height, true))
+        LayoutGroup group;
+        if (value.isMember("id")) {
+            const auto& id = value["id"];
+            if (!id.isString() || id.asString().size() > max_string_bytes || !valid_utf8(id.asString()))
+                return fail(resource_error(ErrorCode::Validation, "invalid layout group id", child_path(path, "id")));
+            group.id = id.asString();
+        }
+        for (const auto& [name, field, positive] :
+             {std::tuple{"x", &group.x, false}, std::tuple{"y", &group.y, false},
+              std::tuple{"width", &group.width, true}, std::tuple{"height", &group.height, true},
+              std::tuple{"margin", &group.margin, false}, std::tuple{"padding", &group.padding, false}}) {
+            if (auto failure = read_amount(value, name, path, *field, positive))
+                return fail(std::move(*failure));
+        }
+
+        constexpr std::array selectors{std::pair{"nodes", LayoutSource::Nodes},
+                                       std::pair{"prefix", LayoutSource::Prefix},
+                                       std::pair{"collections", LayoutSource::Collections}};
+        const auto contents = std::ranges::count_if(selectors,
+                                                    [&](const auto& selector) {
+                                                        return value.isMember(selector.first);
+                                                    }) +
+                              (value.isMember("children") ? 1 : 0);
+        if (contents > 1)
+            return fail(resource_error(ErrorCode::Validation,
+                                       "a layout group takes only one of nodes, prefix, collections and children",
+                                       path));
+        for (const auto& [name, source] : selectors) {
+            if (!value.isMember(name))
+                continue;
+            group.source = source;
+            if (auto failure =
+                    read_ids(value[name], child_path(path, name), group.nodes, source != LayoutSource::Prefix))
+                return fail(std::move(*failure));
+        }
+        if (value.isMember("exclude")) {
+            if (group.source == LayoutSource::None)
+                return fail(resource_error(ErrorCode::Validation, "exclude requires nodes, prefix or collections",
+                                           child_path(path, "exclude")));
+            if (auto failure = read_ids(value["exclude"], child_path(path, "exclude"), group.exclude, true))
+                return fail(std::move(*failure));
+        }
+
+        group.spacing = default_spacing(overlay, group.source);
+        if (value.isMember("spacing")) {
+            if (auto failure =
+                    read_spacing(value["spacing"], group.spacing, overlay, group.source, child_path(path, "spacing")))
+                return fail(std::move(*failure));
+        }
+        if (value.isMember("item_style")) {
+            if (overlay || group.source != LayoutSource::Collections)
+                return fail(resource_error(ErrorCode::Validation, "item_style requires main window collections",
+                                           child_path(path, "item_style")));
+            if (auto failure = read_item_styles(value["item_style"], group.item_style, child_path(path, "item_style")))
+                return fail(std::move(*failure));
+        }
+        if (value.isMember("scroll")) {
+            if (!overlay || !value["scroll"].isBool())
+                return fail(resource_error(ErrorCode::Validation, "scroll requires an overlay boolean",
+                                           child_path(path, "scroll")));
+            group.scroll = value["scroll"].asBool();
+        }
+        return group;
+    };
+    // Every level is a grid: siblings are scaled together so their extent fills the parent's box.
+    const auto compile_groups = [&](const auto& self, const Json::Value& values, const std::string& path,
+                                    const bool overlay, const float parent_x, const float parent_y,
+                                    const float parent_width, const float parent_height) -> std::optional<Error> {
+        if (!values.isArray())
+            return resource_error(ErrorCode::Validation, "expected an array of layout groups", path);
+        std::vector<LayoutGroup> siblings;
+        siblings.reserve(values.size());
+        float extent_x = 0.0F;
+        float extent_y = 0.0F;
+        for (Json::ArrayIndex index = 0; index < values.size(); ++index) {
+            if (++group_count > max_rule_nodes)
+                return resource_error(ErrorCode::SecurityLimit, "layout exceeds the group limit", path);
+            auto group = read_group(values[index], child_path(path, std::to_string(index)), overlay);
+            if (!group)
+                return std::move(group.error());
+            extent_x = std::max(extent_x, group->x + group->width);
+            extent_y = std::max(extent_y, group->y + group->height);
+            siblings.push_back(std::move(*group));
+        }
+        auto& groups = overlay ? result.overlay : result.main;
+        for (Json::ArrayIndex index = 0; index < values.size(); ++index) {
+            auto& group = siblings[index];
+            group.x = parent_x + (group.x / extent_x * parent_width);
+            group.y = parent_y + (group.y / extent_y * parent_height);
+            group.width = group.width / extent_x * parent_width;
+            group.height = group.height / extent_y * parent_height;
+            groups.push_back(group);
+            if (values[index].isMember("children")) {
+                if (auto failure = self(self, values[index]["children"],
+                                        child_path(child_path(path, std::to_string(index)), "children"), overlay,
+                                        group.x, group.y, group.width, group.height))
                     return failure;
             }
         }
         return std::nullopt;
     };
-    if (auto failure = compile_groups(compile_groups, (*root)["main"], result.main, 0, 0, 1, 1, false)) {
-        return ylt::unexpected<Error>{std::move(*failure)};
+    for (const auto* window : {"main", "overlay"}) {
+        if (!root->isMember(window))
+            continue;
+        if (auto failure = compile_groups(compile_groups, (*root)[window], child_path(root_path, window),
+                                          std::string_view(window) == "overlay", 0.0F, 0.0F, 1.0F, 1.0F))
+            return ylt::unexpected<Error>{std::move(*failure)};
     }
-    if (auto failure = compile_groups(compile_groups, (*root)["overlay"], result.overlay, 0, 0, 1, 1, false)) {
-        return ylt::unexpected<Error>{std::move(*failure)};
-    }
-    normalize_layout_groups(result.main);
-    normalize_layout_groups(result.overlay);
     return result;
 }
 
@@ -427,7 +477,8 @@ std::vector<NodeImages> node_images(const CompiledTemplate& compiled) {
         if (const auto& view = compiled.presentation_by_node[node]) {
             images[node] = {.icon = path_from_utf8(view->icon_path),
                             .frame_obtained = path_from_utf8(view->frame_obtained_path),
-                            .frame_unobtained = path_from_utf8(view->frame_unobtained_path)};
+                            .frame_unobtained = path_from_utf8(view->frame_unobtained_path),
+                            .enchanted = view->enchanted};
         }
     }
     return images;

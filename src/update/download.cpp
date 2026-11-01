@@ -7,7 +7,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cctype>
 #include <fstream>
 #include <memory>
 #include <utility>

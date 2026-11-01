@@ -5,6 +5,47 @@
 #include <memory>
 
 namespace beacon {
+namespace {
+
+std::string pointer_token(std::string_view token) {
+    std::string escaped;
+    for (const char character : token) {
+        if (character == '~') {
+            escaped += "~0";
+        } else if (character == '/') {
+            escaped += "~1";
+        } else {
+            escaped += character;
+        }
+    }
+    return escaped;
+}
+
+}  // namespace
+
+std::string child_path(const std::string& path, std::string_view child) {
+    return path + '/' + pointer_token(child);
+}
+
+std::optional<Error> reject_unknown_fields(const Json::Value& object, const std::string& path,
+                                           std::initializer_list<std::string_view> allowed) {
+    for (const auto& name : object.getMemberNames()) {
+        if (name.size() > max_string_bytes) {
+            return Error{.code = ErrorCode::SecurityLimit,
+                         .message = "field name exceeds the byte limit",
+                         .context = child_path(path, name)};
+        }
+        if (!valid_utf8(name)) {
+            return Error{.code = ErrorCode::Validation, .message = "field name is not valid UTF-8", .context = path};
+        }
+        if (std::find(allowed.begin(), allowed.end(), name) == allowed.end()) {
+            return Error{.code = ErrorCode::Validation,
+                         .message = "unknown field '" + name + "'",
+                         .context = child_path(path, name)};
+        }
+    }
+    return std::nullopt;
+}
 
 ylt::expected<Json::Value, Error> parse_json(std::string_view json, std::string_view context,
                                              std::string_view invalid_message) {

@@ -1,4 +1,5 @@
 #include <beacon/ui/desktop.hpp>
+#include <beacon/app/settings_applier.hpp>
 #include <beacon/minecraft/process.hpp>
 #include <beacon/ui/display.hpp>
 #include <beacon/ui/profile.hpp>
@@ -14,7 +15,6 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -110,12 +110,16 @@ public:
                    asset_root_, view_, settings.overlay_window_scale, settings.overlay_transparent,
                    settings.overlay_visible),
           profile_loader_(data_root_) {
-        const auto initial_state = runtime_ ? runtime_->state() : fixed_state_;
-        resource_loader_ =
-            TemplateResourceLoader(settings.template_path, asset_root_,
-                                   initial_state ? TemplateResources{initial_state->compiled,
-                                                                     initial_state->localization, initial_state->layout}
-                                                 : TemplateResources{});
+        if (runtime_ != nullptr && persistence_ != nullptr) {
+            const auto initial_state = runtime_->state();
+            settings_applier_.emplace(
+                *runtime_, *persistence_, asset_root_,
+                TemplateResourceLoader(
+                    settings.template_path, asset_root_,
+                    initial_state
+                        ? TemplateResources{initial_state->compiled, initial_state->localization, initial_state->layout}
+                        : TemplateResources{}));
+        }
         if (!tracker_.ready() || !overlay_.ready() || tracker_.renderer() == overlay_.renderer()) {
             running_ = false;
             return;
@@ -230,38 +234,14 @@ public:
         }
         if (apply_settings_) {
             apply_settings_ = false;
-            auto candidate_loader = resource_loader_;
-            ylt::expected<void, Error> applied;
-            std::optional<RuntimeConfiguration> prepared;
-            if (runtime_ == nullptr || persistence_ == nullptr) {
-                applied = ylt::unexpected<Error>{
-                    {.code = ErrorCode::Internal, .message = "runtime is unavailable", .context = "settings"}};
-            } else if (current_settings_.game_root != applied_settings_.game_root ||
-                       current_settings_.template_path != applied_settings_.template_path ||
-                       current_settings_.language != applied_settings_.language) {
-                const bool language_only = current_settings_.template_path == applied_settings_.template_path &&
-                                           current_settings_.language != applied_settings_.language;
-                auto resources = candidate_loader.load(current_settings_.template_path, asset_root_,
-                                                       current_settings_.language, language_only);
-                if (!resources) {
-                    applied = ylt::unexpected<Error>{std::move(resources.error())};
-                } else {
-                    auto candidate = Runtime::prepare_configuration(current_settings_.game_root, resources->compiled,
-                                                                    resources->localization, resources->layout);
-                    if (!candidate)
-                        applied = ylt::unexpected<Error>{std::move(candidate.error())};
-                    else
-                        prepared = std::move(*candidate);
-                }
-            }
-            if (applied)
-                applied = persistence_->save_settings(current_settings_);
+            auto applied =
+                settings_applier_
+                    ? settings_applier_->apply(applied_settings_, current_settings_)
+                    : ylt::expected<void, Error>{ylt::unexpected<Error>{
+                          {.code = ErrorCode::Internal, .message = "runtime is unavailable", .context = "settings"}}};
             if (!applied) {
                 settings_error_ = std::move(applied.error());
             } else {
-                if (prepared)
-                    runtime_->commit_configuration(std::move(*prepared));
-                resource_loader_ = std::move(candidate_loader);
                 applied_settings_ = current_settings_;
                 settings_error_.reset();
                 runtime_error_.reset();
@@ -400,7 +380,7 @@ private:
     WindowRenderer tracker_;
     WindowRenderer overlay_;
     ProfileLoader profile_loader_;
-    TemplateResourceLoader resource_loader_;
+    std::optional<SettingsApplier> settings_applier_;
     Clock::time_point next_poll_{};
     Clock::time_point next_tracker_frame_{};
     Clock::time_point next_overlay_frame_{};
@@ -517,12 +497,20 @@ int desktop_smoke_test(const std::filesystem::path& asset_root) {
                                                                                        {"goal.smoke", "Goal"},
                                                                                        {"done.smoke", "Done"},
                                                                                        {"pending.smoke", "Pending"}}});
-    Layout layout_value;
-    layout_value.main.push_back({"Progress", LayoutSource::Nodes, {"done", "pending"}, {}, 0, 0, 1, 0.7F});
-    layout_value.main.push_back({"Stats", LayoutSource::Nodes, {"counter"}, {}, 0, 0.72F, 1, 0.28F});
-    layout_value.overlay.push_back({"Collections", LayoutSource::Children, {"goal"}, {}, 0, 0, 1, 0.7F});
-    layout_value.overlay.push_back({"Stats", LayoutSource::Nodes, {"counter"}, {}, 0, 0.72F, 1, 0.28F});
-    auto layout = std::make_shared<const Layout>(std::move(layout_value));
+    auto layout_value = compile_layout_json(R"({
+          "main": [
+            {"id": "Progress", "height": 70, "nodes": ["done", "pending"]},
+            {"id": "Stats", "y": 72, "height": 28, "nodes": ["counter"]}
+          ],
+          "overlay": [
+            {"id": "Collections", "height": 70, "collections": ["goal"]},
+            {"id": "Stats", "y": 72, "height": 28, "nodes": ["counter"]}
+          ]
+        })",
+                                            *compiled);
+    if (!layout_value)
+        return 1;
+    auto layout = std::make_shared<const Layout>(std::move(*layout_value));
     auto results = evaluate(*compiled, {{"a", 1}, {"stat/first", 1}});
     if (!results)
         return 1;

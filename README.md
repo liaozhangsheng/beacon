@@ -26,9 +26,8 @@ Beacon reads Minecraft save data and turns advancements, statistics, and custom 
 ### Getting started
 
 1. Build or download Beacon for your platform.
-2. Put at least one template package under `templates/` in the installation root; see [Custom templates](#custom-templates).
-3. Launch `beacon`, open settings, and choose your Minecraft game directory and template.
-4. Select a world and player, then start playing. Beacon updates the checklist as the save changes.
+2. Launch `beacon`. It starts with the bundled **1.16.1 All Advancements** template; open settings to choose your Minecraft game directory, or another template from `templates/` in the installation root (see [Custom templates](#custom-templates)).
+3. Select a world and player, then start playing. Beacon updates the checklist as the save changes.
 
 The default Minecraft directories are detected automatically:
 
@@ -38,7 +37,7 @@ The default Minecraft directories are detected automatically:
 | macOS | `~/Library/Application Support/minecraft` |
 | Linux | `~/.minecraft` |
 
-The installation root is the directory containing the `beacon` launcher. Beacon does not ship any templates; without one, it exits with `no templates found`.
+The installation root is the directory containing the `beacon` launcher. Beacon ships the `templates/1.16.1` template, which tracks every Minecraft Java Edition 1.16.1 advancement in Chinese and English. Without any template, it exits with `no templates found`.
 
 The interface defaults to Chinese. In settings, change **界面语言** (Interface language) to **English** to switch the app's labels.
 
@@ -103,7 +102,7 @@ cmake -S . -B build -G Ninja \
   -DVCPKG_TARGET_TRIPLET=x64-windows
 ```
 
-Before running a development build, put a complete template directory under `build/templates/<name>/`. Then run:
+Building copies the bundled templates to `build/templates/`; put your own template directories beside them. Then run:
 
 ```sh
 ./build/beacon
@@ -195,7 +194,7 @@ The program bundle contains only app UI resources and fonts. Use the bundled [`b
 `lang.json` provides the template's default text. Choose a translation from `langs/` with the **Template language** setting; missing entries fall back to `lang.json`. **Interface language** controls Beacon's own labels separately. Restart Beacon after adding templates. To reload an edited template, restart Beacon or switch to another template and back; selecting the already active template does not reload it.
 
 Statistic counters can use `prefix` to define an ordered sequence of stages. Each direct child uses a `stat/` fact, a positive integer `target`,
-and its own `view`; the layout references the parent with `source: "nodes"`. The same slot shows the first unfinished
+and its own `view`; the layout references the parent through a group's `nodes`. The same slot shows the first unfinished
 stage's icon, label, and count, then keeps the final stage highlighted when all stages are complete. In the main window,
 a manual increment adds one to the displayed stage's count (and is ignored once all stages are complete); a manual decrement reduces that count,
 or reopens the previous stage when the displayed count is zero. The counter keeps a fixed slot in the overlay.
@@ -203,7 +202,7 @@ Plain counters and staged counters can share a group.
 These counters use cumulative save statistics, so consuming items does not reduce their counts; stages need no separate persistent state.
 Picking up the same item again increases pickup statistics again, so these counts do not show how many items the player currently holds. Stages must be completed in order.
 
-In `layout.json`, groups under `main` with `source: "children"` can configure child item styles:
+In `layout.json`, `collections` groups under `main` can configure child item styles:
 
 ```json
 "item_style": {
@@ -219,8 +218,8 @@ and `done` items are `highlight`. Explicit settings override these defaults.
 after completion and skips the icon, text, glow, decoration, and click handling. Blank items cannot be clicked to undo completion.
 `blank` takes priority over emphasis and decoration. Both states and all their properties are optional and use these defaults when omitted.
 Styles affect child items only, leaving collection headings and totals unchanged. Nested groups need their own styles; styles are not inherited.
-The overlay uses its own completion animation and carousel behavior for collection items. Placing `item_style` in `overlay`, in a group with another
-`source`, or in `template.json` is invalid. Unknown states, properties, enum values, and non-string property values are also rejected.
+The overlay uses its own completion animation and carousel behavior for collection items. Placing `item_style` in `overlay`, in a `nodes` or `prefix`
+group, or in `template.json` is invalid. Unknown states, properties, enum values, and non-string property values are also rejected.
 
 ## Minecraft trademark
 

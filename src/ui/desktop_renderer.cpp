@@ -48,9 +48,6 @@ void WindowRenderer::Impl::set_scale(const float scale) {
     }
     scale_ = scale;
     context_.set_scale(scale_);
-    if (overlay_ && !completion_view_) {
-        SDL_SetWindowMinimumSize(context_.window(), 0, overlay_min_height(0.0F, scale_));
-    }
 }
 
 void WindowRenderer::Impl::process_event(const SDL_Event& event) {
@@ -85,7 +82,7 @@ void WindowRenderer::Impl::render(const std::shared_ptr<const PublishedState>& s
     }
     manual_runtime_ = runtime;
     update_notice_ = overlay_ ? nullptr : update_notice;
-    continuous_animation_ = false;
+    frame_schedule_.begin(SDL_GetTicks());
     assets_->begin_frame();
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
@@ -114,16 +111,7 @@ void WindowRenderer::Impl::render(const std::shared_ptr<const PublishedState>& s
     const auto flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                        ImGuiWindowFlags_NoBringToFrontOnFocus | (overlay_ ? ImGuiWindowFlags_NoBackground : 0);
     ImGui::PushFont(nullptr, ui::font_size(scale_));
-    if (update_notice_ != nullptr && !update_notice_->version.empty()) {
-        // Keep both footer buttons reachable; messages and the header shrink to fit.
-        const float controls_width = from_icon(96.0F) + ImGui::GetStyle().ItemSpacing.x + update_button_width();
-        const float required_width =
-            controls_width + (from_icon(8.0F) * 2.0F) + (ImGui::GetStyle().WindowPadding.x * 2.0F);
-        const float required_height =
-            from_icon(80.0F) + ImGui::GetTextLineHeight() + (ImGui::GetStyle().WindowPadding.y * 2.0F);
-        context_.ensure_minimum_size(static_cast<int>(std::ceil(required_width)),
-                                     static_cast<int>(std::ceil(required_height)));
-    }
+    layout_min_height_ = 0.0F;
     const bool transparent_background = overlay_ && (settings ? settings->overlay_transparent : overlay_transparent_);
     const auto background = [&] {
         if (transparent_background) {
@@ -145,6 +133,7 @@ void WindowRenderer::Impl::render(const std::shared_ptr<const PublishedState>& s
         render_progress_view(state, runtime_error, settings ? settings->overlay_scroll_speed : 60.0F,
                              settings != nullptr && settings->overlay_scroll_right);
     }
+    apply_minimum_size();
     ImGui::End();
     ImGui::PopStyleColor();
     ImGui::PopFont();
@@ -153,9 +142,10 @@ void WindowRenderer::Impl::render(const std::shared_ptr<const PublishedState>& s
         settings_panel_.render(viewport, *settings, settings_error, template_options, apply_settings, *assets_);
     }
 
-    continuous_animation_ |= (state && (completion_.any_active() || completion_view_ ||
-                                        (completion_started_.has_value() && !completion_view_))) ||
-                             ImGui::IsAnyItemActive() || ImGui::GetIO().WantTextInput;
+    if ((state &&
+         (completion_.any_active() || completion_view_ || (completion_started_.has_value() && !completion_view_))) ||
+        ImGui::IsAnyItemActive() || ImGui::GetIO().WantTextInput)
+        frame_schedule_.every(animation_frame_ms());
     // Window moves count too: ImGui makes the move an active item.
     pointer_held_ = ImGui::IsAnyItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left);
     ImGui::Render();
@@ -178,13 +168,12 @@ std::uint64_t WindowRenderer::Impl::refresh_delay_ms() const {
         const float rate = mode != nullptr && mode->refresh_rate > 0.0F ? mode->refresh_rate : 60.0F;
         return std::max<std::uint64_t>(1, static_cast<std::uint64_t>(1000.0F / rate));
     }
-    const auto now = SDL_GetTicks();
-    if (continuous_animation_ || now < interactive_until_) {
-        // VSync may queue a present without blocking; always keep a CPU frame budget.
-        return overlay_ ? 16 : 33;
-    }
-    const auto next = assets_->next_frame_ms();
-    return next <= now ? 1 : std::min<std::uint64_t>(1000, next - now);
+    // Measured from the frame's start, which is where the caller paces from.
+    const auto start = frame_schedule_.now();
+    auto next = std::min(frame_schedule_.next(), assets_->next_frame_ms());
+    if (SDL_GetTicks() < interactive_until_)
+        next = std::min(next, start + animation_frame_ms());
+    return next <= start ? 1 : std::min<std::uint64_t>(1000, next - start);
 }
 
 std::uint64_t WindowRenderer::refresh_delay_ms() const {

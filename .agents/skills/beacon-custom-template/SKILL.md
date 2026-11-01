@@ -1,67 +1,88 @@
 ---
 name: beacon-custom-template
-description: 为 Beacon 创建、修改和校验可直接加载的 Minecraft 自定义模板包。
+description: 帮 Beacon 用户新建、修改或排查 Minecraft 追踪模板（templates/ 下的 template.json、lang.json、layout.json）。用户想追踪新的进度、统计或手动任务，调整主窗口或悬浮窗布局，添加翻译和图标，或模板加载失败、显示不对时使用。
 ---
 
-# Beacon 自定义模板 Skill
+# Beacon 自定义模板
 
-本 skill 面向 AI。用户要求新增或修改模板时，先阅读用户 `templates/` 下已有的模板（Beacon 不附带内置模板），
-再按下面的格式生成文件；不要修改 Beacon C++ 源码，也不要凭空引入模板字段。
+Beacon 是一个读取 Minecraft 存档、实时显示挑战进度的桌面程序。**模板**决定它追踪什么、什么时候算完成、界面怎样排列。
+这份 skill 用来帮助 Beacon 的使用者（通常是玩家，不是程序员）编写和修改模板。
 
-## 工作协议
+## 与用户沟通
 
-1. 先确认目标 Minecraft `DataVersion` 和要追踪的事实；不确定时保留兼容范围并明确说明。
-2. 每个模板只创建 `template.json`、`lang.json`、`layout.json` 三个必需文件；语言目录和模板专用资源按需添加。
-3. 复用已有模板的命名、图标和布局风格。所有 `id`、`ref`、`completion_rule` 和布局节点引用必须闭合且唯一。
-4. 生成后检查 JSON、规则引用、版本范围、布局引用和资源路径；确保每个非空 `view.icon` 都指向模板内存在的文件；优先用仓库已有测试或构建命令验证。
-5. 输出变更文件、用户需要选择的模板名称，以及仍需用户确认的版本或事实假设。
+- 用游戏里的说法交流：问“想追踪哪些进度、要挖多少远古残骸、哪些完成才算通关”，不要让用户填写 `DataVersion`、Fact、`prefix` 这类字段名。
+- 能从本地文件确认的事情自己查：已有模板、存档里的进度和统计名称、存档版本。只在需要用户做决定时提问。
+- 只改模板目录里的文件。不要修改 Beacon 程序本身、`versions/` 下的文件、用户的设置或 Minecraft 存档。
+- 模板做不到的事情直说（例如检查背包里当前有几个物品），并给出替代做法（估算数量或手动打勾）。
+- 交付时用一两句话说明模板会显示什么，再说明怎样在 Beacon 里看到它；文件细节放在后面。
 
-模板包放在安装根目录（`beacon` 启动器所在目录）的 `templates/<name>/` 下。本 skill 随包放在安装根目录的
-`.agents/skills/beacon-custom-template/SKILL.md`。版本化安装中的程序和内置资源位于 `versions/<版本>/`，模板不放进版本目录。
-直接运行源码构建的 `build/beacon` 时，模板应放在 `build/templates/<name>/` 下。
+## 工作流程
 
-## 模板格式
+1. **找到模板目录。** 模板放在 Beacon 安装目录（`beacon` 启动程序所在目录，这份 skill 位于其中的 `.agents/skills/` 下）的 `templates/<模板名>/` 里，不要放进 `versions/`。Beacon 自带 `templates/1.16.1`（1.16.1 全进度，中英文），可作为参考或起点；先看 `templates/` 下已有哪些，修改已有模板时先读完它的三个 JSON 文件、翻译和图标。
+2. **弄清需求。** 把用户的描述整理成下表，能从本地查到的不再问：
 
-Beacon 的模板决定三件事：追踪什么、怎样判定完成、怎样显示。模板不会保存历史记录；Minecraft 存档变化后，Beacon 会用当前 Facts 重新计算并刷新界面。
+   | 要弄清的内容 | 例子 |
+   | --- | --- |
+   | 游戏版本 | 1.20.1，或者直接从存档读取（见“确定游戏版本”） |
+   | 追踪哪些东西 | 进度、某个进度里的子条件、挖掘/拾取/击杀次数、游戏时长、只能自己打勾的任务 |
+   | 每项的目标 | 获得进度即可，还是要累计到某个数量 |
+   | 什么时候算通关 | 全部完成、任选其一、完成其中几项，还是按顺序完成 |
+   | 怎样显示 | 主窗口如何分区，悬浮窗显示哪些，统计是否常驻，哪些项按阶段或轮换显示 |
+   | 名称与图标 | 模板名、每一项显示的文字、需要的语言、用户手头有没有图标图片 |
 
-## 创建模板包
+3. **从存档核对名称。** 进度和统计的写法必须与存档完全一致，按“从存档查找名称”查实，不要凭记忆拼写。
+4. **编写文件。** 新模板可以从“最小模板”或“完整示例”开始；已有模板只改需要改的部分，不顺手改动用户的其他目标、布局或翻译。改名或删除某项时，同时更新引用它的地方。
+5. **自检。** 运行“检查模板”里的脚本，修完所有问题。
+6. **让用户加载并确认。** 新模板需要重启 Beacon；修改已有模板可以重启，或在设置里先切到其他模板再切回（直接重选当前模板不会重新读取文件）。请用户确认设置中能看到模板、窗口显示正确。
+7. **交付说明。** 见“完成后告诉用户”。
 
-已有模板时，最简单的做法是复制其目录再删改内容；没有模板时按本文格式从零编写。桌面程序只扫描安装根目录的 `templates/` 下一级子目录；每个模板必须包含下面三个 JSON 文件：
+## 模板文件
+
+Beacon 启动时扫描 `templates/` 下的每个子目录，每个模板目录必须有三个 JSON 文件：
 
 ```text
 templates/
   my-run/
-    template.json
-    lang.json
-    langs/          可选语言目录
-    layout.json
-    assets/         可选的模板专用资源，可任意组织子目录
-      debris.png
+    template.json   追踪什么、怎样算完成、适用的游戏版本
+    lang.json       默认语言的显示文字
+    layout.json     主窗口和悬浮窗的布局
+    langs/          可选：其他语言，例如 en.json、zh-CN.json
+    assets/         可选：图标等资源，子目录随意
 ```
 
-`lang.json` 是模板的默认语言。可选语言放在模板目录的 `langs/` 下，文件名使用语言代码，例如
-`langs/en.json` 或 `langs/zh-CN.json`；然后可以在设置中的“模板语言”下拉框切换。语言文件只需提供要覆盖的条目，缺失条目会回退到 `lang.json`；“界面语言”独立控制 Beacon 自身的文字。
+- 设置里显示的模板名来自 `template.json` 的 `name_key` 经 `lang.json` 翻译后的文字，目录名只用于存放文件。
+- 三个文件都用 UTF-8 编码和标准 JSON：双引号、不写注释、没有末尾多余的逗号、同一对象里不重复字段。Beacon 会拒绝它不认识的字段。
+- 不要把 Markdown 代码围栏或说明文字写进 JSON 文件。
+- 整个模板目录（包括图标）复制给别人就能直接使用。
 
-Beacon 启动时扫描这些目录。新增模板后重启 Beacon，然后在设置中的“模板”下拉框选择它。
+### `template.json`
 
-下面是一个只追踪“解放末地”的最小模板。
+顶层只有下面四个字段，全部必填：
+
+| 字段 | 内容 |
+| --- | --- |
+| `name_key` | 模板名的文字 key，建议写 `template.<目录名>`，在 `lang.json` 里给出文字 |
+| `minecraft` | `{"min_version": 整数, "max_version": 整数}`，适用的存档版本号范围，两端都包含 |
+| `goals` | 规则数组：要显示的目标、统计，以及不直接显示的通关规则 |
+| `completion_rule` | 决定“整个挑战是否完成”的规则 `id` |
+
+没有 `version`、`description`、`assets`、`stats`、`language` 等其他顶层字段。
+
+### 最小模板
+
+只追踪“解放末地”：
 
 `template.json`：
 
 ```json
 {
   "name_key": "template.my_run",
-  "minecraft": {
-    "min_version": 0,
-    "max_version": 99999999
-  },
+  "minecraft": {"min_version": 3465, "max_version": 3465},
   "goals": [
     {
       "id": "goal/kill_dragon",
       "fact": "adv/minecraft:end/kill_dragon",
-      "view": {
-        "name_key": "goal.kill_dragon"
-      }
+      "view": {"name_key": "goal.kill_dragon"}
     }
   ],
   "completion_rule": "goal/kill_dragon"
@@ -82,51 +103,76 @@ Beacon 启动时扫描这些目录。新增模板后重启 Beacon，然后在设
 ```json
 {
   "main": [
-    {
-      "id": "Progress",
-      "source": "nodes",
-      "nodes": ["goal/kill_dragon"],
-      "exclude": [],
-      "x": 0,
-      "y": 0,
-      "width": 1,
-      "height": 1, "margin": 0, "padding": 0
-    }
-  ],
-  "overlay": []
+    {"id": "Progress", "nodes": ["goal/kill_dragon"]}
+  ]
 }
 ```
 
-## 选择 Fact
+示例中的 `3465` 只是占位，必须换成用户存档的实际版本号。
 
-Fact 是 Beacon 从 Minecraft 存档读取出的整数。缺失的 Fact 按 `0` 处理；布尔事件完成后通常为 `1`。
+## 确定游戏版本
 
-| 要追踪的数据 | Fact 格式 | 示例 |
+`min_version` / `max_version` 填写的是**存档版本号**（`DataVersion`，一个整数，例如 1.20.1 是 `3465`），不是 `1.20.1` 这样的版本名。
+最可靠的来源是用户的存档：打开下文的统计文件，顶层 `DataVersion` 就是它。只支持一个版本时两端写同一个数；确认用到的进度和统计在多个版本里都存在后，才放宽范围。
+不确定的版本号要告诉用户“尚未核实”，不要写一个很大的范围当作兼容承诺。
+
+存档版本不在模板范围内时，Beacon 不会对这个存档使用该模板。
+
+## 从存档查找名称
+
+### 存档在哪里
+
+| 系统 | 默认游戏目录 |
+| --- | --- |
+| Windows | `%APPDATA%\.minecraft` |
+| macOS | `~/Library/Application Support/minecraft` |
+| Linux | `~/.minecraft` |
+
+使用 HMCL、PCL、Prism 等启动器并开启版本隔离时，游戏目录在启动器的实例或版本文件夹里；Beacon 设置中填写的游戏目录也可以作参考。
+世界存档在游戏目录的 `saves/<世界名>/` 下：
+
+- 统计：`stats/<玩家UUID>.json`，`stats` 对象里按分类列出，例如 `stats["minecraft:mined"]["minecraft:stone"]`。
+- 进度：`advancements/<玩家UUID>.json`，顶层 key 是进度 ID，其中 `criteria` 列出已达成的子条件。
+
+一个世界里有多个玩家文件时，确认用的是同一个玩家的统计和进度。存档里还没有某个条目，可能只是还没发生；最好在一个已经完成过该进度的存档里查，或请用户在游戏里先做一次。
+只读取存档，不要修改它。
+
+### 能追踪的数据
+
+模板通过 **Fact**（从存档读出的整数）获取数据。缺失的 Fact 视为 `0`，达成的进度为 `1`。
+
+| 要追踪的东西 | 写法 | 例子 |
 | --- | --- | --- |
 | 进度 | `adv/<进度 ID>` | `adv/minecraft:end/kill_dragon` |
-| 进度条件 | `criterion/<进度 ID>/<条件 ID>` | `criterion/minecraft:story/shiny_gear/diamond_helmet` |
+| 进度的子条件 | `criterion/<进度 ID>/<条件 ID>` | `criterion/minecraft:story/shiny_gear/diamond_helmet` |
 | 统计 | `stat/<分类>/<对象 ID>` | `stat/minecraft:mined/minecraft:ancient_debris` |
-| 配方 | `recipe/<配方 ID>` | `recipe/minecraft:diamond_pickaxe` |
-| 游戏时间 | `clock/play_ticks` | `clock/play_ticks` |
+| 配方解锁 | `recipe/<配方进度路径>` | `recipe/minecraft:tools/diamond_pickaxe` |
+| 游戏时长 | `clock/play_ticks` | `clock/play_ticks` |
+| 物品数量估算 | `stat/minecraft:estimated/<物品 ID>` | `stat/minecraft:estimated/minecraft:ender_pearl` |
 
-Beacon 还提供一个非权威的物品数量估算 Fact：
-`stat/minecraft:estimated/<物品 ID>`，计算方式是“拾取 + 合成 - 丢弃 - 使用”，不足时钳制为 0。
-例如 `stat/minecraft:estimated/minecraft:ender_pearl`。它不是玩家当前背包的真实库存。
+写法要点：
 
-现代版本中，可以直接从存档找到名称：
+- 名称按存档原样照抄，保留命名空间、大小写和中间的 `/`。条件 ID 本身可能包含 `minecraft:` 和 `/`，不要猜测拆分位置。
+- 统计分类如 `minecraft:mined`（挖掘）、`minecraft:picked_up`（拾取）、`minecraft:crafted`（合成）、`minecraft:killed`（击杀）、`minecraft:custom`（杂项），以存档中出现的为准。
+- `recipe/` 表示配方**已解锁**，不代表合成过。它来自存档中 `minecraft:recipes/` 开头的进度，保留分类路径：`minecraft:recipes/tools/diamond_pickaxe` 写作 `recipe/minecraft:tools/diamond_pickaxe`，不一定等于物品 ID。
+- `clock/play_ticks` 是这个玩家累计的游戏时长，单位是 tick（每秒 20）。“累计玩 5 分钟”写作 `"target": 6000`。它不是倒计时，也不是现实时间。
+- 物品数量估算 = 拾取 + 合成 − 丢弃 − 使用，最小为 0。它**不是**背包里的真实数量，交付时要向用户说明。
+- “获得过”“现在拿着”“累计拾取过几次”是不同的事：拾取统计在重复捡起同一物品时也会增加。
 
-- 统计：`.minecraft/saves/<世界>/stats/<UUID>.json` 的 `stats` 对象。例如 `stats["minecraft:mined"]["minecraft:stone"]` 对应 `stat/minecraft:mined/minecraft:stone`。
-- 进度：`.minecraft/saves/<世界>/advancements/<UUID>.json`。顶层 key 对应 `adv/<key>`，其 `criteria` 中的 key 对应 `criterion/<顶层 key>/<条件 key>`。
-
-模板的 `minecraft.min_version` 和 `max_version` 是存档 JSON 顶层的 `DataVersion`，范围包含两端。只支持一个版本时将两者设为相同值；确认所用 Fact 在多个版本中稳定后，才放宽范围。
+没有背包、箱子、坐标、生命值、记分板或 NBT 数据，也没有 `inventory/`、`scoreboard/`、`nbt/` 之类的写法。
+Beacon 只读取保存下来的进度和统计，不运行数据包。做不到自动追踪的目标，改用“手动打勾的任务”。
 
 ## 编写规则
 
-`goals` 中的自动规则必须且只能使用一种规则。叶子节点可以省略规则操作，此时它不会从存档读取数据，只能按住 Ctrl（macOS 为 Cmd）并用鼠标左键/右键手动标记或取消；需要显示或被其他规则引用的节点应设置唯一 `id`；`completion_rule` 必须指向一个显式 `id`。
+`goals` 里的每一项是一条**规则**。规则可以有：
 
-### 单个事实
+- `id`：被其他地方引用时必填，且在整个模板里唯一。只作为某个分组子项显示的规则可以不写。
+- `view`：显示方式（见下文）。
+- 一种判定方式：`fact`、`all`、`any`、`count`、`prefix`、`ref` 六选一；都不写就是手动打勾的任务。
 
-达到 `target` 即完成，省略 `target` 时默认为 `1`：
+建议给真正的目标用 `goal/` 开头的 ID，纯统计用 `counter/`，通关规则用 `completion/`。主窗口顶部的“已完成/总目标”只统计 `goal/` 开头的规则（不管它是否在布局中出现）；子项也用 `goal/` 开头会被重复计数。
+
+### 单项数据：`fact`
 
 ```json
 {
@@ -137,46 +183,44 @@ Beacon 还提供一个非权威的物品数量估算 Fact：
 }
 ```
 
-`view` 只控制显示。`name_key` 是 `lang.json` 中的本地化 key；`icon` 可选，填写时必须使用模板目录内的完整相对文件路径；`type` 可选为 `task`、`goal` 或 `challenge`，用于选择 Minecraft 进度边框，省略时不显示边框。
-模板资源可放在 `assets/` 下的任意子目录。路径必须与实际文件名和扩展名完全一致；Beacon 不查找全局资源名，也不会补充文件扩展名。省略 `icon`、路径为空、文件缺失、图片无法读取（包括损坏的 GIF）、非法路径或符号链接越界时，统一显示紫黑棋盘格 missingno，不影响模板加载；程序不会加载模板目录外的文件作为图标。模板目录包含其使用的全部资源，复制整个目录即可分享。
+- 数值达到 `target` 即完成。`target` 必须是至少为 1 的整数（不能写 `0`、负数、`"20"` 或 `20.0`）。
+- 进度和条件省略 `target` 时默认为 1。
+- 统计（`stat/`）省略 `target` 时只显示数字，永远不会自动完成。想让“挖 7 块石头”算完成，必须写 `"target": 7`。不要把没有目标的统计放进需要完成的组合规则里。
 
-父级或会被 `layout.json`、`ref`、`completion_rule` 引用的节点应提供唯一 `id`。
-收集类规则的子项不需要 `id`，直接在子项上提供 `view` 即可：
-
-```json
-{
-  "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:badlands",
-  "view": {
-    "name_key": "criterion.badlands",
-    "icon": "assets/icons/check.xpm"
-  }
-}
-```
-
-`view` 可以用于 `all`、`any` 和 `count` 的任意子项。这样不会为仅用于展示的子项生成不会被引用的虚假 ID。
-收集类子项通常使用自己的 `name_key` 和 `icon`，父级的 `view` 仍用于收集卡片标题和主图标。
-
-对应的 `criterion.*` 标题写在同目录的 `lang.json` 中。例如：
+只显示数量的计数器：
 
 ```json
 {
-  "fact": "criterion/minecraft:husbandry/complete_catalogue/minecraft:all_black",
-  "view": {
-    "name_key": "criterion.all_black",
-    "icon": "assets/icons/check.xpm"
-  }
+  "id": "counter/stone",
+  "fact": "stat/minecraft:mined/minecraft:stone",
+  "view": {"name_key": "counter.stone"}
 }
 ```
+
+### 手动打勾的任务
+
+不写判定方式即可；不要写 `"fact": ""`、`"manual": true` 或编造的 Fact：
 
 ```json
 {
-  "criterion.all_black": "全黑"
+  "id": "goal/manual_check",
+  "view": {"name_key": "goal.manual_check"}
 }
 ```
 
-例如，`"icon": "assets/blocks/stone.png"` 对应模板目录中的 `assets/blocks/stone.png`。程序包只带界面资源和字体；模板资源与模板配置一起复制、分享。
+在 Beacon 里按住 Ctrl（macOS 为 Cmd）点击图标：左键标记完成，右键撤销；统计项则是加一、减一。
+手动标记只保存在本次运行中，不写入存档，重启 Beacon 或按 Ctrl+R / Cmd+R 重开本轮会清除。
+组合规则不能直接打勾，标记它的子项即可。已经自动完成的进度不会因为右键撤销而变回未完成；统计的手动调整叠加在存档数值上，最低显示 0。
 
-### 组合规则
+### 组合多项
+
+| 写法 | 完成条件 |
+| --- | --- |
+| `"all": [...]` | 全部子项完成 |
+| `"any": [...]` | 任一子项完成 |
+| `"count": {"target": n, "of": [...]}` | 完成至少 n 项（n 在 1 到子项数之间） |
+| `"prefix": [...]` | 按顺序完成：只数从第一项开始连续完成的项，全部完成才算完成 |
+| `"ref": "<id>"` | 与另一条规则的结果相同，用于复用 |
 
 ```json
 {
@@ -194,34 +238,12 @@ Beacon 还提供一个非权威的物品数量估算 Fact：
 }
 ```
 
-可用规则：
+- 子项数组不能为空。组合规则数的是**完成了几项**，不会把数值相加：“挖 10 块石头”和“挖 20 块石头”组成的 `all` 显示 `0/2`～`2/2`，不是 `0/30`。
+- `target` 只能紧跟 `fact`，或写在 `count` 对象里。
+- 没有“非”、等于、区间、算式或脚本之类的写法。
+- `prefix` 不记录事情发生的先后，只按当前存档判断：后面的项先完成，也要等前面的项完成后才计入。
 
-| 规则 | 完成条件 |
-| --- | --- |
-| `fact` | Fact 值达到 `target` |
-| `all` | 所有子规则完成 |
-| `any` | 至少一个子规则完成 |
-| `count` | 完成的子规则数量达到目标 |
-| `prefix` | 按顺序统计从第一个开始连续完成的子规则 |
-| `ref` | 使用另一个显式 ID 节点的结果 |
-
-`count` 的格式为：
-
-```json
-{
-  "id": "goal/two_of_three",
-  "count": {
-    "target": 2,
-    "of": [
-      {"fact": "adv/example:a"},
-      {"fact": "adv/example:b"},
-      {"fact": "adv/example:c"}
-    ]
-  }
-}
-```
-
-`ref` 适合在总完成规则中复用已有目标，避免复制判定条件：
+通关规则通常用 `ref` 把已有目标组合起来，不必重复写判定：
 
 ```json
 {
@@ -233,131 +255,431 @@ Beacon 还提供一个非权威的物品数量估算 Fact：
 }
 ```
 
-引用可以写在目标节点之前，但不能形成环。
+`ref` 可以引用写在后面的规则，但不能绕回自己（直接或间接）。`ref` 只复用结果，不继承对方的名称、图标或子项；要显示它就单独写 `view`。
 
-主窗口顶部的目标计数目前只统计 ID 以 `goal/` 开头的 Fact 节点；组合规则和其他前缀的节点不计入该总数。`completion_rule` 独立决定整次挑战是否完成。自定义目标应遵循这个命名约定，否则规则仍可求值和显示，但不会进入顶部目标计数。
+### 显示方式：`view`
 
-## 配置布局
+| 字段 | 内容 | 省略时 |
+| --- | --- | --- |
+| `name_key` | 必填，显示文字的 key，在 `lang.json` 里给出文字 | 不能省略 |
+| `icon` | 模板目录内图片的相对路径，例如 `assets/items/apple.png` | 显示紫黑棋盘格占位图 |
+| `type` | `task`、`goal` 或 `challenge`，对应游戏里三种进度边框 | 无边框 |
+| `enchanted` | `true` 时在图标上叠加附魔紫光 | 无光效 |
+| `show` | `self`、`stages` 或 `cycle`，见“分阶段显示与轮换显示” | `prefix` 为 `stages`，其余为 `self` |
 
-`layout.json` 的 `main` 控制主窗口，`overlay` 控制悬浮窗。每个分组都必须提供完整字段：
-
-| 字段 | 含义 |
-| --- | --- |
-| `id` | 非空分组名称 |
-| `source` | 如何选择节点 |
-| `nodes` | 节点 ID 或 ID 前缀 |
-| `exclude` | 要排除的精确节点 ID |
-| `x`, `y` | 左上角位置，使用任意非负数，加载时自动归一化 |
-| `width`, `height` | 正数尺寸，加载时自动归一化 |
-| `margin`, `padding` | 必填像素值，分别表示分组外边距和内容内边距 |
-
-`source` 有三种：
-
-| source | `nodes` 的含义 |
-| --- | --- |
-| `nodes` | 精确节点 ID，按数组顺序显示 |
-| `prefix` | 节点 ID 前缀，按模板声明顺序显示匹配项 |
-| `children` | 显式节点 ID，显示它们的直接子规则 |
-
-自定义统计应和其他规则一样定义在 `template.json` 的 `goals` 中，再由 `layout.json` 使用 `source: "nodes"` 按 ID 引用。统计的 `fact`、`target`、`view.name_key`、`view.icon` 和 `view.type` 都属于模板配置：
+组合规则的子项也可以有自己的 `view`（不需要 `id`），用作收集组里每个成员的名称和图标：
 
 ```json
 {
-  "id": "counter/ancient_debris",
-  "fact": "stat/minecraft:mined/minecraft:ancient_debris",
-  "target": 20,
+  "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:badlands",
+  "view": {"name_key": "criterion.badlands", "icon": "assets/icons/badlands.png"}
+}
+```
+
+### 图标
+
+- 路径相对模板目录，使用 `/`，要与实际文件名、扩展名和大小写完全一致；不能用绝对路径、网址、盘符、反斜杠、`.` 或 `..`。Beacon 不会补扩展名，也不会读取模板目录之外的文件。
+- 图标缺失、路径写错或图片读不出来时显示紫黑棋盘格，模板仍能加载。用户没有图标时省略 `icon`，并告诉用户会显示占位图；不要写指向不存在文件的路径。
+- 优先使用透明背景的 PNG。GIF 动图可以用，但请用户在 Beacon 里实际看一下。
+- 在 Windows 或 macOS 上能显示，不代表在区分大小写的系统上也能显示；分享模板前核对大小写。
+
+**附魔光效**：在 `view` 里写 `"enchanted": true`（只接受 `true` / `false`）。图片不需要自带光效，Beacon 会沿图标的不透明部分绘制紫光；不透明的方形背景也会被覆盖。光效只是装饰，和完成状态无关，没有颜色、速度等选项。每一项各自设置，不会从父项继承。
+
+### 分阶段显示与轮换显示
+
+一个位置可以显示一组规则中“当前那一项”，由 `view.show` 决定：
+
+| `show` | 可用于 | 显示内容 |
+| --- | --- | --- |
+| `self` | 任意规则 | 自己（非 `prefix` 的默认值） |
+| `stages` | `prefix`、`all` | 第一个未完成的子项；全部完成后停在最后一项（`prefix` 的默认值） |
+| `cycle` | `all`、`any`、`count` | 每 1.5 秒轮换子项的图标；未完成时只轮换未完成的，完成后只轮换已完成的 |
+
+`show` 写在不适用的规则上会导致模板加载失败。
+
+**分阶段统计**，例如“挖石头 10 → 20 → 64”显示在同一个位置：
+
+```json
+{
+  "id": "counter/stone_stages",
+  "prefix": [
+    {"fact": "stat/minecraft:mined/minecraft:stone", "target": 10, "view": {"name_key": "stage.stone_10"}},
+    {"fact": "stat/minecraft:mined/minecraft:stone", "target": 20, "view": {"name_key": "stage.stone_20"}},
+    {"fact": "stat/minecraft:mined/minecraft:stone", "target": 64, "view": {"name_key": "stage.stone_64"}}
+  ],
+  "view": {"name_key": "counter.stone_stages"}
+}
+```
+
+- 每个阶段显示自己的名称；没写图标时沿用上一层的图标。统计阶段的名称下方会多一行 `12/20`。
+- 各阶段读的是同一个累计数：挖了 12 块时显示 `12/20`，不会从 0 重新数。
+- 主窗口里，Ctrl/Cmd 左键推进当前阶段，右键回退（当前阶段为 0 时回到上一阶段）。
+
+**先获取再使用**，例如锻造模板收集中的一项：
+
+```json
+{
+  "prefix": [
+    {
+      "fact": "stat/minecraft:picked_up/minecraft:rib_armor_trim_smithing_template",
+      "view": {"name_key": "stage.rib_obtain"}
+    },
+    {
+      "fact": "criterion/minecraft:adventure/trim_with_all_exclusive_armor_patterns/armor_trimmed_minecraft:rib_armor_trim_smithing_template_smithing_trim",
+      "view": {"name_key": "stage.rib_use"}
+    }
+  ],
   "view": {
-    "name_key": "counter.ancient_debris",
-    "icon": "assets/blocks/stone.png",
-    "type": "challenge"
+    "name_key": "criterion.rib_armor_trim_smithing_template",
+    "icon": "assets/icons/rib_armor_trim_smithing_template.png"
   }
 }
 ```
 
-例如，将全部 `goal/nether_` 节点放进四列网格：
+放进收集组的 `all` 里，只有“使用”阶段完成后这一项才算完成。拾取统计只在捡起物品时增加，合成得到的不算；需要时把第一阶段改成 `any` 并列多个来源。
+`all` 配 `"show": "stages"` 也按顺序显示，但后面的步骤先完成也会计入；要求严格顺序时用 `prefix`。
+
+**任选其一轮换**，例如“吃生牛肉或熟牛肉都算”：
 
 ```json
 {
-  "id": "Nether",
-  "source": "prefix",
-  "nodes": ["goal/nether_"],
-  "exclude": ["goal/nether_hidden"],
-  "x": 0,
-  "y": 0,
-  "width": 1,
-  "height": 1, "margin": 0, "padding": 0
+  "any": [
+    {"fact": "criterion/minecraft:husbandry/balanced_diet/beef", "view": {"name_key": "food.beef", "icon": "assets/icons/beef.png"}},
+    {"fact": "criterion/minecraft:husbandry/balanced_diet/cooked_beef", "view": {"name_key": "food.cooked_beef", "icon": "assets/icons/cooked_beef.png"}}
+  ],
+  "view": {"name_key": "food.any_beef", "show": "cycle"}
 }
 ```
 
-### 主窗口子项状态样式
+未完成时两个图标轮换，名称固定显示 `food.any_beef` 的文字；吃过一种后固定显示那一种。两种都要吃就把 `any` 换成 `all`。
+轮换时不显示外层自己的图标，可以省略。示例中的条件名仅作示意，使用前按存档核对。
 
-仅 `layout.json` 的 `main` 中、`source: "children"` 的分组允许可选字段 `item_style`。
-它作用于该分组的直接子项，不改变规则求值、收集组标题或总进度。嵌套布局组分别配置，不继承父组样式。
-不要将此字段写入 `template.json`、`view`、`overlay` 或 `source: "nodes"` / `"prefix"` 的分组，否则加载失败。
-悬浮窗沿用原有的完成遮盖动画和轮播移除行为，不应用这些样式。
+## 布局 `layout.json`
 
-例如，未完成子项高亮，完成后变暗并绘制贯穿图标与文字的删除线：
+`main` 是主窗口，`overlay` 是悬浮窗（悬浮窗还需用户在设置中开启），两者都可省略。每个窗口是一个分组数组。
+分组的字段都有默认值，**只写与默认值不同的部分**：
+
+| 字段 | 含义 | 默认 |
+| --- | --- | --- |
+| `id` | 分组名，只为方便阅读，不显示 | 空 |
+| `x`, `y` | 左上角位置（相对比例，见下文） | `0` |
+| `width`, `height` | 尺寸（相对比例，必须大于 0） | `1` |
+| `margin`, `padding` | 外边距、内边距，像素，随窗口缩放 | `0` |
+| `nodes` / `prefix` / `collections` / `children` | 分组内容，四选一 | 空面板 |
+| `exclude` | 从选中的项里排除的规则 ID | `[]` |
+| `spacing` | 组内间距 | 见“间距” |
+| `item_style` | 仅主窗口的 `collections` 分组：完成/未完成的样式 | 未完成变暗、完成高亮 |
+| `scroll` | 仅悬浮窗：是否滚动轮播 | `true` |
+
+数值都不能是负数。写错字段或把字段写在不支持的地方时，模板加载失败，错误信息会给出 `layout.json/main/0/children/1/x` 这样的位置。
+
+### 分组内容
+
+| 字段 | 填写 | 显示 |
+| --- | --- | --- |
+| `nodes` | 规则 ID 列表 | 这些规则，按列表顺序 |
+| `prefix` | ID 开头的字符串列表 | 所有以它开头的规则，按 `template.json` 中的顺序 |
+| `collections` | 规则 ID 列表 | 每条规则的直接子项，组成带标题的收集组 |
+| `children` | 子分组数组 | 不显示项目，子分组在本组范围内排列 |
+
+- 这里只能填规则的 `id`，不能填 Fact 或文字 key。
+- `prefix` 是普通的开头匹配：写 `goal/nether_`，不要写 `goal/nether_*`。
+- `collections` 只展开一层，收集组标题来自父规则的 `view`。
+- 某项没放进布局只是不显示，仍然影响通关判定和顶部计数。
+- **填错的 ID 不会让加载失败，只会让那一项不显示**，所以必须用“检查模板”的脚本核对。
+- 没有 `columns`、`rows`、字体大小之类的字段，项目排列由 Beacon 根据空间自动决定。
+
+```json
+{"id": "Nether", "prefix": ["goal/nether_"], "exclude": ["goal/nether_hidden"]}
+```
+
+### 位置与嵌套
+
+同一层的分组按 `x`、`y`、`width`、`height` 的比例铺满它所在的区域（顶层就是整个窗口）。
+例如并排的两个分组，一个 `"width": 1`，另一个 `"x": 1, "width": 2`，就分别占窗口宽度的三分之一和三分之二。
+想在某处留空，就放一个不写内容的分组占位。
+
+用 `children` 嵌套时，子分组的位置相对父分组计算，父分组只当作背景面板：
 
 ```json
 {
   "main": [
     {
-      "id": "Collections",
-      "source": "children",
-      "nodes": ["goal/route"],
-      "exclude": [],
-      "x": 0,
-      "y": 0,
-      "width": 1,
-      "height": 1,
-      "margin": 0,
+      "id": "Container",
+      "children": [
+        {"id": "Left", "padding": 8, "nodes": ["goal/kill_dragon"]},
+        {"id": "Right", "x": 1, "padding": 8, "nodes": ["counter/stone"]}
+      ]
+    }
+  ]
+}
+```
+
+布局的 `children` 是分组数组，规则里的 `all`、`any`、`prefix`、`count.of` 是规则数组，两者不能混用。主窗口和悬浮窗的布局各写各的，不会自动复制。
+
+### 悬浮窗滚动
+
+悬浮窗只有一行。分组默认按设置中的方向和速度滚动轮播，完成的项从轮播中移除。
+统计等需要一直显示的内容，给它的分组写 `"scroll": false`，项目会固定排成一行：
+
+```json
+{"id": "Stats", "y": 1, "padding": 4, "nodes": ["counter/ancient_debris"], "scroll": false}
+```
+
+悬浮窗的分组全部占满宽度、从上到下排列时，各行按 `height` 的比例分配高度，`y` 留出的空隙保留为空行；某行内容放不下时，该行保持内容所需的高度，其余行按比例分剩下的空间，窗口最小高度也会随之增大。
+
+### 间距
+
+两个分组之间的距离等于它们的 `margin` 之和。组内间距用 `spacing` 对象调整（像素，只写要改的字段）：
+
+| 字段 | 含义 | 主窗口 `nodes`/`prefix` | 主窗口 `collections` | 悬浮窗 |
+| --- | --- | --- | --- | --- |
+| `item` | 相邻项目的横向间距 | 0 | 16 | `collections` 为 32，其余 0 |
+| `row` | 行距 | 0 | 6 | 不支持 |
+| `label` | 图标到下方文字的距离 | 4 | 3 | 2 |
+| `collection` | 相邻收集组的距离 | 不支持 | 0 | 48（仅 `collections`） |
+
+```json
+{"id": "Route", "margin": 4, "padding": 8, "collections": ["goal/route"], "spacing": {"item": 24, "row": 10}}
+```
+
+### 收集组的完成样式
+
+主窗口的 `collections` 分组可以用 `item_style` 设置子项在未完成（`pending`）和完成（`done`）时的样子：
+
+| 属性 | 可选值 | 默认 |
+| --- | --- | --- |
+| `emphasis` | `highlight` 高亮、`muted` 变暗 | 未完成 `muted`，完成 `highlight` |
+| `decoration` | `none`、`strikethrough` 删除线 | `none` |
+| `visibility` | `visible`、`blank` 留空 | `visible` |
+
+```json
+{
+  "id": "Collections",
+  "padding": 8,
+  "collections": ["goal/route"],
+  "item_style": {
+    "pending": {"emphasis": "highlight"},
+    "done": {"emphasis": "muted", "decoration": "strikethrough"}
+  }
+}
+```
+
+`"done": {"visibility": "blank"}` 会让完成的项留出空位、不再显示，同时也**无法再点击撤销**；用户希望能撤销时，建议用变暗或删除线。
+`item_style` 只能写在主窗口的 `collections` 分组里；悬浮窗有自己的完成动画。
+
+## 文字与翻译
+
+- `lang.json` 是默认语言，必须是平铺的 `"key": "文字"` 对象，不能嵌套。要覆盖模板名和所有 `view.name_key`；缺少的 key 会直接把 key 原文显示在界面上。
+- 其他语言放在 `langs/<语言代码>.json`（例如 `langs/en.json`），只写需要翻译的条目，没写的回退到 `lang.json`。文件名只用字母、数字、`_`、`-`。不要再套一层 `{"en": {...}}`。
+- 用户在 Beacon 设置的“模板语言”中切换模板文字；“界面语言”只控制 Beacon 自己的按钮和菜单。
+- 文字 key 和规则 ID 是两回事，建议用 `goal.route`、`stage.stone_20` 这样有含义的 key。
+
+## 完整示例：路线、补给与手动确认
+
+三个目标都完成才算通关：进入下界并击败末影龙、累计挖 32 块石头、手动确认准备完成。不需要额外图标。
+`3465` 需换成用户存档的实际版本号。
+
+`template.json`：
+
+```json
+{
+  "name_key": "template.route_demo",
+  "minecraft": {"min_version": 3465, "max_version": 3465},
+  "goals": [
+    {
+      "id": "goal/route",
+      "all": [
+        {"fact": "adv/minecraft:story/enter_the_nether", "view": {"name_key": "step.nether"}},
+        {"fact": "adv/minecraft:end/kill_dragon", "view": {"name_key": "step.dragon"}}
+      ],
+      "view": {"name_key": "goal.route", "type": "challenge"}
+    },
+    {
+      "id": "goal/supplies",
+      "fact": "stat/minecraft:mined/minecraft:stone",
+      "target": 32,
+      "view": {"name_key": "goal.supplies"}
+    },
+    {
+      "id": "goal/manual_check",
+      "view": {"name_key": "goal.manual_check"}
+    },
+    {
+      "id": "completion/all",
+      "all": [
+        {"ref": "goal/route"},
+        {"ref": "goal/supplies"},
+        {"ref": "goal/manual_check"}
+      ]
+    }
+  ],
+  "completion_rule": "completion/all"
+}
+```
+
+`lang.json`：
+
+```json
+{
+  "template.route_demo": "路线与补给示例",
+  "goal.route": "完成路线",
+  "step.nether": "进入下界",
+  "step.dragon": "击败末影龙",
+  "goal.supplies": "累计挖掘 32 块石头",
+  "goal.manual_check": "手动确认准备完成"
+}
+```
+
+`layout.json`：
+
+```json
+{
+  "main": [
+    {
+      "id": "Route",
+      "width": 2,
+      "height": 2,
       "padding": 8,
+      "collections": ["goal/route"],
       "item_style": {
         "pending": {"emphasis": "highlight"},
         "done": {"emphasis": "muted", "decoration": "strikethrough"}
       }
-    }
+    },
+    {"id": "Supplies", "x": 2, "padding": 8, "nodes": ["goal/supplies"]},
+    {"id": "Manual", "x": 2, "y": 1, "padding": 8, "nodes": ["goal/manual_check"]}
   ],
-  "overlay": []
+  "overlay": [
+    {"id": "RemainingGoals", "width": 2, "padding": 4, "nodes": ["goal/route", "goal/manual_check"]},
+    {"id": "SupplyCounter", "x": 2, "padding": 4, "nodes": ["goal/supplies"], "scroll": false}
+  ]
 }
 ```
 
-此示例的 `goal/route` 必须在 `template.json` 中定义，并为需要展示的子规则提供 `view`。
-`pending` 表示未完成，`done` 表示已完成；两种状态及其属性均可省略。支持的属性如下：
-
-| 属性 | 可选字符串值 | 省略时的默认值 |
-| --- | --- | --- |
-| `emphasis` | `highlight` 高亮、`muted` 变暗，同时影响图标与文字 | `pending` 为 `muted`，`done` 为 `highlight` |
-| `decoration` | `none` 无装饰、`strikethrough` 删除线 | `none` |
-| `visibility` | `visible` 显示、`blank` 留空 | `visible` |
-
-不配置 `item_style`、省略状态或仅配置删除线等其他属性时，均默认未完成暗色、完成高亮；显式 `emphasis` 配置覆盖对应状态的默认值。
-
-删除线从图标贯穿到首行文字右侧，多行文字的后续行分别绘制删除线，不改变排版尺寸。
-不支持按图标和文字分别配置装饰，也不支持叉线、装饰数组、自定义颜色或线宽。
-
-完成后留空时，将上例的 `done` 对象替换为：
-
-```json
-"done": {"visibility": "blank"}
-```
-
-`blank` 保留原有位置和尺寸，不会让后续子项前移；绘制前直接跳过图标、文字、光晕、装饰与点击处理。
-它优先于 `emphasis` 和 `decoration`，即使同时配置删除线也不绘制。留空项无法直接点击撤销完成。
-当用户希望完成后还能直接手动撤销时，应选择可见的变暗或删除线样式。
-
-生成配置时只填写用户需要的属性，不要补齐所有默认值。未知状态、属性、枚举值和非字符串属性值都会被拒绝；
-`item_style` 及 `pending` / `done` 必须是对象，不能写成 `null` 或数组。
-修改后重启 Beacon，或先切换到其他模板再切回当前模板。
+主窗口左侧三分之二是路线收集组，右侧上下是挖石头和手动确认；悬浮窗里路线和手动任务轮播，挖石头计数固定显示。
 
 ## 检查模板
 
-修改 JSON 或资源文件后重启 Beacon，或先切换到其他模板再切回；直接选择当前模板不会重新加载。加载失败时优先检查：
+写完后先自检，再请用户在 Beacon 里加载。下面的脚本检查 JSON 语法、重复字段、ID 是否重复、`ref` / `completion_rule` / 布局引用是否存在、文字 key 是否都有翻译、图标文件是否存在。
+把它保存到模板目录以外的临时位置（不要放进 `templates/`），用 `python3 -I <脚本> <模板目录>` 运行。用户电脑上没有 Python 时，按脚本逻辑逐项人工核对。
 
-1. 三个必需文件是否都在同一个模板目录中。
-2. JSON 是否有尾随逗号、重复字段或拼写错误；Beacon 会拒绝未知字段。
-3. 每个 `id` 是否唯一，`ref` 和 `completion_rule` 指向的 ID 是否存在。
-4. `layout.json` 的 `nodes` 是否与 `template.json` 中的 ID 一致。
-5. 当前存档的 `DataVersion` 是否落在模板范围内。
-6. 每个非空 `view.icon` 是否是模板目录内的完整相对文件路径，且对应文件确实存在。
-7. `item_style` 是否仅用于 `main` 的 `source: "children"` 分组，状态、属性和值是否符合上表。
+```python
+import json, sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+problems = []
+
+def load(path):
+    def no_duplicates(pairs):
+        keys = [k for k, _ in pairs]
+        dups = sorted({k for k in keys if keys.count(k) > 1})
+        if dups:
+            problems.append(f"{path.relative_to(root)}: 重复字段 {dups}")
+        return dict(pairs)
+    try:
+        return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=no_duplicates)
+    except FileNotFoundError:
+        problems.append(f"缺少文件 {path.relative_to(root)}")
+    except ValueError as error:
+        problems.append(f"{path.relative_to(root)}: JSON 无法解析：{error}")
+    return None
+
+template = load(root / "template.json") or {}
+lang = load(root / "lang.json") or {}
+layout = load(root / "layout.json") or {}
+for extra in sorted((root / "langs").glob("*.json")):
+    load(extra)
+
+ids, refs, name_keys, icons = [], [], [template.get("name_key")], []
+
+def walk(rule):
+    if not isinstance(rule, dict):
+        problems.append(f"规则不是对象：{rule!r}")
+        return
+    if "id" in rule:
+        ids.append(rule["id"])
+    if "ref" in rule:
+        refs.append(rule["ref"])
+    view = rule.get("view") or {}
+    name_keys.append(view.get("name_key"))
+    if view.get("icon"):
+        icons.append(view["icon"])
+    children = rule.get("all") or rule.get("any") or rule.get("prefix") or (rule.get("count") or {}).get("of") or []
+    for child in children:
+        walk(child)
+
+for goal in template.get("goals", []):
+    walk(goal)
+
+for rule_id in sorted({i for i in ids if ids.count(i) > 1}):
+    problems.append(f"ID 重复：{rule_id}")
+for target in refs + [template.get("completion_rule")]:
+    if target not in ids:
+        problems.append(f"引用了不存在的 ID：{target}")
+for key in name_keys:
+    if key and key not in lang:
+        problems.append(f"lang.json 缺少文字：{key}")
+for icon in icons:
+    if not (root / icon).is_file():
+        problems.append(f"图标文件不存在：{icon}")
+
+def walk_layout(groups, where):
+    for index, group in enumerate(groups):
+        place = f"{where}/{index}"
+        for field in ("nodes", "collections", "exclude"):
+            for rule_id in group.get(field, []):
+                if rule_id not in ids:
+                    problems.append(f"layout.json {place}: {field} 中的 ID 不存在：{rule_id}")
+        for start in group.get("prefix", []):
+            if not any(i.startswith(start) for i in ids):
+                problems.append(f"layout.json {place}: prefix 没有匹配任何 ID：{start}")
+        walk_layout(group.get("children", []), place + "/children")
+
+for window in ("main", "overlay"):
+    walk_layout(layout.get(window, []), window)
+
+print("\n".join(problems) if problems else "未发现问题")
+```
+
+脚本通过只说明文件之间能对上，字段写法是否被 Beacon 接受仍以实际加载为准。请用户加载后确认：
+
+1. 设置的“模板”下拉框里出现了模板名（不是 key 原文）。
+2. 主窗口、需要时还有悬浮窗，显示了预期的项目、文字和图标。
+3. 有条件时用一个已知进度的存档看看完成状态和数字是否对得上。
+
+不要为了测试而修改用户的存档。
+
+### 常见问题
+
+| 现象 | 先检查 |
+| --- | --- |
+| 设置里找不到模板 / `no templates found` | 是否放在安装目录的 `templates/<名称>/template.json`，有没有误放进 `versions/` 或多套了一层目录；新模板是否重启了 Beacon |
+| `invalid template JSON` / `invalid resource JSON` | JSON 语法、重复字段 |
+| `unknown field` | 是否写了不支持的字段，或把 `target`、`item_style`、`scroll`、`spacing` 写错了位置 |
+| `duplicate rule ID` / `missing Ref target` | ID 是否唯一，引用拼写是否一致 |
+| `dependency cycle` | `ref` 是否直接或间接引用了自己 |
+| `completion_rule does not name an explicit rule ID` | `completion_rule` 是否填了 Fact、文字 key 或没有 `id` 的规则 |
+| `a layout group takes only one of ...` | 同一分组是否同时写了 `nodes`、`prefix`、`collections`、`children` 中的两个以上 |
+| 窗口空白或少了某项 | 布局里的 ID 是否拼对，`prefix` 是否匹配，`collections` 是否只展开了一层，是否被 `exclude` 或 `blank` 隐藏 |
+| 数字在变但一直不完成 | 统计是否没写 `target`，组合规则里是否包含没有目标的统计 |
+| 顶部总数不对 | 所有 `goal/` 开头的规则都会计数，包括没显示的和组合规则的子项 |
+| 不切换阶段或不轮换 | `view.show` 是否写成了 `self`，轮换是否写了 `"show": "cycle"` |
+| 统计在悬浮窗里跟着滚走 | 统计所在分组是否写了 `"scroll": false` |
+| 紫黑棋盘格图标 | 文件是否存在，扩展名和大小写是否完全一致，图片能否打开 |
+| 没有附魔光效 | 实际显示的那一项是否写了 `"enchanted": true`，图标是否能正常显示 |
+| 改了文件但界面没变 | 是否重启或切到其他模板再切回，改的是否是 Beacon 实际使用的那个 `templates/` |
+| 存档没有被识别 | 存档版本号是否在模板范围内，游戏目录是否正确 |
+
+### 规模限制
+
+单个 JSON 文件不超过 16 MiB、嵌套不超过 128 层；规则总数（含所有子项）、布局分组总数、单个列表的 ID 数和每份语言文件的条目数都不超过 10,000；单个字符串不超过 4,096 字节。
+重复出现的目标用 `ref` 复用，不要堆出巨大的嵌套结构。
+
+## 完成后告诉用户
+
+1. 模板做了什么：追踪哪些内容、什么时候算通关、主窗口和悬浮窗怎样显示。
+2. 怎样使用：模板文件夹的位置、在设置“模板”下拉框里选哪个名称、需要重启 Beacon 还是切换模板后切回、悬浮窗需要在设置中开启。
+3. 已经检查了什么（自检脚本、存档核对），还需要用户在 Beacon 里确认什么。
+4. 限制和未核实的地方：估算数量不是真实库存、手动标记重启后清除、哪些版本号或进度名称还没在存档中核实、哪些项没有图标会显示占位图。

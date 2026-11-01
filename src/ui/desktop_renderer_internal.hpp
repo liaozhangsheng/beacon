@@ -2,10 +2,12 @@
 
 #include "desktop_renderer.hpp"
 #include "completion_animation.hpp"
+#include "enchantment_glint.hpp"
 #include "settings_panel.hpp"
 #include "window_context.hpp"
 
 #include <beacon/ui/carousel.hpp>
+#include <beacon/ui/frame_schedule.hpp>
 #include <beacon/ui/language.hpp>
 #include <beacon/ui/layout_metrics.hpp>
 #include <beacon/ui/profile.hpp>
@@ -140,6 +142,8 @@ private:
         Sprite icon;
         Sprite frame_obtained;
         Sprite frame_unobtained;
+        // The icon file whose shape carries the enchantment glint; empty when the node is not enchanted.
+        std::filesystem::path glint;
     };
 
     struct ItemLayout {
@@ -155,7 +159,6 @@ private:
         float icon_size = 0.0F;
         bool show_frame = true;
         bool draw_glow = false;
-        bool stats = false;
         bool scrollable = false;
         bool collection_item = false;
     };
@@ -172,12 +175,20 @@ private:
     void draw_overlay_group(const PublishedState& state, std::size_t group_index, const LayoutMetrics& metrics,
                             float minimum_group_height, bool stacked, float overlay_scroll_speed, bool scroll_right);
     void draw_main_layout(const PublishedState& state, ImVec2 origin, ImVec2 available, float body_height);
+    // Records the window height that fits a layout needing required_body_height of its body_height.
+    void require_body_height(float body_height, float required_body_height);
+    void apply_minimum_size();
     // Draws each collection's parent and returns every member's cell position, indexed like the group's nodes.
     std::vector<ImVec2> draw_collections(const PublishedState& state, std::size_t group_index,
                                          const LayoutMetrics& metrics);
     void draw_responsive_layout(const PublishedState& state, float overlay_scroll_speed, bool scroll_right);
     void load_cjk_font();
 
+    // The frame period for motion that must look smooth. VSync may queue a present without blocking, so this
+    // also keeps a CPU frame budget.
+    [[nodiscard]] std::uint64_t animation_frame_ms() const {
+        return overlay_ ? 16 : 33;
+    }
     [[nodiscard]] float from_icon(float original_size) const {
         return ui::from_icon(original_size, scale_);
     }
@@ -197,11 +208,13 @@ private:
     bool overlay_transparent_ = true;
     bool ready_ = false;
     float scale_ = 1.0F;
-    mutable bool continuous_animation_ = false;
+    // Filled while drawing: when the frame next changes.
+    mutable FrameSchedule frame_schedule_;
     bool pointer_held_ = false;
     std::uint64_t interactive_until_ = 0;
     WindowContext context_;
     mutable std::optional<UiAssets> assets_;
+    mutable std::optional<EnchantmentGlint> glint_;
     struct Glow {
         SDL_Texture* texture = nullptr;
         double time = 0.0;
@@ -217,6 +230,10 @@ private:
     const ProgressViewModel& view_;
     std::shared_ptr<const CompiledTemplate> compiled_;
     const Layout* layout_ = nullptr;
+    // A new layout resizes the overlay to its minimum height on the next frame, once fonts are known.
+    bool fit_overlay_height_ = false;
+    // The window height the drawn layout needs this frame; zero when no layout was drawn.
+    float layout_min_height_ = 0.0F;
     SettingsPanel settings_panel_;
     std::shared_ptr<const PlayerCard> player_card_;
     SdlTexturePtr remote_avatar_texture_;

@@ -1,24 +1,15 @@
+#include "temporary_directory.hpp"
+
 #include <beacon/update/download.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <chrono>
 #include <filesystem>
 #include <fstream>
 
 TEST_CASE("Update downloads validate new destinations and reuse verified cached artifacts", "[update]") {
-    const auto root =
-        std::filesystem::canonical(std::filesystem::temp_directory_path()) /
-        ("beacon-download-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
-    std::filesystem::create_directory(root);
-    struct Cleanup {
-        std::filesystem::path root;
-        ~Cleanup() {
-            std::error_code error;
-            std::filesystem::remove_all(root, error);
-        }
-    } cleanup{root};
-    const auto destination = root / "artifact.zip";
+    const beacon::test::TemporaryDirectory directory;
+    const auto destination = directory.path / "artifact.zip";
     constexpr auto hash = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
 
     // A missing cache file is not an error; the URL is rejected before any network use.

@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstdint>
 #include <string_view>
 
 namespace beacon {
@@ -64,48 +63,53 @@ bool short_string(const Json::Value& value) {
     return text.size() <= max_string_bytes && text.find('\0') == std::string::npos && valid_utf8(text);
 }
 
+bool valid_scale(const Json::Value& value) {
+    return value.isNumeric() && std::isfinite(value.asDouble()) && value.asDouble() >= min_window_scale &&
+           value.asDouble() <= max_window_scale;
+}
+
+bool valid_color(const Json::Value& value) {
+    return value.isArray() && value.size() == 3 && std::all_of(value.begin(), value.end(), [](const Json::Value& part) {
+               return part.isNumeric() && std::isfinite(part.asDouble()) && part.asDouble() >= 0.0 &&
+                      part.asDouble() <= 1.0;
+           });
+}
+
 bool valid_settings_json(const Json::Value& root) {
-    if (!root.isObject())
+    if (!root.isObject() ||
+        reject_unknown_fields(root, "settings.json",
+                              {"game_root", "template_path", "auto_detect", "language", "ui_language",
+                               "main_window_scale", "main_window_background_color", "overlay_visible",
+                               "overlay_transparent", "overlay_window_scale", "overlay_window_background_color",
+                               "overlay_scroll_speed", "overlay_scroll_right"}))
         return false;
-    auto fields = root;
-    fields.removeMember("auto_detect");
-    fields.removeMember("ui_language");
-    if ((root.isMember("ui_language") &&
-         (!root["ui_language"].isString() ||
-          (root["ui_language"].asString() != "zh" && root["ui_language"].asString() != "en"))) ||
-        (root.isMember("auto_detect") && !root["auto_detect"].isBool()) ||
-        !exact_json_fields(fields, {"game_root", "template_path", "language", "main_window_scale",
-                                    "main_window_background_color", "overlay_visible", "overlay_transparent",
-                                    "overlay_scroll_right", "overlay_window_scale", "overlay_window_background_color",
-                                    "overlay_scroll_speed"}) ||
-        !short_string(root["game_root"]) || root["game_root"].asString().empty() ||
-        !short_string(root["template_path"]) || root["template_path"].asString().empty() ||
-        !short_string(root["language"]) ||
-        (!root["language"].asString().empty() && !valid_language(root["language"].asString())) ||
-        !root["overlay_visible"].isBool() || !root["overlay_transparent"].isBool() ||
-        !root["overlay_scroll_right"].isBool()) {
-        return false;
-    }
-    const auto valid_scroll_speed = [](const Json::Value& value) {
-        return value.isNumeric() && std::isfinite(value.asDouble()) && value.asDouble() >= 0.0 &&
-               value.asDouble() <= 300.0;
+    const auto required_path = [&](const char* name) {
+        return short_string(root[name]) && !root[name].asString().empty();
     };
-    const auto valid_color = [](const Json::Value& value) {
-        if (!value.isArray() || value.size() != 3) {
-            return false;
-        }
-        return std::all_of(value.begin(), value.end(), [](const Json::Value& component) {
-            return component.isNumeric() && std::isfinite(component.asDouble()) && component.asDouble() >= 0.0 &&
-                   component.asDouble() <= 1.0;
-        });
+    const auto optional = [&](const char* name, const auto valid) {
+        return !root.isMember(name) || valid(root[name]);
     };
-    const auto valid_scale = [](const Json::Value& value) {
-        return value.isNumeric() && std::isfinite(value.asDouble()) && value.asDouble() >= min_window_scale &&
-               value.asDouble() <= max_window_scale;
+    const auto boolean = [](const Json::Value& value) {
+        return value.isBool();
     };
-    return valid_scale(root["main_window_scale"]) && valid_color(root["main_window_background_color"]) &&
-           valid_scale(root["overlay_window_scale"]) && valid_color(root["overlay_window_background_color"]) &&
-           valid_scroll_speed(root["overlay_scroll_speed"]);
+    return required_path("game_root") && required_path("template_path") && optional("auto_detect", boolean) &&
+           optional("language",
+                    [](const Json::Value& value) {
+                        return short_string(value) && (value.asString().empty() || valid_language(value.asString()));
+                    }) &&
+           optional("ui_language",
+                    [](const Json::Value& value) {
+                        return value.isString() && (value.asString() == "zh" || value.asString() == "en");
+                    }) &&
+           optional("main_window_scale", valid_scale) && optional("main_window_background_color", valid_color) &&
+           optional("overlay_visible", boolean) && optional("overlay_transparent", boolean) &&
+           optional("overlay_window_scale", valid_scale) && optional("overlay_window_background_color", valid_color) &&
+           optional("overlay_scroll_speed",
+                    [](const Json::Value& value) {
+                        return value.isNumeric() && std::isfinite(value.asDouble()) && value.asDouble() >= 0.0 &&
+                               value.asDouble() <= 300.0;
+                    }) &&
+           optional("overlay_scroll_right", boolean);
 }
 
 ylt::expected<Json::Value, Error>
@@ -150,24 +154,27 @@ ylt::expected<std::optional<Settings>, Error> Persistence::load_settings() const
     if (!root) {
         return ylt::unexpected<Error>{std::move(root.error())};
     }
+    const auto& fields = *root;
     Settings settings;
-    settings.game_root = path_from_utf8((*root)["game_root"].asString());
-    settings.template_path = path_from_utf8((*root)["template_path"].asString());
-    settings.auto_detect = (*root).get("auto_detect", true).asBool();
-    settings.language = (*root)["language"].asString();
-    settings.ui_language = (*root).get("ui_language", "zh").asString();
-    settings.main_window_scale = (*root)["main_window_scale"].asFloat();
-    for (Json::ArrayIndex index = 0; index < 3; ++index) {
-        settings.main_window_background_color[index] = (*root)["main_window_background_color"][index].asFloat();
-    }
-    settings.overlay_visible = (*root)["overlay_visible"].asBool();
-    settings.overlay_transparent = (*root)["overlay_transparent"].asBool();
-    settings.overlay_scroll_right = (*root)["overlay_scroll_right"].asBool();
-    settings.overlay_window_scale = (*root)["overlay_window_scale"].asFloat();
-    for (Json::ArrayIndex index = 0; index < 3; ++index) {
-        settings.overlay_window_background_color[index] = (*root)["overlay_window_background_color"][index].asFloat();
-    }
-    settings.overlay_scroll_speed = (*root)["overlay_scroll_speed"].asFloat();
+    const auto read_color = [&](const char* name, std::array<float, 3>& color) {
+        if (fields.isMember(name)) {
+            for (Json::ArrayIndex index = 0; index < color.size(); ++index)
+                color[index] = fields[name][index].asFloat();
+        }
+    };
+    settings.game_root = path_from_utf8(fields["game_root"].asString());
+    settings.template_path = path_from_utf8(fields["template_path"].asString());
+    settings.auto_detect = fields.get("auto_detect", settings.auto_detect).asBool();
+    settings.language = fields.get("language", settings.language).asString();
+    settings.ui_language = fields.get("ui_language", settings.ui_language).asString();
+    settings.main_window_scale = fields.get("main_window_scale", settings.main_window_scale).asFloat();
+    read_color("main_window_background_color", settings.main_window_background_color);
+    settings.overlay_visible = fields.get("overlay_visible", settings.overlay_visible).asBool();
+    settings.overlay_transparent = fields.get("overlay_transparent", settings.overlay_transparent).asBool();
+    settings.overlay_window_scale = fields.get("overlay_window_scale", settings.overlay_window_scale).asFloat();
+    read_color("overlay_window_background_color", settings.overlay_window_background_color);
+    settings.overlay_scroll_speed = fields.get("overlay_scroll_speed", settings.overlay_scroll_speed).asFloat();
+    settings.overlay_scroll_right = fields.get("overlay_scroll_right", settings.overlay_scroll_right).asBool();
     return std::optional<Settings>{std::move(settings)};
 }
 
@@ -181,18 +188,16 @@ ylt::expected<void, Error> Persistence::save_settings(const Settings& settings) 
     root["ui_language"] = settings.ui_language;
     root["main_window_scale"] = settings.main_window_scale;
     root["main_window_background_color"] = Json::arrayValue;
-    for (const auto component : settings.main_window_background_color) {
+    for (const auto component : settings.main_window_background_color)
         root["main_window_background_color"].append(component);
-    }
     root["overlay_visible"] = settings.overlay_visible;
     root["overlay_transparent"] = settings.overlay_transparent;
-    root["overlay_scroll_right"] = settings.overlay_scroll_right;
     root["overlay_window_scale"] = settings.overlay_window_scale;
     root["overlay_window_background_color"] = Json::arrayValue;
-    for (const auto component : settings.overlay_window_background_color) {
+    for (const auto component : settings.overlay_window_background_color)
         root["overlay_window_background_color"].append(component);
-    }
     root["overlay_scroll_speed"] = settings.overlay_scroll_speed;
+    root["overlay_scroll_right"] = settings.overlay_scroll_right;
     if (!valid_settings_json(root)) {
         return ylt::unexpected<Error>{
             {.code = ErrorCode::Validation, .message = "invalid settings", .context = "settings"}};

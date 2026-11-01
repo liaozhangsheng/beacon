@@ -1,0 +1,2152 @@
+{
+  "name_key": "template.1_16_1",
+  "minecraft": {
+    "min_version": 2567,
+    "max_version": 2567
+  },
+  "goals": [
+    {
+      "id": "goal/story_root",
+      "fact": "adv/minecraft:story/root",
+      "view": {
+        "name_key": "advancement.story.root",
+        "type": "task",
+        "icon": "assets/item/grass_block.png"
+      }
+    },
+    {
+      "id": "goal/story_mine_stone",
+      "fact": "adv/minecraft:story/mine_stone",
+      "view": {
+        "name_key": "advancement.story.mine_stone",
+        "type": "task",
+        "icon": "assets/item/wooden_pickaxe.png"
+      }
+    },
+    {
+      "id": "goal/story_upgrade_tools",
+      "fact": "adv/minecraft:story/upgrade_tools",
+      "view": {
+        "name_key": "advancement.story.upgrade_tools",
+        "type": "task",
+        "icon": "assets/item/stone_pickaxe.png"
+      }
+    },
+    {
+      "id": "goal/story_smelt_iron",
+      "fact": "adv/minecraft:story/smelt_iron",
+      "view": {
+        "name_key": "advancement.story.smelt_iron",
+        "type": "task",
+        "icon": "assets/item/iron_ingot.png"
+      }
+    },
+    {
+      "id": "goal/story_obtain_armor",
+      "fact": "adv/minecraft:story/obtain_armor",
+      "view": {
+        "name_key": "advancement.story.obtain_armor",
+        "type": "task",
+        "icon": "assets/item/iron_chestplate.png"
+      }
+    },
+    {
+      "id": "goal/story_lava_bucket",
+      "fact": "adv/minecraft:story/lava_bucket",
+      "view": {
+        "name_key": "advancement.story.lava_bucket",
+        "type": "task",
+        "icon": "assets/item/lava_bucket.png"
+      }
+    },
+    {
+      "id": "goal/story_iron_tools",
+      "fact": "adv/minecraft:story/iron_tools",
+      "view": {
+        "name_key": "advancement.story.iron_tools",
+        "type": "task",
+        "icon": "assets/item/iron_pickaxe.png"
+      }
+    },
+    {
+      "id": "goal/story_deflect_arrow",
+      "fact": "adv/minecraft:story/deflect_arrow",
+      "view": {
+        "name_key": "advancement.story.deflect_arrow",
+        "type": "task",
+        "icon": "assets/item/shield.png"
+      }
+    },
+    {
+      "id": "goal/story_form_obsidian",
+      "fact": "adv/minecraft:story/form_obsidian",
+      "view": {
+        "name_key": "advancement.story.form_obsidian",
+        "type": "task",
+        "icon": "assets/item/obsidian.png"
+      }
+    },
+    {
+      "id": "goal/story_mine_diamond",
+      "fact": "adv/minecraft:story/mine_diamond",
+      "view": {
+        "name_key": "advancement.story.mine_diamond",
+        "type": "task",
+        "icon": "assets/item/diamond.png"
+      }
+    },
+    {
+      "id": "goal/story_enter_the_nether",
+      "fact": "adv/minecraft:story/enter_the_nether",
+      "view": {
+        "name_key": "advancement.story.enter_the_nether",
+        "type": "task",
+        "icon": "assets/item/flint_and_steel.png"
+      }
+    },
+    {
+      "id": "goal/story_shiny_gear",
+      "fact": "adv/minecraft:story/shiny_gear",
+      "view": {
+        "name_key": "advancement.story.shiny_gear",
+        "type": "task",
+        "icon": "assets/item/diamond_chestplate.png"
+      }
+    },
+    {
+      "id": "goal/story_enchant_item",
+      "fact": "adv/minecraft:story/enchant_item",
+      "view": {
+        "name_key": "advancement.story.enchant_item",
+        "type": "task",
+        "icon": "assets/item/enchanted_book.png"
+      }
+    },
+    {
+      "id": "goal/story_cure_zombie_villager",
+      "fact": "adv/minecraft:story/cure_zombie_villager",
+      "view": {
+        "name_key": "advancement.story.cure_zombie_villager",
+        "type": "goal",
+        "icon": "assets/item/golden_apple.png"
+      }
+    },
+    {
+      "id": "goal/story_follow_ender_eye",
+      "fact": "adv/minecraft:story/follow_ender_eye",
+      "view": {
+        "name_key": "advancement.story.follow_ender_eye",
+        "type": "task",
+        "icon": "assets/item/ender_eye.png"
+      }
+    },
+    {
+      "id": "goal/story_enter_the_end",
+      "fact": "adv/minecraft:story/enter_the_end",
+      "view": {
+        "name_key": "advancement.story.enter_the_end",
+        "type": "task",
+        "icon": "assets/item/end_stone.png"
+      }
+    },
+    {
+      "id": "goal/nether_root",
+      "fact": "adv/minecraft:nether/root",
+      "view": {
+        "name_key": "advancement.nether.root",
+        "type": "task",
+        "icon": "assets/item/red_nether_bricks.png"
+      }
+    },
+    {
+      "id": "goal/nether_return_to_sender",
+      "fact": "adv/minecraft:nether/return_to_sender",
+      "view": {
+        "name_key": "advancement.nether.return_to_sender",
+        "type": "challenge",
+        "icon": "assets/item/fire_charge.png"
+      }
+    },
+    {
+      "id": "goal/nether_find_bastion",
+      "fact": "adv/minecraft:nether/find_bastion",
+      "view": {
+        "name_key": "advancement.nether.find_bastion",
+        "type": "task",
+        "icon": "assets/item/polished_blackstone_bricks.png"
+      }
+    },
+    {
+      "id": "goal/nether_obtain_ancient_debris",
+      "fact": "adv/minecraft:nether/obtain_ancient_debris",
+      "view": {
+        "name_key": "advancement.nether.obtain_ancient_debris",
+        "type": "task",
+        "icon": "assets/item/ancient_debris.png"
+      }
+    },
+    {
+      "id": "goal/nether_fast_travel",
+      "fact": "adv/minecraft:nether/fast_travel",
+      "view": {
+        "name_key": "advancement.nether.fast_travel",
+        "type": "challenge",
+        "icon": "assets/item/map.png"
+      }
+    },
+    {
+      "id": "goal/nether_find_fortress",
+      "fact": "adv/minecraft:nether/find_fortress",
+      "view": {
+        "name_key": "advancement.nether.find_fortress",
+        "type": "task",
+        "icon": "assets/item/nether_bricks.png"
+      }
+    },
+    {
+      "id": "goal/nether_obtain_crying_obsidian",
+      "fact": "adv/minecraft:nether/obtain_crying_obsidian",
+      "view": {
+        "name_key": "advancement.nether.obtain_crying_obsidian",
+        "type": "task",
+        "icon": "assets/item/crying_obsidian.png"
+      }
+    },
+    {
+      "id": "goal/nether_distract_piglin",
+      "fact": "adv/minecraft:nether/distract_piglin",
+      "view": {
+        "name_key": "advancement.nether.distract_piglin",
+        "type": "task",
+        "icon": "assets/item/gold_ingot.png"
+      }
+    },
+    {
+      "id": "goal/nether_ride_strider",
+      "fact": "adv/minecraft:nether/ride_strider",
+      "view": {
+        "name_key": "advancement.nether.ride_strider",
+        "type": "task",
+        "icon": "assets/item/warped_fungus_on_a_stick.png"
+      }
+    },
+    {
+      "id": "goal/nether_uneasy_alliance",
+      "fact": "adv/minecraft:nether/uneasy_alliance",
+      "view": {
+        "name_key": "advancement.nether.uneasy_alliance",
+        "type": "challenge",
+        "icon": "assets/item/ghast_tear.png"
+      }
+    },
+    {
+      "id": "goal/nether_loot_bastion",
+      "fact": "adv/minecraft:nether/loot_bastion",
+      "view": {
+        "name_key": "advancement.nether.loot_bastion",
+        "type": "task",
+        "icon": "assets/item/chest.png"
+      }
+    },
+    {
+      "id": "goal/nether_use_lodestone",
+      "fact": "adv/minecraft:nether/use_lodestone",
+      "view": {
+        "name_key": "advancement.nether.use_lodestone",
+        "type": "task",
+        "icon": "assets/item/lodestone.png"
+      }
+    },
+    {
+      "id": "goal/nether_netherite_armor",
+      "fact": "adv/minecraft:nether/netherite_armor",
+      "view": {
+        "name_key": "advancement.nether.netherite_armor",
+        "type": "challenge",
+        "icon": "assets/item/netherite_chestplate.png"
+      }
+    },
+    {
+      "id": "goal/nether_get_wither_skull",
+      "fact": "adv/minecraft:nether/get_wither_skull",
+      "view": {
+        "name_key": "advancement.nether.get_wither_skull",
+        "type": "task",
+        "icon": "assets/item/wither_skeleton_skull.png"
+      }
+    },
+    {
+      "id": "goal/nether_obtain_blaze_rod",
+      "fact": "adv/minecraft:nether/obtain_blaze_rod",
+      "view": {
+        "name_key": "advancement.nether.obtain_blaze_rod",
+        "type": "task",
+        "icon": "assets/item/blaze_rod.png"
+      }
+    },
+    {
+      "id": "goal/nether_charge_respawn_anchor",
+      "fact": "adv/minecraft:nether/charge_respawn_anchor",
+      "view": {
+        "name_key": "advancement.nether.charge_respawn_anchor",
+        "type": "task",
+        "icon": "assets/item/respawn_anchor.png"
+      }
+    },
+    {
+      "id": "goal/nether_explore_nether",
+      "all": [
+        {
+          "fact": "criterion/minecraft:nether/explore_nether/minecraft:nether_wastes",
+          "view": {
+            "name_key": "criterion.explore_nether.nether_wastes",
+            "icon": "assets/biome/nether_wastes.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:nether/explore_nether/minecraft:crimson_forest",
+          "view": {
+            "name_key": "criterion.explore_nether.crimson_forest",
+            "icon": "assets/biome/crimson_forest.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:nether/explore_nether/minecraft:warped_forest",
+          "view": {
+            "name_key": "criterion.explore_nether.warped_forest",
+            "icon": "assets/biome/warped_forest.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:nether/explore_nether/minecraft:soul_sand_valley",
+          "view": {
+            "name_key": "criterion.explore_nether.soul_sand_valley",
+            "icon": "assets/biome/soul_sand_valley.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:nether/explore_nether/minecraft:basalt_deltas",
+          "view": {
+            "name_key": "criterion.explore_nether.basalt_deltas",
+            "icon": "assets/biome/basalt_deltas.png"
+          }
+        }
+      ],
+      "view": {
+        "name_key": "advancement.nether.explore_nether",
+        "type": "challenge",
+        "icon": "assets/item/netherite_boots.png"
+      }
+    },
+    {
+      "id": "goal/nether_summon_wither",
+      "fact": "adv/minecraft:nether/summon_wither",
+      "view": {
+        "name_key": "advancement.nether.summon_wither",
+        "type": "task",
+        "icon": "assets/item/nether_star.png"
+      }
+    },
+    {
+      "id": "goal/nether_brew_potion",
+      "fact": "adv/minecraft:nether/brew_potion",
+      "view": {
+        "name_key": "advancement.nether.brew_potion",
+        "type": "task",
+        "icon": "assets/item/potion.png"
+      }
+    },
+    {
+      "id": "goal/nether_create_beacon",
+      "fact": "adv/minecraft:nether/create_beacon",
+      "view": {
+        "name_key": "advancement.nether.create_beacon",
+        "type": "task",
+        "icon": "assets/item/beacon.png"
+      }
+    },
+    {
+      "id": "goal/nether_all_potions",
+      "fact": "adv/minecraft:nether/all_potions",
+      "view": {
+        "name_key": "advancement.nether.all_potions",
+        "type": "challenge",
+        "icon": "assets/item/milk_bucket.png"
+      }
+    },
+    {
+      "id": "goal/nether_create_full_beacon",
+      "fact": "adv/minecraft:nether/create_full_beacon",
+      "view": {
+        "name_key": "advancement.nether.create_full_beacon",
+        "type": "goal",
+        "icon": "assets/item/beacon.png"
+      }
+    },
+    {
+      "id": "goal/nether_all_effects",
+      "fact": "adv/minecraft:nether/all_effects",
+      "view": {
+        "name_key": "advancement.nether.all_effects",
+        "type": "challenge",
+        "icon": "assets/item/bucket.png"
+      }
+    },
+    {
+      "id": "goal/end_root",
+      "fact": "adv/minecraft:end/root",
+      "view": {
+        "name_key": "advancement.end.root",
+        "type": "task",
+        "icon": "assets/item/end_stone.png"
+      }
+    },
+    {
+      "id": "goal/end_kill_dragon",
+      "fact": "adv/minecraft:end/kill_dragon",
+      "view": {
+        "name_key": "advancement.end.kill_dragon",
+        "type": "task",
+        "icon": "assets/mob/ender_dragon.png"
+      }
+    },
+    {
+      "id": "goal/end_dragon_egg",
+      "fact": "adv/minecraft:end/dragon_egg",
+      "view": {
+        "name_key": "advancement.end.dragon_egg",
+        "type": "goal",
+        "icon": "assets/item/dragon_egg.png"
+      }
+    },
+    {
+      "id": "goal/end_enter_end_gateway",
+      "fact": "adv/minecraft:end/enter_end_gateway",
+      "view": {
+        "name_key": "advancement.end.enter_end_gateway",
+        "type": "task",
+        "icon": "assets/item/ender_pearl.png"
+      }
+    },
+    {
+      "id": "goal/end_respawn_dragon",
+      "fact": "adv/minecraft:end/respawn_dragon",
+      "view": {
+        "name_key": "advancement.end.respawn_dragon",
+        "type": "goal",
+        "icon": "assets/item/end_crystal.png"
+      }
+    },
+    {
+      "id": "goal/end_dragon_breath",
+      "fact": "adv/minecraft:end/dragon_breath",
+      "view": {
+        "name_key": "advancement.end.dragon_breath",
+        "type": "goal",
+        "icon": "assets/item/dragon_breath.png"
+      }
+    },
+    {
+      "id": "goal/end_find_end_city",
+      "fact": "adv/minecraft:end/find_end_city",
+      "view": {
+        "name_key": "advancement.end.find_end_city",
+        "type": "task",
+        "icon": "assets/item/purpur_block.png"
+      }
+    },
+    {
+      "id": "goal/end_elytra",
+      "fact": "adv/minecraft:end/elytra",
+      "view": {
+        "name_key": "advancement.end.elytra",
+        "type": "goal",
+        "icon": "assets/item/elytra.png"
+      }
+    },
+    {
+      "id": "goal/end_levitate",
+      "fact": "adv/minecraft:end/levitate",
+      "view": {
+        "name_key": "advancement.end.levitate",
+        "type": "challenge",
+        "icon": "assets/item/shulker_shell.png"
+      }
+    },
+    {
+      "id": "goal/adventure_root",
+      "fact": "adv/minecraft:adventure/root",
+      "view": {
+        "name_key": "advancement.adventure.root",
+        "type": "task",
+        "icon": "assets/item/map.png"
+      }
+    },
+    {
+      "id": "goal/adventure_voluntary_exile",
+      "fact": "adv/minecraft:adventure/voluntary_exile",
+      "view": {
+        "name_key": "advancement.adventure.voluntary_exile",
+        "type": "task",
+        "icon": "assets/item/ominous_banner.png"
+      }
+    },
+    {
+      "id": "goal/adventure_kill_a_mob",
+      "fact": "adv/minecraft:adventure/kill_a_mob",
+      "view": {
+        "name_key": "advancement.adventure.kill_a_mob",
+        "type": "task",
+        "icon": "assets/item/iron_sword.png"
+      }
+    },
+    {
+      "id": "goal/adventure_trade",
+      "fact": "adv/minecraft:adventure/trade",
+      "view": {
+        "name_key": "advancement.adventure.trade",
+        "type": "task",
+        "icon": "assets/item/emerald.png"
+      }
+    },
+    {
+      "id": "goal/adventure_honey_block_slide",
+      "fact": "adv/minecraft:adventure/honey_block_slide",
+      "view": {
+        "name_key": "advancement.adventure.honey_block_slide",
+        "type": "task",
+        "icon": "assets/item/honey_block.png"
+      }
+    },
+    {
+      "id": "goal/adventure_ol_betsy",
+      "fact": "adv/minecraft:adventure/ol_betsy",
+      "view": {
+        "name_key": "advancement.adventure.ol_betsy",
+        "type": "task",
+        "icon": "assets/item/crossbow.png"
+      }
+    },
+    {
+      "id": "goal/adventure_sleep_in_bed",
+      "fact": "adv/minecraft:adventure/sleep_in_bed",
+      "view": {
+        "name_key": "advancement.adventure.sleep_in_bed",
+        "type": "task",
+        "icon": "assets/item/red_bed.png"
+      }
+    },
+    {
+      "id": "goal/adventure_hero_of_the_village",
+      "fact": "adv/minecraft:adventure/hero_of_the_village",
+      "view": {
+        "name_key": "advancement.adventure.hero_of_the_village",
+        "type": "challenge",
+        "icon": "assets/item/ominous_banner.png"
+      }
+    },
+    {
+      "id": "goal/adventure_throw_trident",
+      "fact": "adv/minecraft:adventure/throw_trident",
+      "view": {
+        "name_key": "advancement.adventure.throw_trident",
+        "type": "task",
+        "icon": "assets/item/trident.png"
+      }
+    },
+    {
+      "id": "goal/adventure_shoot_arrow",
+      "fact": "adv/minecraft:adventure/shoot_arrow",
+      "view": {
+        "name_key": "advancement.adventure.shoot_arrow",
+        "type": "task",
+        "icon": "assets/item/bow.png"
+      }
+    },
+    {
+      "id": "goal/adventure_kill_all_mobs",
+      "all": [
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:zombie",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.zombie",
+            "icon": "assets/mob/zombie.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:husk",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.husk",
+            "icon": "assets/mob/husk.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:drowned",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.drowned",
+            "icon": "assets/mob/drowned.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:zombie_villager",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.zombie_villager",
+            "icon": "assets/mob/zombie_villager.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:skeleton",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.skeleton",
+            "icon": "assets/mob/skeleton.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:stray",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.stray",
+            "icon": "assets/mob/stray.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:wither_skeleton",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.wither_skeleton",
+            "icon": "assets/mob/wither_skeleton.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:spider",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.spider",
+            "icon": "assets/mob/spider.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:cave_spider",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.cave_spider",
+            "icon": "assets/mob/cave_spider.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:creeper",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.creeper",
+            "icon": "assets/mob/creeper.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:witch",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.witch",
+            "icon": "assets/mob/witch.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:slime",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.slime",
+            "icon": "assets/mob/slime.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:magma_cube",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.magma_cube",
+            "icon": "assets/mob/magma_cube.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:phantom",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.phantom",
+            "icon": "assets/mob/phantom.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:silverfish",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.silverfish",
+            "icon": "assets/mob/silverfish.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:pillager",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.pillager",
+            "icon": "assets/mob/pillager.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:vindicator",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.vindicator",
+            "icon": "assets/mob/vindicator.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:evoker",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.evoker",
+            "icon": "assets/mob/evoker.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:vex",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.vex",
+            "icon": "assets/mob/vex.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:ravager",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.ravager",
+            "icon": "assets/mob/ravager.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:guardian",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.guardian",
+            "icon": "assets/mob/guardian.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:elder_guardian",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.elder_guardian",
+            "icon": "assets/mob/elder_guardian.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:blaze",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.blaze",
+            "icon": "assets/mob/blaze.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:ghast",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.ghast",
+            "icon": "assets/mob/ghast.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:piglin",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.piglin",
+            "icon": "assets/mob/piglin.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:zombified_piglin",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.zombified_piglin",
+            "icon": "assets/mob/zombified_piglin.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:hoglin",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.hoglin",
+            "icon": "assets/mob/hoglin.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:zoglin",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.zoglin",
+            "icon": "assets/mob/zoglin.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:enderman",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.enderman",
+            "icon": "assets/mob/enderman.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:endermite",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.endermite",
+            "icon": "assets/mob/endermite.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:shulker",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.shulker",
+            "icon": "assets/mob/shulker.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:ender_dragon",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.ender_dragon",
+            "icon": "assets/mob/ender_dragon.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:wither",
+          "view": {
+            "name_key": "criterion.kill_all_mobs.wither",
+            "icon": "assets/mob/wither.png"
+          }
+        }
+      ],
+      "view": {
+        "name_key": "advancement.adventure.kill_all_mobs",
+        "type": "challenge",
+        "icon": "assets/item/diamond_sword.png"
+      }
+    },
+    {
+      "id": "goal/adventure_totem_of_undying",
+      "fact": "adv/minecraft:adventure/totem_of_undying",
+      "view": {
+        "name_key": "advancement.adventure.totem_of_undying",
+        "type": "goal",
+        "icon": "assets/item/totem_of_undying.png"
+      }
+    },
+    {
+      "id": "goal/adventure_summon_iron_golem",
+      "fact": "adv/minecraft:adventure/summon_iron_golem",
+      "view": {
+        "name_key": "advancement.adventure.summon_iron_golem",
+        "type": "goal",
+        "icon": "assets/item/carved_pumpkin.png"
+      }
+    },
+    {
+      "id": "goal/adventure_two_birds_one_arrow",
+      "fact": "adv/minecraft:adventure/two_birds_one_arrow",
+      "view": {
+        "name_key": "advancement.adventure.two_birds_one_arrow",
+        "type": "challenge",
+        "icon": "assets/item/crossbow.png"
+      }
+    },
+    {
+      "id": "goal/adventure_whos_the_pillager_now",
+      "fact": "adv/minecraft:adventure/whos_the_pillager_now",
+      "view": {
+        "name_key": "advancement.adventure.whos_the_pillager_now",
+        "type": "task",
+        "icon": "assets/item/crossbow.png"
+      }
+    },
+    {
+      "id": "goal/adventure_arbalistic",
+      "fact": "adv/minecraft:adventure/arbalistic",
+      "view": {
+        "name_key": "advancement.adventure.arbalistic",
+        "type": "challenge",
+        "icon": "assets/item/crossbow.png"
+      }
+    },
+    {
+      "id": "goal/adventure_adventuring_time",
+      "all": [
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:plains",
+          "view": {
+            "name_key": "criterion.adventuring_time.plains",
+            "icon": "assets/biome/plains.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:forest",
+          "view": {
+            "name_key": "criterion.adventuring_time.forest",
+            "icon": "assets/biome/forest.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:wooded_hills",
+          "view": {
+            "name_key": "criterion.adventuring_time.wooded_hills",
+            "icon": "assets/biome/forest.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:birch_forest",
+          "view": {
+            "name_key": "criterion.adventuring_time.birch_forest",
+            "icon": "assets/biome/birch_forest.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:birch_forest_hills",
+          "view": {
+            "name_key": "criterion.adventuring_time.birch_forest_hills",
+            "icon": "assets/biome/birch_forest.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:dark_forest",
+          "view": {
+            "name_key": "criterion.adventuring_time.dark_forest",
+            "icon": "assets/biome/dark_forest.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:taiga",
+          "view": {
+            "name_key": "criterion.adventuring_time.taiga",
+            "icon": "assets/biome/taiga.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:taiga_hills",
+          "view": {
+            "name_key": "criterion.adventuring_time.taiga_hills",
+            "icon": "assets/biome/taiga.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:giant_tree_taiga",
+          "view": {
+            "name_key": "criterion.adventuring_time.giant_tree_taiga",
+            "icon": "assets/biome/old_growth_pine_taiga.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:giant_tree_taiga_hills",
+          "view": {
+            "name_key": "criterion.adventuring_time.giant_tree_taiga_hills",
+            "icon": "assets/biome/old_growth_pine_taiga.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:snowy_tundra",
+          "view": {
+            "name_key": "criterion.adventuring_time.snowy_tundra",
+            "icon": "assets/biome/snowy_plains.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:snowy_mountains",
+          "view": {
+            "name_key": "criterion.adventuring_time.snowy_mountains",
+            "icon": "assets/biome/snowy_plains.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:snowy_taiga",
+          "view": {
+            "name_key": "criterion.adventuring_time.snowy_taiga",
+            "icon": "assets/biome/snowy_taiga.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:snowy_taiga_hills",
+          "view": {
+            "name_key": "criterion.adventuring_time.snowy_taiga_hills",
+            "icon": "assets/biome/snowy_taiga.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:snowy_beach",
+          "view": {
+            "name_key": "criterion.adventuring_time.snowy_beach",
+            "icon": "assets/biome/snowy_beach.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:frozen_river",
+          "view": {
+            "name_key": "criterion.adventuring_time.frozen_river",
+            "icon": "assets/biome/frozen_river.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:mountains",
+          "view": {
+            "name_key": "criterion.adventuring_time.mountains",
+            "icon": "assets/biome/windswept_hills.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:wooded_mountains",
+          "view": {
+            "name_key": "criterion.adventuring_time.wooded_mountains",
+            "icon": "assets/biome/windswept_forest.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:stone_shore",
+          "view": {
+            "name_key": "criterion.adventuring_time.stone_shore",
+            "icon": "assets/biome/stony_shore.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:jungle",
+          "view": {
+            "name_key": "criterion.adventuring_time.jungle",
+            "icon": "assets/biome/jungle.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:jungle_hills",
+          "view": {
+            "name_key": "criterion.adventuring_time.jungle_hills",
+            "icon": "assets/biome/jungle.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:jungle_edge",
+          "view": {
+            "name_key": "criterion.adventuring_time.jungle_edge",
+            "icon": "assets/biome/sparse_jungle.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:bamboo_jungle",
+          "view": {
+            "name_key": "criterion.adventuring_time.bamboo_jungle",
+            "icon": "assets/biome/bamboo_jungle.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:bamboo_jungle_hills",
+          "view": {
+            "name_key": "criterion.adventuring_time.bamboo_jungle_hills",
+            "icon": "assets/biome/bamboo_jungle.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:swamp",
+          "view": {
+            "name_key": "criterion.adventuring_time.swamp",
+            "icon": "assets/biome/swamp.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:desert",
+          "view": {
+            "name_key": "criterion.adventuring_time.desert",
+            "icon": "assets/biome/desert.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:desert_hills",
+          "view": {
+            "name_key": "criterion.adventuring_time.desert_hills",
+            "icon": "assets/biome/desert.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:savanna",
+          "view": {
+            "name_key": "criterion.adventuring_time.savanna",
+            "icon": "assets/biome/savanna.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:savanna_plateau",
+          "view": {
+            "name_key": "criterion.adventuring_time.savanna_plateau",
+            "icon": "assets/biome/savanna_plateau.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:badlands",
+          "view": {
+            "name_key": "criterion.adventuring_time.badlands",
+            "icon": "assets/biome/badlands.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:badlands_plateau",
+          "view": {
+            "name_key": "criterion.adventuring_time.badlands_plateau",
+            "icon": "assets/biome/badlands.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:wooded_badlands_plateau",
+          "view": {
+            "name_key": "criterion.adventuring_time.wooded_badlands_plateau",
+            "icon": "assets/biome/wooded_badlands.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:river",
+          "view": {
+            "name_key": "criterion.adventuring_time.river",
+            "icon": "assets/biome/river.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:beach",
+          "view": {
+            "name_key": "criterion.adventuring_time.beach",
+            "icon": "assets/biome/beach.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:warm_ocean",
+          "view": {
+            "name_key": "criterion.adventuring_time.warm_ocean",
+            "icon": "assets/biome/warm_ocean.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:lukewarm_ocean",
+          "view": {
+            "name_key": "criterion.adventuring_time.lukewarm_ocean",
+            "icon": "assets/biome/lukewarm_ocean.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:deep_lukewarm_ocean",
+          "view": {
+            "name_key": "criterion.adventuring_time.deep_lukewarm_ocean",
+            "icon": "assets/biome/deep_lukewarm_ocean.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:cold_ocean",
+          "view": {
+            "name_key": "criterion.adventuring_time.cold_ocean",
+            "icon": "assets/biome/cold_ocean.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:deep_cold_ocean",
+          "view": {
+            "name_key": "criterion.adventuring_time.deep_cold_ocean",
+            "icon": "assets/biome/deep_cold_ocean.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:deep_frozen_ocean",
+          "view": {
+            "name_key": "criterion.adventuring_time.deep_frozen_ocean",
+            "icon": "assets/biome/deep_frozen_ocean.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:mushroom_fields",
+          "view": {
+            "name_key": "criterion.adventuring_time.mushroom_fields",
+            "icon": "assets/biome/mushroom_fields.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/adventuring_time/minecraft:mushroom_field_shore",
+          "view": {
+            "name_key": "criterion.adventuring_time.mushroom_field_shore",
+            "icon": "assets/biome/mushroom_fields.png"
+          }
+        }
+      ],
+      "view": {
+        "name_key": "advancement.adventure.adventuring_time",
+        "type": "challenge",
+        "icon": "assets/item/diamond_boots.png"
+      }
+    },
+    {
+      "id": "goal/adventure_very_very_frightening",
+      "fact": "adv/minecraft:adventure/very_very_frightening",
+      "view": {
+        "name_key": "advancement.adventure.very_very_frightening",
+        "type": "task",
+        "icon": "assets/item/trident.png"
+      }
+    },
+    {
+      "id": "goal/adventure_sniper_duel",
+      "fact": "adv/minecraft:adventure/sniper_duel",
+      "view": {
+        "name_key": "advancement.adventure.sniper_duel",
+        "type": "challenge",
+        "icon": "assets/item/arrow.png"
+      }
+    },
+    {
+      "id": "goal/adventure_bullseye",
+      "fact": "adv/minecraft:adventure/bullseye",
+      "view": {
+        "name_key": "advancement.adventure.bullseye",
+        "type": "challenge",
+        "icon": "assets/item/target.png"
+      }
+    },
+    {
+      "id": "goal/husbandry_root",
+      "fact": "adv/minecraft:husbandry/root",
+      "view": {
+        "name_key": "advancement.husbandry.root",
+        "type": "task",
+        "icon": "assets/item/hay_block.png"
+      }
+    },
+    {
+      "id": "goal/husbandry_safely_harvest_honey",
+      "fact": "adv/minecraft:husbandry/safely_harvest_honey",
+      "view": {
+        "name_key": "advancement.husbandry.safely_harvest_honey",
+        "type": "task",
+        "icon": "assets/item/honey_bottle.png"
+      }
+    },
+    {
+      "id": "goal/husbandry_breed_an_animal",
+      "fact": "adv/minecraft:husbandry/breed_an_animal",
+      "view": {
+        "name_key": "advancement.husbandry.breed_an_animal",
+        "type": "task",
+        "icon": "assets/item/wheat.png"
+      }
+    },
+    {
+      "id": "goal/husbandry_tame_an_animal",
+      "fact": "adv/minecraft:husbandry/tame_an_animal",
+      "view": {
+        "name_key": "advancement.husbandry.tame_an_animal",
+        "type": "task",
+        "icon": "assets/item/lead.png"
+      }
+    },
+    {
+      "id": "goal/husbandry_fishy_business",
+      "fact": "adv/minecraft:husbandry/fishy_business",
+      "view": {
+        "name_key": "advancement.husbandry.fishy_business",
+        "type": "task",
+        "icon": "assets/item/fishing_rod.png"
+      }
+    },
+    {
+      "id": "goal/husbandry_silk_touch_nest",
+      "fact": "adv/minecraft:husbandry/silk_touch_nest",
+      "view": {
+        "name_key": "advancement.husbandry.silk_touch_nest",
+        "type": "task",
+        "icon": "assets/item/bee_nest.png"
+      }
+    },
+    {
+      "id": "goal/husbandry_plant_seed",
+      "fact": "adv/minecraft:husbandry/plant_seed",
+      "view": {
+        "name_key": "advancement.husbandry.plant_seed",
+        "type": "task",
+        "icon": "assets/item/wheat.png"
+      }
+    },
+    {
+      "id": "goal/husbandry_bred_all_animals",
+      "all": [
+        {
+          "fact": "criterion/minecraft:husbandry/bred_all_animals/minecraft:cow",
+          "view": {
+            "name_key": "criterion.bred_all_animals.cow",
+            "icon": "assets/mob/cow.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/bred_all_animals/minecraft:mooshroom",
+          "view": {
+            "name_key": "criterion.bred_all_animals.mooshroom",
+            "icon": "assets/mob/mooshroom.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/bred_all_animals/minecraft:pig",
+          "view": {
+            "name_key": "criterion.bred_all_animals.pig",
+            "icon": "assets/mob/pig.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/bred_all_animals/minecraft:sheep",
+          "view": {
+            "name_key": "criterion.bred_all_animals.sheep",
+            "icon": "assets/mob/sheep.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/bred_all_animals/minecraft:chicken",
+          "view": {
+            "name_key": "criterion.bred_all_animals.chicken",
+            "icon": "assets/mob/chicken.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/bred_all_animals/minecraft:rabbit",
+          "view": {
+            "name_key": "criterion.bred_all_animals.rabbit",
+            "icon": "assets/mob/rabbit.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/bred_all_animals/minecraft:horse",
+          "view": {
+            "name_key": "criterion.bred_all_animals.horse",
+            "icon": "assets/mob/horse.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/bred_all_animals/minecraft:donkey",
+          "view": {
+            "name_key": "criterion.bred_all_animals.donkey",
+            "icon": "assets/mob/donkey.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/bred_all_animals/minecraft:mule",
+          "view": {
+            "name_key": "criterion.bred_all_animals.mule",
+            "icon": "assets/mob/mule.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/bred_all_animals/minecraft:llama",
+          "view": {
+            "name_key": "criterion.bred_all_animals.llama",
+            "icon": "assets/mob/llama.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/bred_all_animals/minecraft:wolf",
+          "view": {
+            "name_key": "criterion.bred_all_animals.wolf",
+            "icon": "assets/mob/wolf.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/bred_all_animals/minecraft:cat",
+          "view": {
+            "name_key": "criterion.bred_all_animals.cat",
+            "icon": "assets/mob/cat.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/bred_all_animals/minecraft:ocelot",
+          "view": {
+            "name_key": "criterion.bred_all_animals.ocelot",
+            "icon": "assets/mob/ocelot.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/bred_all_animals/minecraft:fox",
+          "view": {
+            "name_key": "criterion.bred_all_animals.fox",
+            "icon": "assets/mob/fox.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/bred_all_animals/minecraft:panda",
+          "view": {
+            "name_key": "criterion.bred_all_animals.panda",
+            "icon": "assets/mob/panda.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/bred_all_animals/minecraft:bee",
+          "view": {
+            "name_key": "criterion.bred_all_animals.bee",
+            "icon": "assets/mob/bee.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/bred_all_animals/minecraft:turtle",
+          "view": {
+            "name_key": "criterion.bred_all_animals.turtle",
+            "icon": "assets/mob/turtle.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/bred_all_animals/minecraft:hoglin",
+          "view": {
+            "name_key": "criterion.bred_all_animals.hoglin",
+            "icon": "assets/mob/hoglin.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/bred_all_animals/minecraft:strider",
+          "view": {
+            "name_key": "criterion.bred_all_animals.strider",
+            "icon": "assets/mob/strider.png"
+          }
+        }
+      ],
+      "view": {
+        "name_key": "advancement.husbandry.bred_all_animals",
+        "type": "challenge",
+        "icon": "assets/item/golden_carrot.png"
+      }
+    },
+    {
+      "id": "goal/husbandry_complete_catalogue",
+      "all": [
+        {
+          "fact": "criterion/minecraft:husbandry/complete_catalogue/textures/entity/cat/tabby.png",
+          "view": {
+            "name_key": "criterion.complete_catalogue.tabby",
+            "icon": "assets/cat/tabby.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/complete_catalogue/textures/entity/cat/red.png",
+          "view": {
+            "name_key": "criterion.complete_catalogue.red",
+            "icon": "assets/cat/red.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/complete_catalogue/textures/entity/cat/calico.png",
+          "view": {
+            "name_key": "criterion.complete_catalogue.calico",
+            "icon": "assets/cat/calico.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/complete_catalogue/textures/entity/cat/siamese.png",
+          "view": {
+            "name_key": "criterion.complete_catalogue.siamese",
+            "icon": "assets/cat/siamese.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/complete_catalogue/textures/entity/cat/british_shorthair.png",
+          "view": {
+            "name_key": "criterion.complete_catalogue.british_shorthair",
+            "icon": "assets/cat/british.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/complete_catalogue/textures/entity/cat/persian.png",
+          "view": {
+            "name_key": "criterion.complete_catalogue.persian",
+            "icon": "assets/cat/persian.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/complete_catalogue/textures/entity/cat/ragdoll.png",
+          "view": {
+            "name_key": "criterion.complete_catalogue.ragdoll",
+            "icon": "assets/cat/ragdoll.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/complete_catalogue/textures/entity/cat/white.png",
+          "view": {
+            "name_key": "criterion.complete_catalogue.white",
+            "icon": "assets/cat/white.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/complete_catalogue/textures/entity/cat/jellie.png",
+          "view": {
+            "name_key": "criterion.complete_catalogue.jellie",
+            "icon": "assets/cat/jellie.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/complete_catalogue/textures/entity/cat/black.png",
+          "view": {
+            "name_key": "criterion.complete_catalogue.black",
+            "icon": "assets/cat/black.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/complete_catalogue/textures/entity/cat/all_black.png",
+          "view": {
+            "name_key": "criterion.complete_catalogue.all_black",
+            "icon": "assets/cat/all_black.png"
+          }
+        }
+      ],
+      "view": {
+        "name_key": "advancement.husbandry.complete_catalogue",
+        "type": "challenge",
+        "icon": "assets/item/cod.png"
+      }
+    },
+    {
+      "id": "goal/husbandry_tactical_fishing",
+      "fact": "adv/minecraft:husbandry/tactical_fishing",
+      "view": {
+        "name_key": "advancement.husbandry.tactical_fishing",
+        "type": "task",
+        "icon": "assets/item/pufferfish_bucket.png"
+      }
+    },
+    {
+      "id": "goal/husbandry_balanced_diet",
+      "all": [
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/apple",
+          "view": {
+            "name_key": "criterion.balanced_diet.apple",
+            "icon": "assets/item/apple.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/golden_apple",
+          "view": {
+            "name_key": "criterion.balanced_diet.golden_apple",
+            "icon": "assets/item/golden_apple.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/enchanted_golden_apple",
+          "view": {
+            "name_key": "criterion.balanced_diet.enchanted_golden_apple",
+            "icon": "assets/item/enchanted_golden_apple.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/melon_slice",
+          "view": {
+            "name_key": "criterion.balanced_diet.melon_slice",
+            "icon": "assets/item/melon_slice.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/sweet_berries",
+          "view": {
+            "name_key": "criterion.balanced_diet.sweet_berries",
+            "icon": "assets/item/sweet_berries.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/chorus_fruit",
+          "view": {
+            "name_key": "criterion.balanced_diet.chorus_fruit",
+            "icon": "assets/item/chorus_fruit.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/carrot",
+          "view": {
+            "name_key": "criterion.balanced_diet.carrot",
+            "icon": "assets/item/carrot.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/golden_carrot",
+          "view": {
+            "name_key": "criterion.balanced_diet.golden_carrot",
+            "icon": "assets/item/golden_carrot.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/potato",
+          "view": {
+            "name_key": "criterion.balanced_diet.potato",
+            "icon": "assets/item/potato.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/baked_potato",
+          "view": {
+            "name_key": "criterion.balanced_diet.baked_potato",
+            "icon": "assets/item/baked_potato.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/poisonous_potato",
+          "view": {
+            "name_key": "criterion.balanced_diet.poisonous_potato",
+            "icon": "assets/item/poisonous_potato.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/beetroot",
+          "view": {
+            "name_key": "criterion.balanced_diet.beetroot",
+            "icon": "assets/item/beetroot.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/dried_kelp",
+          "view": {
+            "name_key": "criterion.balanced_diet.dried_kelp",
+            "icon": "assets/item/dried_kelp.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/beef",
+          "view": {
+            "name_key": "criterion.balanced_diet.beef",
+            "icon": "assets/item/beef.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/cooked_beef",
+          "view": {
+            "name_key": "criterion.balanced_diet.cooked_beef",
+            "icon": "assets/item/cooked_beef.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/porkchop",
+          "view": {
+            "name_key": "criterion.balanced_diet.porkchop",
+            "icon": "assets/item/porkchop.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/cooked_porkchop",
+          "view": {
+            "name_key": "criterion.balanced_diet.cooked_porkchop",
+            "icon": "assets/item/cooked_porkchop.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/chicken",
+          "view": {
+            "name_key": "criterion.balanced_diet.chicken",
+            "icon": "assets/item/chicken.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/cooked_chicken",
+          "view": {
+            "name_key": "criterion.balanced_diet.cooked_chicken",
+            "icon": "assets/item/cooked_chicken.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/mutton",
+          "view": {
+            "name_key": "criterion.balanced_diet.mutton",
+            "icon": "assets/item/mutton.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/cooked_mutton",
+          "view": {
+            "name_key": "criterion.balanced_diet.cooked_mutton",
+            "icon": "assets/item/cooked_mutton.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/rabbit",
+          "view": {
+            "name_key": "criterion.balanced_diet.rabbit",
+            "icon": "assets/item/rabbit.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/cooked_rabbit",
+          "view": {
+            "name_key": "criterion.balanced_diet.cooked_rabbit",
+            "icon": "assets/item/cooked_rabbit.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/cod",
+          "view": {
+            "name_key": "criterion.balanced_diet.cod",
+            "icon": "assets/item/cod.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/cooked_cod",
+          "view": {
+            "name_key": "criterion.balanced_diet.cooked_cod",
+            "icon": "assets/item/cooked_cod.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/salmon",
+          "view": {
+            "name_key": "criterion.balanced_diet.salmon",
+            "icon": "assets/item/salmon.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/cooked_salmon",
+          "view": {
+            "name_key": "criterion.balanced_diet.cooked_salmon",
+            "icon": "assets/item/cooked_salmon.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/tropical_fish",
+          "view": {
+            "name_key": "criterion.balanced_diet.tropical_fish",
+            "icon": "assets/item/tropical_fish.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/pufferfish",
+          "view": {
+            "name_key": "criterion.balanced_diet.pufferfish",
+            "icon": "assets/item/pufferfish.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/mushroom_stew",
+          "view": {
+            "name_key": "criterion.balanced_diet.mushroom_stew",
+            "icon": "assets/item/mushroom_stew.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/rabbit_stew",
+          "view": {
+            "name_key": "criterion.balanced_diet.rabbit_stew",
+            "icon": "assets/item/rabbit_stew.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/beetroot_soup",
+          "view": {
+            "name_key": "criterion.balanced_diet.beetroot_soup",
+            "icon": "assets/item/beetroot_soup.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/suspicious_stew",
+          "view": {
+            "name_key": "criterion.balanced_diet.suspicious_stew",
+            "icon": "assets/item/suspicious_stew.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/bread",
+          "view": {
+            "name_key": "criterion.balanced_diet.bread",
+            "icon": "assets/item/bread.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/cookie",
+          "view": {
+            "name_key": "criterion.balanced_diet.cookie",
+            "icon": "assets/item/cookie.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/pumpkin_pie",
+          "view": {
+            "name_key": "criterion.balanced_diet.pumpkin_pie",
+            "icon": "assets/item/pumpkin_pie.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/honey_bottle",
+          "view": {
+            "name_key": "criterion.balanced_diet.honey_bottle",
+            "icon": "assets/item/honey_bottle.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/rotten_flesh",
+          "view": {
+            "name_key": "criterion.balanced_diet.rotten_flesh",
+            "icon": "assets/item/rotten_flesh.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:husbandry/balanced_diet/spider_eye",
+          "view": {
+            "name_key": "criterion.balanced_diet.spider_eye",
+            "icon": "assets/item/spider_eye.png"
+          }
+        }
+      ],
+      "view": {
+        "name_key": "advancement.husbandry.balanced_diet",
+        "type": "challenge",
+        "icon": "assets/item/apple.png"
+      }
+    },
+    {
+      "id": "goal/husbandry_obtain_netherite_hoe",
+      "fact": "adv/minecraft:husbandry/obtain_netherite_hoe",
+      "view": {
+        "name_key": "advancement.husbandry.obtain_netherite_hoe",
+        "type": "challenge",
+        "icon": "assets/item/netherite_hoe.png"
+      }
+    },
+    {
+      "id": "counter/gold_blocks",
+      "fact": "stat/minecraft:estimated/minecraft:gold_block",
+      "target": 164,
+      "view": {
+        "name_key": "counter.gold_blocks",
+        "type": "challenge",
+        "icon": "assets/item/gold_block.png"
+      }
+    },
+    {
+      "id": "counter/ancient_debris",
+      "fact": "stat/minecraft:estimated/minecraft:ancient_debris",
+      "view": {
+        "name_key": "counter.ancient_debris",
+        "type": "challenge",
+        "icon": "assets/item/ancient_debris.png"
+      }
+    },
+    {
+      "id": "counter/beehives",
+      "fact": "stat/minecraft:estimated/minecraft:beehive",
+      "view": {
+        "name_key": "counter.beehives",
+        "type": "challenge",
+        "icon": "assets/item/beehive.png"
+      }
+    },
+    {
+      "id": "counter/wither",
+      "prefix": [
+        {
+          "fact": "stat/minecraft:picked_up/minecraft:wither_skeleton_skull",
+          "target": 3,
+          "view": {
+            "name_key": "stage.wither_skulls",
+            "icon": "assets/item/wither_skeleton_skull.png"
+          }
+        },
+        {
+          "fact": "adv/minecraft:nether/summon_wither",
+          "view": {
+            "name_key": "advancement.nether.summon_wither",
+            "icon": "assets/mob/wither.png"
+          }
+        },
+        {
+          "fact": "criterion/minecraft:adventure/kill_all_mobs/minecraft:wither",
+          "view": {
+            "name_key": "stage.kill_wither",
+            "icon": "assets/item/nether_star.png"
+          }
+        },
+        {
+          "fact": "adv/minecraft:nether/create_beacon",
+          "view": {
+            "name_key": "advancement.nether.create_beacon",
+            "icon": "assets/item/beacon.png"
+          }
+        }
+      ],
+      "view": {
+        "name_key": "counter.wither",
+        "type": "challenge",
+        "icon": "assets/item/wither_skeleton_skull.png"
+      }
+    },
+    {
+      "id": "counter/conduit",
+      "prefix": [
+        {
+          "fact": "stat/minecraft:estimated/minecraft:nautilus_shell",
+          "target": 8,
+          "view": {
+            "name_key": "stage.nautilus_shells",
+            "icon": "assets/item/nautilus_shell.png"
+          }
+        },
+        {
+          "fact": "stat/minecraft:crafted/minecraft:conduit",
+          "target": 1,
+          "view": {
+            "name_key": "stage.craft_conduit",
+            "icon": "assets/item/conduit.png"
+          }
+        }
+      ],
+      "view": {
+        "name_key": "counter.conduit",
+        "type": "challenge",
+        "icon": "assets/item/nautilus_shell.png"
+      }
+    },
+    {
+      "id": "counter/trident",
+      "prefix": [
+        {
+          "fact": "stat/minecraft:picked_up/minecraft:trident",
+          "target": 1,
+          "view": {
+            "name_key": "stage.obtain_trident",
+            "icon": "assets/item/trident.png"
+          }
+        },
+        {
+          "fact": "adv/minecraft:adventure/very_very_frightening",
+          "view": {
+            "name_key": "advancement.adventure.very_very_frightening",
+            "icon": "assets/item/trident.png",
+            "enchanted": true
+          }
+        }
+      ],
+      "view": {
+        "name_key": "counter.trident",
+        "type": "challenge",
+        "icon": "assets/item/trident.png"
+      }
+    },
+    {
+      "id": "counter/enchanted_golden_apples",
+      "fact": "stat/minecraft:estimated/minecraft:enchanted_golden_apple",
+      "view": {
+        "name_key": "counter.enchanted_golden_apples",
+        "type": "challenge",
+        "icon": "assets/item/enchanted_golden_apple.png"
+      }
+    },
+    {
+      "id": "completion/all_advancements",
+      "all": [
+        {
+          "ref": "goal/story_root"
+        },
+        {
+          "ref": "goal/story_mine_stone"
+        },
+        {
+          "ref": "goal/story_upgrade_tools"
+        },
+        {
+          "ref": "goal/story_smelt_iron"
+        },
+        {
+          "ref": "goal/story_obtain_armor"
+        },
+        {
+          "ref": "goal/story_lava_bucket"
+        },
+        {
+          "ref": "goal/story_iron_tools"
+        },
+        {
+          "ref": "goal/story_deflect_arrow"
+        },
+        {
+          "ref": "goal/story_form_obsidian"
+        },
+        {
+          "ref": "goal/story_mine_diamond"
+        },
+        {
+          "ref": "goal/story_enter_the_nether"
+        },
+        {
+          "ref": "goal/story_shiny_gear"
+        },
+        {
+          "ref": "goal/story_enchant_item"
+        },
+        {
+          "ref": "goal/story_cure_zombie_villager"
+        },
+        {
+          "ref": "goal/story_follow_ender_eye"
+        },
+        {
+          "ref": "goal/story_enter_the_end"
+        },
+        {
+          "ref": "goal/nether_root"
+        },
+        {
+          "ref": "goal/nether_return_to_sender"
+        },
+        {
+          "ref": "goal/nether_find_bastion"
+        },
+        {
+          "ref": "goal/nether_obtain_ancient_debris"
+        },
+        {
+          "ref": "goal/nether_fast_travel"
+        },
+        {
+          "ref": "goal/nether_find_fortress"
+        },
+        {
+          "ref": "goal/nether_obtain_crying_obsidian"
+        },
+        {
+          "ref": "goal/nether_distract_piglin"
+        },
+        {
+          "ref": "goal/nether_ride_strider"
+        },
+        {
+          "ref": "goal/nether_uneasy_alliance"
+        },
+        {
+          "ref": "goal/nether_loot_bastion"
+        },
+        {
+          "ref": "goal/nether_use_lodestone"
+        },
+        {
+          "ref": "goal/nether_netherite_armor"
+        },
+        {
+          "ref": "goal/nether_get_wither_skull"
+        },
+        {
+          "ref": "goal/nether_obtain_blaze_rod"
+        },
+        {
+          "ref": "goal/nether_charge_respawn_anchor"
+        },
+        {
+          "ref": "goal/nether_explore_nether"
+        },
+        {
+          "ref": "goal/nether_summon_wither"
+        },
+        {
+          "ref": "goal/nether_brew_potion"
+        },
+        {
+          "ref": "goal/nether_create_beacon"
+        },
+        {
+          "ref": "goal/nether_all_potions"
+        },
+        {
+          "ref": "goal/nether_create_full_beacon"
+        },
+        {
+          "ref": "goal/nether_all_effects"
+        },
+        {
+          "ref": "goal/end_root"
+        },
+        {
+          "ref": "goal/end_kill_dragon"
+        },
+        {
+          "ref": "goal/end_dragon_egg"
+        },
+        {
+          "ref": "goal/end_enter_end_gateway"
+        },
+        {
+          "ref": "goal/end_respawn_dragon"
+        },
+        {
+          "ref": "goal/end_dragon_breath"
+        },
+        {
+          "ref": "goal/end_find_end_city"
+        },
+        {
+          "ref": "goal/end_elytra"
+        },
+        {
+          "ref": "goal/end_levitate"
+        },
+        {
+          "ref": "goal/adventure_root"
+        },
+        {
+          "ref": "goal/adventure_voluntary_exile"
+        },
+        {
+          "ref": "goal/adventure_kill_a_mob"
+        },
+        {
+          "ref": "goal/adventure_trade"
+        },
+        {
+          "ref": "goal/adventure_honey_block_slide"
+        },
+        {
+          "ref": "goal/adventure_ol_betsy"
+        },
+        {
+          "ref": "goal/adventure_sleep_in_bed"
+        },
+        {
+          "ref": "goal/adventure_hero_of_the_village"
+        },
+        {
+          "ref": "goal/adventure_throw_trident"
+        },
+        {
+          "ref": "goal/adventure_shoot_arrow"
+        },
+        {
+          "ref": "goal/adventure_kill_all_mobs"
+        },
+        {
+          "ref": "goal/adventure_totem_of_undying"
+        },
+        {
+          "ref": "goal/adventure_summon_iron_golem"
+        },
+        {
+          "ref": "goal/adventure_two_birds_one_arrow"
+        },
+        {
+          "ref": "goal/adventure_whos_the_pillager_now"
+        },
+        {
+          "ref": "goal/adventure_arbalistic"
+        },
+        {
+          "ref": "goal/adventure_adventuring_time"
+        },
+        {
+          "ref": "goal/adventure_very_very_frightening"
+        },
+        {
+          "ref": "goal/adventure_sniper_duel"
+        },
+        {
+          "ref": "goal/adventure_bullseye"
+        },
+        {
+          "ref": "goal/husbandry_root"
+        },
+        {
+          "ref": "goal/husbandry_safely_harvest_honey"
+        },
+        {
+          "ref": "goal/husbandry_breed_an_animal"
+        },
+        {
+          "ref": "goal/husbandry_tame_an_animal"
+        },
+        {
+          "ref": "goal/husbandry_fishy_business"
+        },
+        {
+          "ref": "goal/husbandry_silk_touch_nest"
+        },
+        {
+          "ref": "goal/husbandry_plant_seed"
+        },
+        {
+          "ref": "goal/husbandry_bred_all_animals"
+        },
+        {
+          "ref": "goal/husbandry_complete_catalogue"
+        },
+        {
+          "ref": "goal/husbandry_tactical_fishing"
+        },
+        {
+          "ref": "goal/husbandry_balanced_diet"
+        },
+        {
+          "ref": "goal/husbandry_obtain_netherite_hoe"
+        }
+      ]
+    }
+  ],
+  "completion_rule": "completion/all_advancements"
+}

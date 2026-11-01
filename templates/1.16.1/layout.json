@@ -1,0 +1,182 @@
+{
+  "main": [
+    {
+      "id": "Minecraft",
+      "children": [
+        {
+          "id": "Progress",
+          "height": 5,
+          "children": [
+            {
+              "id": "Overworld",
+              "width": 6,
+              "padding": 16,
+              "prefix": [
+                "goal/story_"
+              ]
+            },
+            {
+              "id": "Nether",
+              "x": 6,
+              "width": 8,
+              "padding": 16,
+              "prefix": [
+                "goal/nether_"
+              ],
+              "exclude": [
+                "goal/nether_explore_nether"
+              ]
+            },
+            {
+              "id": "The End",
+              "x": 14,
+              "width": 5,
+              "padding": 16,
+              "prefix": [
+                "goal/end_"
+              ]
+            },
+            {
+              "id": "Adventure",
+              "x": 19,
+              "width": 7,
+              "padding": 16,
+              "prefix": [
+                "goal/adventure_"
+              ],
+              "exclude": [
+                "goal/adventure_kill_all_mobs",
+                "goal/adventure_adventuring_time"
+              ]
+            },
+            {
+              "id": "Husbandry",
+              "x": 26,
+              "width": 5,
+              "padding": 16,
+              "prefix": [
+                "goal/husbandry_"
+              ],
+              "exclude": [
+                "goal/husbandry_bred_all_animals",
+                "goal/husbandry_complete_catalogue",
+                "goal/husbandry_balanced_diet"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "Collections",
+          "y": 5,
+          "height": 4,
+          "children": [
+            {
+              "id": "Explore Nether",
+              "width": 2,
+              "padding": 8,
+              "collections": [
+                "goal/nether_explore_nether"
+              ]
+            },
+            {
+              "id": "Kill All Mobs",
+              "x": 2,
+              "width": 4,
+              "padding": 8,
+              "collections": [
+                "goal/adventure_kill_all_mobs"
+              ]
+            },
+            {
+              "id": "Adventuring Time",
+              "x": 6,
+              "width": 6,
+              "padding": 8,
+              "collections": [
+                "goal/adventure_adventuring_time"
+              ]
+            },
+            {
+              "id": "Breed All Animals",
+              "x": 12,
+              "width": 3,
+              "padding": 8,
+              "collections": [
+                "goal/husbandry_bred_all_animals"
+              ]
+            },
+            {
+              "id": "Complete Catalogue",
+              "x": 15,
+              "width": 2,
+              "padding": 8,
+              "collections": [
+                "goal/husbandry_complete_catalogue"
+              ]
+            },
+            {
+              "id": "Balanced Diet",
+              "x": 17,
+              "width": 5,
+              "padding": 8,
+              "collections": [
+                "goal/husbandry_balanced_diet"
+              ]
+            },
+            {
+              "id": "Stats",
+              "x": 22,
+              "width": 3,
+              "padding": 16,
+              "nodes": [
+                "counter/gold_blocks",
+                "counter/ancient_debris",
+                "counter/beehives",
+                "counter/wither",
+                "counter/conduit",
+                "counter/trident",
+                "counter/enchanted_golden_apples"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "overlay": [
+    {
+      "id": "Collections",
+      "y": 0,
+      "collections": [
+        "goal/adventure_adventuring_time",
+        "goal/adventure_kill_all_mobs",
+        "goal/husbandry_bred_all_animals",
+        "goal/husbandry_balanced_diet",
+        "goal/husbandry_complete_catalogue"
+      ]
+    },
+    {
+      "id": "Advancements",
+      "y": 1,
+      "height": 4,
+      "prefix": [
+        "goal/"
+      ]
+    },
+    {
+      "id": "Stats",
+      "y": 5,
+      "height": 4,
+      "nodes": [
+        "counter/gold_blocks",
+        "counter/ancient_debris",
+        "counter/beehives",
+        "counter/wither",
+        "counter/conduit",
+        "counter/trident",
+        "counter/enchanted_golden_apples"
+      ],
+      "scroll": false
+    }
+  ]
+}

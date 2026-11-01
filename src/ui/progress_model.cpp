@@ -44,31 +44,20 @@ void ProgressViewModel::update(const PublishedState& state) {
     };
     resolve_groups(state.layout->main, main_groups);
     resolve_groups(state.layout->overlay, overlay_groups);
-    const auto is_stat = [&](const auto node) {
-        const auto& rule = state.compiled->graph.nodes[node];
-        return rule.op == RuleOp::Fact && rule.fact_key.starts_with("stat/");
+    const auto group_progress = [&](const std::vector<std::uint32_t>& nodes) {
+        return std::ranges::any_of(nodes, [&](const auto node) {
+            return std::ranges::any_of(item_variants(node, *state.compiled), [&](const auto variant) {
+                return shows_progress(variant, *state.compiled);
+            });
+        });
     };
-    const auto is_stats = [&](const LayoutGroup& group, const std::vector<std::uint32_t>& nodes) {
-        return group.source == LayoutSource::Nodes && !nodes.empty() &&
-               std::ranges::all_of(nodes, [&](const auto node) {
-                   const auto& rule = state.compiled->graph.nodes[node];
-                   return is_stat(node) ||
-                          (rule.op == RuleOp::Prefix && std::ranges::all_of(rule.children, [&](const auto child) {
-                               return is_stat(child) && state.compiled->graph.nodes[child].target > 0;
-                           }));
-               });
-    };
-    const auto resolve_stats = [&](const auto& groups, const auto& nodes, auto& stats) {
-        stats.clear();
-        for (std::size_t index = 0; index < groups.size(); ++index)
-            stats.push_back(is_stats(groups[index], nodes[index]));
-    };
-    resolve_stats(state.layout->main, main_groups, main_stats);
-    resolve_stats(state.layout->overlay, overlay_groups, overlay_stats);
+    overlay_progress.clear();
+    for (const auto& nodes : overlay_groups)
+        overlay_progress.push_back(group_progress(nodes));
 
     const auto collections = [&](const LayoutGroup& group, const std::vector<std::uint32_t>& nodes) {
         std::vector<Collection> resolved;
-        if (group.source != LayoutSource::Children) {
+        if (group.source != LayoutSource::Collections) {
             return resolved;
         }
         std::vector<std::size_t> positions(state.compiled->graph.nodes.size(), nodes.size());
@@ -101,34 +90,145 @@ void ProgressViewModel::update(const PublishedState& state) {
     }
 }
 
-std::uint32_t stat_display_node(const std::uint32_t node, const CompiledTemplate& compiled,
-                                const std::span<const RuleResult> results) {
-    const auto& rule = compiled.graph.nodes[node];
-    if (rule.op != RuleOp::Prefix || rule.children.empty())
-        return node;
-    if (results[node].done)
-        return rule.children.back();
-    // Unevaluated results have no active stage yet.
-    return results[node].active_child < results.size() ? results[node].active_child : node;
+namespace {
+
+bool has_view(const std::uint32_t node, const CompiledTemplate& compiled) {
+    return compiled.presentation_by_node[node].has_value();
 }
 
-std::optional<std::uint32_t> stat_manual_node(const std::uint32_t node, const bool increment,
-                                              const CompiledTemplate& compiled,
-                                              const std::span<const RuleResult> results) {
+bool has_icon(const std::uint32_t node, const CompiledTemplate& compiled) {
+    const auto& view = compiled.presentation_by_node[node];
+    return view && !view->icon_path.empty();
+}
+
+// Nodes without a view still walk a prefix chain, since stages are what a prefix means.
+Presentation::Show item_show(const std::uint32_t node, const CompiledTemplate& compiled) {
+    if (const auto& view = compiled.presentation_by_node[node])
+        return view->show;
+    return compiled.graph.nodes[node].op == RuleOp::Prefix ? Presentation::Show::Stages : Presentation::Show::Self;
+}
+
+// The children a cycling node shows in turn: those that agree with it, so a pending node shows
+// what is left and a finished one shows what finished it.
+std::vector<std::uint32_t> alternatives(const std::uint32_t node, const CompiledTemplate& compiled,
+                                        const std::span<const RuleResult> results) {
+    const auto& children = compiled.graph.nodes[node].children;
+    std::vector<std::uint32_t> matching;
+    for (const auto child : children) {
+        if (child < results.size() && results[child].done == results[node].done)
+            matching.push_back(child);
+    }
+    return matching.empty() ? children : matching;
+}
+
+struct Step {
+    std::uint32_t node;
+    bool stage = false;
+    bool cycling = false;
+};
+
+std::optional<Step> shown_child(const std::uint32_t node, const CompiledTemplate& compiled,
+                                const std::span<const RuleResult> results, const std::uint64_t now_ms) {
     const auto& rule = compiled.graph.nodes[node];
-    if (rule.op != RuleOp::Prefix)
+    if (node >= results.size() || rule.children.empty())
+        return std::nullopt;
+    switch (item_show(node, compiled)) {
+        case Presentation::Show::Self:
+            return std::nullopt;
+        case Presentation::Show::Stages:
+            if (results[node].done)
+                return Step{rule.children.back(), true};
+            if (rule.op == RuleOp::Prefix) {
+                // Unevaluated results have no active stage yet.
+                if (results[node].active_child < results.size())
+                    return Step{results[node].active_child, true};
+                return std::nullopt;
+            }
+            for (const auto child : rule.children) {
+                if (child < results.size() && !results[child].done)
+                    return Step{child, true};
+            }
+            return std::nullopt;
+        case Presentation::Show::Cycle: {
+            const auto choices = alternatives(node, compiled, results);
+            return Step{choices[(now_ms / item_cycle_ms) % choices.size()], false, choices.size() > 1};
+        }
+    }
+    return std::nullopt;
+}
+
+}  // namespace
+
+ItemDisplay item_display(const std::uint32_t node, const CompiledTemplate& compiled,
+                         const std::span<const RuleResult> results, const std::uint64_t now_ms) {
+    ItemDisplay shown{.value = node, .label = node, .icon = node};
+    const auto icon_rank = [&](const std::uint32_t candidate) {
+        return has_icon(candidate, compiled) ? 2 : has_view(candidate, compiled) ? 1 : 0;
+    };
+    while (const auto step = shown_child(shown.value, compiled, results, now_ms)) {
+        if (has_view(step->node, compiled) && (step->stage || !has_view(shown.label, compiled)))
+            shown.label = step->node;
+        if (icon_rank(step->node) >= icon_rank(shown.icon))
+            shown.icon = step->node;
+        shown.value = step->node;
+        shown.cycling = shown.cycling || step->cycling;
+    }
+    return shown;
+}
+
+std::vector<std::uint32_t> item_variants(const std::uint32_t node, const CompiledTemplate& compiled) {
+    std::vector<std::uint32_t> variants;
+    std::vector<std::uint32_t> pending{node};
+    while (!pending.empty()) {
+        const auto current = pending.back();
+        pending.pop_back();
+        variants.push_back(current);
+        if (item_show(current, compiled) != Presentation::Show::Self) {
+            const auto& children = compiled.graph.nodes[current].children;
+            pending.insert(pending.end(), children.rbegin(), children.rend());
+        }
+    }
+    return variants;
+}
+
+bool shows_progress(const std::uint32_t node, const CompiledTemplate& compiled) {
+    const auto& rule = compiled.graph.nodes[node];
+    return rule.op == RuleOp::Fact && rule.fact_key.starts_with("stat/");
+}
+
+std::optional<std::uint32_t> item_manual_node(const std::uint32_t node, const bool increment,
+                                              const CompiledTemplate& compiled,
+                                              const std::span<const RuleResult> results, const std::uint64_t now_ms) {
+    const auto& rule = compiled.graph.nodes[node];
+    if (item_show(node, compiled) == Presentation::Show::Stages) {
+        const auto step = shown_child(node, compiled, results, now_ms);
+        if (!step)
+            return std::nullopt;
+        if (increment) {
+            if (results[node].done)
+                return std::nullopt;
+            return item_manual_node(step->node, increment, compiled, results, now_ms);
+        }
+        if (results[node].done || results[step->node].value > 0)
+            return item_manual_node(step->node, increment, compiled, results, now_ms);
+        const auto active = std::ranges::find(rule.children, step->node);
+        if (active == rule.children.begin())
+            return std::nullopt;
+        return item_manual_node(*std::prev(active), increment, compiled, results, now_ms);
+    }
+    if (node >= results.size() || item_show(node, compiled) != Presentation::Show::Cycle)
         return node;
-    const auto stage = stat_display_node(node, compiled, results);
-    if (stage == node)
+    // Prefer the alternative on screen; otherwise the first one the click can change.
+    std::optional<std::uint32_t> target;
+    if (const auto step = shown_child(node, compiled, results, now_ms); step && results[step->node].done != increment)
+        target = step->node;
+    for (const auto child : rule.children) {
+        if (!target && child < results.size() && results[child].done != increment)
+            target = child;
+    }
+    if (!target)
         return std::nullopt;
-    if (increment)
-        return results[node].done ? std::nullopt : std::optional{stage};
-    if (results[node].done || results[stage].value > 0)
-        return stage;
-    const auto active = std::ranges::find(rule.children, stage);
-    if (active == rule.children.begin())
-        return std::nullopt;
-    return *std::prev(active);
+    return item_manual_node(*target, increment, compiled, results, now_ms);
 }
 
 ProgressStats summarize_progress(const PublishedState& state, const std::span<const std::uint32_t> goal_nodes) {

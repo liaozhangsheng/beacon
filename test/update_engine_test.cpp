@@ -1,16 +1,15 @@
 #include "temporary_directory.hpp"
 
+#include <beacon/update/download.hpp>
 #include <beacon/update/engine.hpp>
 #include <beacon/update/layout.hpp>
 #include <beacon/update/version.hpp>
 
 #include <archive.h>
 #include <archive_entry.h>
-#include <openssl/evp.h>
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <array>
 #include <fstream>
 #include <string>
 #include <utility>
@@ -32,29 +31,9 @@ void write_text(const std::filesystem::path& path, const std::string& text) {
 }
 
 std::string sha256(const std::filesystem::path& path) {
-    std::ifstream input(path, std::ios::binary);
-    EVP_MD_CTX* context = EVP_MD_CTX_new();
-    REQUIRE(context != nullptr);
-    REQUIRE(EVP_DigestInit_ex(context, EVP_sha256(), nullptr) == 1);
-    std::array<char, 4096> buffer{};
-    while (input) {
-        input.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
-        const auto count = input.gcount();
-        if (count > 0) {
-            REQUIRE(EVP_DigestUpdate(context, buffer.data(), static_cast<std::size_t>(count)) == 1);
-        }
-    }
-    std::array<unsigned char, EVP_MAX_MD_SIZE> digest{};
-    unsigned int size = 0;
-    REQUIRE(EVP_DigestFinal_ex(context, digest.data(), &size) == 1);
-    EVP_MD_CTX_free(context);
-    static constexpr char hex[] = "0123456789abcdef";
-    std::string result;
-    for (unsigned int i = 0; i != size; ++i) {
-        result += hex[digest[i] >> 4];
-        result += hex[digest[i] & 0xf];
-    }
-    return result;
+    const auto digest = beacon::update::sha256_file(path);
+    REQUIRE(digest);
+    return *digest;
 }
 
 std::filesystem::path make_zip(const std::filesystem::path& path, const std::vector<Entry>& entries) {
@@ -332,7 +311,6 @@ TEST_CASE("leftovers of an interrupted update are discarded by the next apply") 
     initialize(root);
     write_text(root / "versions/.staging/partial", "staged");
     write_text(root / "versions/1.1.0/stale", "renamed but never selected");
-    write_text(root / ".beacon-current.tmp", "1.1");
     write_text(root / ".beacon-current.tmp.123.0", "1.1");
     write_text(root / ".beacon-current.tmp-unrelated", "keep");
     const auto target = release("1.1.0", unchanged("runtime-1", '1'), unchanged("assets-1", 'a'));
@@ -343,7 +321,6 @@ TEST_CASE("leftovers of an interrupted update are discarded by the next apply") 
     REQUIRE(current(root) == "1.1.0\n");
     REQUIRE_FALSE(std::filesystem::exists(root / "versions/1.1.0/stale"));
     REQUIRE_FALSE(std::filesystem::exists(root / "versions/.staging"));
-    REQUIRE_FALSE(std::filesystem::exists(root / ".beacon-current.tmp"));
     REQUIRE_FALSE(std::filesystem::exists(root / ".beacon-current.tmp.123.0"));
     REQUIRE(read_text(root / ".beacon-current.tmp-unrelated") == "keep");
 }

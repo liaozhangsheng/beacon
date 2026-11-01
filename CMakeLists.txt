@@ -84,9 +84,10 @@ add_library(beacon_runtime STATIC
     src/minecraft/process.cpp
     src/app/persistence.cpp
     src/app/runtime.cpp
+    src/app/settings_applier.cpp
 )
 target_include_directories(beacon_runtime PUBLIC ${PROJECT_SOURCE_DIR}/include)
-target_link_libraries(beacon_runtime PUBLIC beacon_core PRIVATE beacon_io jsoncpp_static Threads::Threads)
+target_link_libraries(beacon_runtime PUBLIC beacon_core PRIVATE beacon_resources beacon_io jsoncpp_static Threads::Threads)
 if(WIN32)
     target_link_libraries(beacon_runtime PRIVATE shell32 user32)
 elseif(APPLE)
@@ -151,7 +152,6 @@ if(BEACON_BUILD_DESKTOP)
     add_library(beacon_profile STATIC src/ui/profile.cpp)
     target_include_directories(beacon_profile PUBLIC ${PROJECT_SOURCE_DIR}/include)
     target_link_libraries(beacon_profile PRIVATE beacon_runtime beacon_io jsoncpp_static beacon_http)
-    target_include_directories(beacon_profile PRIVATE ${PROJECT_SOURCE_DIR}/3rdparty/jsoncpp/include)
     beacon_warnings(beacon_profile)
 
     add_executable(beacon
@@ -164,6 +164,7 @@ if(BEACON_BUILD_DESKTOP)
         src/ui/desktop_header.cpp
         src/ui/desktop_footer.cpp
         src/ui/completion_animation.cpp
+        src/ui/enchantment_glint.cpp
         src/ui/settings_panel.cpp
         src/ui/window_context.cpp
         src/ui/widgets.cpp
@@ -171,6 +172,7 @@ if(BEACON_BUILD_DESKTOP)
     target_link_libraries(beacon PRIVATE
         beacon_install_lock
         beacon_profile
+        beacon_runtime
         beacon_resources
         beacon_imgui
         SDL3_image::SDL3_image
@@ -191,6 +193,8 @@ if(BEACON_BUILD_DESKTOP)
     add_custom_command(TARGET beacon POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${PROJECT_SOURCE_DIR}/assets $<TARGET_FILE_DIR:beacon>/assets
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${PROJECT_SOURCE_DIR}/templates $<TARGET_FILE_DIR:beacon>/templates
         COMMAND ${CMAKE_COMMAND} -E make_directory
             $<TARGET_FILE_DIR:beacon>/.agents/skills/beacon-custom-template
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -281,6 +285,9 @@ if(BEACON_BUILD_DESKTOP)
     endif()
     install(DIRECTORY "${PROJECT_SOURCE_DIR}/assets/"
         DESTINATION "${BEACON_PROGRAM_DIR}/assets"
+    )
+    install(DIRECTORY "${PROJECT_SOURCE_DIR}/templates/"
+        DESTINATION "${CMAKE_INSTALL_BINDIR}/templates"
     )
     install(FILES "${PROJECT_SOURCE_DIR}/.agents/skills/beacon-custom-template/SKILL.md"
         DESTINATION "${CMAKE_INSTALL_BINDIR}/.agents/skills/beacon-custom-template"

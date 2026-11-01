@@ -16,7 +16,6 @@
 #include <set>
 #include <system_error>
 #include <utility>
-#include <vector>
 
 namespace beacon::update {
 
@@ -342,14 +341,13 @@ ylt::expected<Installed, Error> load_current(const std::filesystem::path& root) 
 ylt::expected<void, Error> select_version(const std::filesystem::path& root, const std::string& version) {
     auto selected = write_file_atomically(root / layout::current_pointer, version + "\n");
     if (selected) {
-        // apply/rollback hold the exclusive installation lock, so these can only
-        // be leftovers, including the fixed temporary name used by older builds.
-        const auto prefix = std::string(layout::current_pointer) + ".tmp";
+        // apply/rollback hold the exclusive installation lock, so these can only be leftovers.
+        const auto prefix = std::string(layout::current_pointer) + ".tmp.";
         std::error_code error;
         for (std::filesystem::directory_iterator entries(root, error);
              !error && entries != std::filesystem::directory_iterator{}; entries.increment(error)) {
             const auto name = path_to_utf8(entries->path().filename());
-            if (name == prefix || name.starts_with(prefix + ".")) {
+            if (name.starts_with(prefix)) {
                 std::error_code cleanup_error;
                 if (entries->is_regular_file(cleanup_error))
                     std::filesystem::remove(entries->path(), cleanup_error);

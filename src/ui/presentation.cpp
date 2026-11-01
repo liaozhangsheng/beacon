@@ -17,12 +17,12 @@ std::vector<std::uint32_t> resolve_layout_nodes(const LayoutGroup& group, const 
     if (group.source == LayoutSource::Nodes) {
         for (const auto& id : group.nodes)
             add(compiled.graph.index_by_id.at(id));
-    } else if (group.source == LayoutSource::Children) {
+    } else if (group.source == LayoutSource::Collections) {
         for (const auto& id : group.nodes) {
             for (const auto child : compiled.graph.nodes[compiled.graph.index_by_id.at(id)].children)
                 add(child);
         }
-    } else {
+    } else if (group.source == LayoutSource::Prefix) {
         for (std::uint32_t index = 0; index < compiled.graph.nodes.size(); ++index) {
             for (const auto& prefix : group.nodes) {
                 if (compiled.graph.nodes[index].id.starts_with(prefix)) {

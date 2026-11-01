@@ -6,14 +6,15 @@
 #include <beacon/ui/language.hpp>
 #include <beacon/ui/progress.hpp>
 #include <beacon/ui/carousel.hpp>
+#include <beacon/ui/frame_schedule.hpp>
 #include <beacon/ui/layout_metrics.hpp>
 #include <beacon/app/persistence.hpp>
+#include <beacon/app/settings_applier.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 
 #include <algorithm>
-#include <limits>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -69,8 +70,7 @@ TEST_CASE("resource reload preserves independent identities and language changes
     REQUIRE(translated->localization != initial->localization);
 
     std::ofstream(root / "lang.json") << R"({"goal.shown":"Reloaded"})";
-    std::ofstream(root / "layout.json")
-        << R"({"main":[{"id":"main","source":"nodes","nodes":["shown"],"exclude":[],"x":0,"y":0,"width":1,"height":1,"margin":0,"padding":0}],"overlay":[]})";
+    std::ofstream(root / "layout.json") << R"({"main":[{"id":"main","nodes":["shown"]}]})";
     const auto full_reload = loader.load(path, root, "");
     REQUIRE(full_reload);
     REQUIRE(full_reload->layout != translated->layout);
@@ -113,7 +113,7 @@ TEST_CASE("statistic stages advance in one fixed slot and keep the final stage")
     const auto compiled_ptr = std::make_shared<const beacon::CompiledTemplate>(*compiled_value);
     const auto& compiled = *compiled_ptr;
     auto layout = std::make_shared<beacon::Layout>();
-    layout->main.push_back({"Stats", beacon::LayoutSource::Nodes, {"chain", "ordinary"}, {}});
+    layout->main.push_back({.id = "Stats", .source = beacon::LayoutSource::Nodes, .nodes = {"chain", "ordinary"}});
     layout->overlay = layout->main;
     beacon::PublishedState state{
         .compiled = compiled_ptr, .localization = std::make_shared<const beacon::Localization>(), .layout = layout};
@@ -128,32 +128,31 @@ TEST_CASE("statistic stages advance in one fixed slot and keep the final stage")
         REQUIRE(results);
         state.snapshot.results = *results;
         view.update(state);
-        const auto displayed = beacon::stat_display_node(slot, compiled, state.snapshot.results);
+        const auto displayed = beacon::item_display(slot, compiled, state.snapshot.results).value;
         REQUIRE(displayed == stages[stage]);
         CHECK(beacon::format_rule_progress(state.snapshot.results[displayed]) == progress);
         CHECK(state.snapshot.results[slot].done == done);
     };
     check_stage(0, "0/3", false);
-    CHECK(view.main_stats == std::vector<bool>{true});
-    CHECK(view.overlay_stats == std::vector<bool>{true});
+    CHECK(view.overlay_progress == std::vector<bool>{true});
     const auto original_main = view.main_groups;
 
     facts["stat/first"] = 2;
     check_stage(0, "2/3", false);
     beacon::ManualProgress manual;
-    auto displayed = beacon::stat_display_node(slot, compiled, state.snapshot.results);
+    auto displayed = beacon::item_display(slot, compiled, state.snapshot.results).value;
     REQUIRE(beacon::apply_manual_operation(compiled, state.snapshot.results, manual, displayed, true));
-    CHECK(beacon::stat_display_node(slot, compiled, state.snapshot.results) == stages[1]);
+    CHECK(beacon::item_display(slot, compiled, state.snapshot.results).value == stages[1]);
 
     facts["stat/first"] = 3;
     check_stage(1, "0/1", false);
     facts["stat/second"] = 1;
     check_stage(2, "0/1", false);
-    displayed = beacon::stat_display_node(slot, compiled, state.snapshot.results);
+    displayed = beacon::item_display(slot, compiled, state.snapshot.results).value;
     manual = {};
     REQUIRE(beacon::apply_manual_operation(compiled, state.snapshot.results, manual, displayed, true));
     CHECK(state.snapshot.results[slot].done);
-    CHECK(beacon::stat_display_node(slot, compiled, state.snapshot.results) == stages[2]);
+    CHECK(beacon::item_display(slot, compiled, state.snapshot.results).value == stages[2]);
     state.snapshot.results = *beacon::evaluate(compiled, facts);
     REQUIRE(beacon::apply_manual_operation(compiled, state.snapshot.results, manual, displayed, false));
     CHECK_FALSE(state.snapshot.results[slot].done);
@@ -161,51 +160,214 @@ TEST_CASE("statistic stages advance in one fixed slot and keep the final stage")
     facts["stat/third"] = 1;
     check_stage(2, "1/1", true);
     CHECK(view.main_groups == original_main);
-    CHECK(beacon::stat_display_node(ordinary, compiled, state.snapshot.results) == ordinary);
-    CHECK(beacon::stat_manual_node(ordinary, false, compiled, state.snapshot.results) == ordinary);
+    CHECK(beacon::item_display(ordinary, compiled, state.snapshot.results).value == ordinary);
+    CHECK(beacon::item_manual_node(ordinary, false, compiled, state.snapshot.results) == ordinary);
 
     // Finished chains only take back the final stage.
-    CHECK_FALSE(beacon::stat_manual_node(slot, true, compiled, state.snapshot.results));
-    CHECK(beacon::stat_manual_node(slot, false, compiled, state.snapshot.results) == stages[2]);
+    CHECK_FALSE(beacon::item_manual_node(slot, true, compiled, state.snapshot.results));
+    CHECK(beacon::item_manual_node(slot, false, compiled, state.snapshot.results) == stages[2]);
     // An untouched active stage reopens the previous one; partial progress is taken back first.
     facts.erase("stat/third");
     check_stage(2, "0/1", false);
-    CHECK(beacon::stat_manual_node(slot, true, compiled, state.snapshot.results) == stages[2]);
-    const auto reopened = beacon::stat_manual_node(slot, false, compiled, state.snapshot.results);
+    CHECK(beacon::item_manual_node(slot, true, compiled, state.snapshot.results) == stages[2]);
+    const auto reopened = beacon::item_manual_node(slot, false, compiled, state.snapshot.results);
     REQUIRE(reopened == stages[1]);
     manual = {};
     REQUIRE(beacon::apply_manual_operation(compiled, state.snapshot.results, manual, *reopened, false));
-    CHECK(beacon::stat_display_node(slot, compiled, state.snapshot.results) == stages[1]);
+    CHECK(beacon::item_display(slot, compiled, state.snapshot.results).value == stages[1]);
     facts.clear();
     facts["stat/first"] = 1;
     check_stage(0, "1/3", false);
-    CHECK(beacon::stat_manual_node(slot, false, compiled, state.snapshot.results) == stages[0]);
+    CHECK(beacon::item_manual_node(slot, false, compiled, state.snapshot.results) == stages[0]);
     facts.clear();
     check_stage(0, "0/3", false);
-    CHECK_FALSE(beacon::stat_manual_node(slot, false, compiled, state.snapshot.results));
+    CHECK_FALSE(beacon::item_manual_node(slot, false, compiled, state.snapshot.results));
     // Results that were never evaluated have no active stage to show or change.
     const std::vector<beacon::RuleResult> unevaluated(compiled.graph.nodes.size());
-    CHECK(beacon::stat_display_node(slot, compiled, unevaluated) == slot);
-    CHECK_FALSE(beacon::stat_manual_node(slot, true, compiled, unevaluated));
+    CHECK(beacon::item_display(slot, compiled, unevaluated).value == slot);
+    CHECK_FALSE(beacon::item_manual_node(slot, true, compiled, unevaluated));
 
     // Later stages never count while an earlier one is missing.
     facts["stat/third"] = 1;
     check_stage(0, "0/3", false);
 }
 
-TEST_CASE("fixed statistic groups only accept stages with explicit statistic targets") {
+TEST_CASE("bundled 1.16.1 routes walk their stages in one slot") {
+    const auto root = beacon::path_from_utf8(BEACON_TEST_ROOT);
+    const auto resources = beacon::load_template_resources(root / "templates/1.16.1/template.json", root);
+    REQUIRE(resources);
+    const auto& compiled = *resources->compiled;
+    beacon::Facts facts;
+    const auto shown = [&](const std::string& route) {
+        const auto results = beacon::evaluate(compiled, facts);
+        REQUIRE(results);
+        const auto slot = compiled.graph.index_by_id.at(route);
+        const auto value = beacon::item_display(slot, compiled, *results).value;
+        const auto& stages = compiled.graph.nodes[slot].children;
+        const auto stage = static_cast<std::size_t>(std::ranges::find(stages, value) - stages.begin());
+        REQUIRE(stage < stages.size());
+        return std::pair{stage, (*results)[slot].done};
+    };
+
+    CHECK(shown("counter/wither") == std::pair{std::size_t{0}, false});
+    // Placing the skulls lowers their estimate, so the route counts skulls picked up.
+    facts["stat/minecraft:picked_up/minecraft:wither_skeleton_skull"] = 3;
+    CHECK(shown("counter/wither") == std::pair{std::size_t{1}, false});
+    facts["adv/minecraft:nether/summon_wither"] = 1;
+    facts["criterion/minecraft:adventure/kill_all_mobs/minecraft:wither"] = 1;
+    CHECK(shown("counter/wither") == std::pair{std::size_t{3}, false});
+    facts["adv/minecraft:nether/create_beacon"] = 1;
+    CHECK(shown("counter/wither") == std::pair{std::size_t{3}, true});
+
+    facts["stat/minecraft:estimated/minecraft:nautilus_shell"] = 8;
+    CHECK(shown("counter/conduit") == std::pair{std::size_t{1}, false});
+    facts["stat/minecraft:crafted/minecraft:conduit"] = 1;
+    CHECK(shown("counter/conduit") == std::pair{std::size_t{1}, true});
+
+    // Throwing the trident lowers its estimate, so the route counts it picked up.
+    facts["stat/minecraft:picked_up/minecraft:trident"] = 1;
+    CHECK(shown("counter/trident") == std::pair{std::size_t{1}, false});
+    facts["adv/minecraft:adventure/very_very_frightening"] = 1;
+    CHECK(shown("counter/trident") == std::pair{std::size_t{1}, true});
+}
+
+TEST_CASE("any item can show stages or cycle through sibling alternatives") {
+    const auto compiled_value = beacon::compile_template_json(R"({
+      "name_key":"items", "minecraft":{"min_version":1,"max_version":1},
+      "goals":[
+        {"id":"trims","all":[
+          {"id":"rib","prefix":[
+            {"fact":"stat/minecraft:picked_up/minecraft:rib","target":1,"view":{"name_key":"stage.obtain"}},
+            {"fact":"criterion/trim/rib","view":{"name_key":"stage.use"}}
+          ],"view":{"name_key":"item.rib","icon":"rib.png","type":"task"}}
+        ],"view":{"name_key":"goal.trims","icon":"trims.png"}},
+        {"id":"beef","any":[
+          {"fact":"criterion/diet/beef","view":{"name_key":"food.beef","icon":"beef.png"}},
+          {"fact":"criterion/diet/cooked_beef","view":{"name_key":"food.cooked_beef","icon":"cooked_beef.png"}}
+        ],"view":{"name_key":"item.beef","show":"cycle"}},
+        {"id":"both","all":[
+          {"id":"raw","fact":"adv/raw","view":{"name_key":"food.raw","icon":"raw.png"}},
+          {"id":"cooked","fact":"adv/cooked","view":{"name_key":"food.cooked","icon":"cooked.png"}}
+        ],"view":{"name_key":"item.both","show":"cycle"}},
+        {"id":"route","all":[
+          {"id":"enter","fact":"adv/enter","view":{"name_key":"step.enter"}},
+          {"id":"leave","fact":"adv/leave","view":{"name_key":"step.leave"}}
+        ],"view":{"name_key":"item.route","icon":"route.png","show":"stages"}},
+        {"id":"plain","any":[{"fact":"adv/x","view":{"name_key":"x","icon":"x.png"}}],"view":{"name_key":"plain"}}
+      ], "completion_rule":"trims"
+    })");
+    REQUIRE(compiled_value);
+    const auto& compiled = *compiled_value;
+    const auto id = [&](const char* name) {
+        return compiled.graph.index_by_id.at(name);
+    };
+    const auto rib = id("rib");
+    const auto& rib_stages = compiled.graph.nodes[rib].children;
+    const auto beef = id("beef");
+    const auto& beef_children = compiled.graph.nodes[beef].children;
+    beacon::Facts facts;
+    const auto results = [&] {
+        auto evaluated = beacon::evaluate(compiled, facts);
+        REQUIRE(evaluated);
+        return *evaluated;
+    };
+
+    // Stages name the step and borrow the item's icon until they bring their own.
+    auto current = results();
+    auto shown = beacon::item_display(rib, compiled, current);
+    CHECK(shown.label == rib_stages[0]);
+    CHECK(shown.icon == rib);
+    CHECK(shown.value == rib_stages[0]);
+    CHECK_FALSE(shown.cycling);
+    CHECK(beacon::item_manual_node(rib, true, compiled, current) == rib_stages[0]);
+    CHECK_FALSE(beacon::item_manual_node(rib, false, compiled, current));
+    facts["stat/minecraft:picked_up/minecraft:rib"] = 1;
+    current = results();
+    CHECK(beacon::item_display(rib, compiled, current).label == rib_stages[1]);
+    CHECK(beacon::item_manual_node(rib, true, compiled, current) == rib_stages[1]);
+    CHECK(beacon::item_manual_node(rib, false, compiled, current) == rib_stages[0]);
+    facts["criterion/trim/rib"] = 1;
+    current = results();
+    CHECK(current[rib].done);
+    CHECK(beacon::item_display(rib, compiled, current).label == rib_stages[1]);
+    // Aggregates show themselves unless their view asks otherwise, even without an icon.
+    CHECK(beacon::item_display(id("trims"), compiled, current).icon == id("trims"));
+    CHECK(beacon::item_display(id("plain"), compiled, current).value == id("plain"));
+
+    // Alternatives keep the item's name and cycle their icons while pending.
+    shown = beacon::item_display(beef, compiled, current, 0);
+    CHECK(shown.cycling);
+    CHECK(shown.label == beef);
+    CHECK(shown.icon == beef_children[0]);
+    CHECK(beacon::item_display(beef, compiled, current, beacon::item_cycle_ms).icon == beef_children[1]);
+    CHECK(beacon::item_manual_node(beef, true, compiled, current, beacon::item_cycle_ms) == beef_children[1]);
+    CHECK_FALSE(beacon::item_manual_node(beef, false, compiled, current));
+    // Once one is eaten the item settles on it.
+    facts["criterion/diet/cooked_beef"] = 1;
+    current = results();
+    shown = beacon::item_display(beef, compiled, current, 0);
+    CHECK_FALSE(shown.cycling);
+    CHECK(shown.icon == beef_children[1]);
+    CHECK(beacon::item_manual_node(beef, false, compiled, current) == beef_children[1]);
+
+    // Finished children drop out of a pending cycle.
+    const auto both = id("both");
+    facts["adv/raw"] = 1;
+    current = results();
+    shown = beacon::item_display(both, compiled, current, beacon::item_cycle_ms);
+    CHECK_FALSE(shown.cycling);
+    CHECK(shown.label == both);
+    CHECK(shown.icon == id("cooked"));
+    CHECK(beacon::item_manual_node(both, true, compiled, current) == id("cooked"));
+    CHECK(beacon::item_manual_node(both, false, compiled, current) == id("raw"));
+
+    // An all can be walked as stages too: the first unfinished step, keeping the item's icon.
+    const auto route = id("route");
+    shown = beacon::item_display(route, compiled, current);
+    CHECK(shown.label == id("enter"));
+    CHECK(shown.icon == route);
+    facts["adv/leave"] = 1;
+    current = results();
+    CHECK(beacon::item_display(route, compiled, current).label == id("enter"));
+    CHECK(beacon::item_manual_node(route, false, compiled, current) == std::nullopt);
+    facts["adv/enter"] = 1;
+    current = results();
+    CHECK(beacon::item_display(route, compiled, current).label == id("leave"));
+
+    CHECK(beacon::item_variants(rib, compiled) == std::vector<std::uint32_t>{rib, rib_stages[0], rib_stages[1]});
+    CHECK(beacon::item_variants(id("trims"), compiled) == std::vector<std::uint32_t>{id("trims")});
+    CHECK(beacon::shows_progress(rib_stages[0], compiled));
+    CHECK_FALSE(beacon::shows_progress(rib_stages[1], compiled));
+}
+
+TEST_CASE("view show must suit its rule") {
+    const auto compile = [](const std::string& goal) {
+        return beacon::compile_template_json(
+            R"({"name_key":"t","minecraft":{"min_version":1,"max_version":1},"goals":[)" + goal +
+            R"(],"completion_rule":"g"})");
+    };
+    CHECK(compile(R"({"id":"g","all":[{"fact":"a"}],"view":{"name_key":"g","show":"stages"}})"));
+    CHECK(compile(R"({"id":"g","count":{"target":1,"of":[{"fact":"a"}]},"view":{"name_key":"g","show":"cycle"}})"));
+    CHECK_FALSE(compile(R"({"id":"g","any":[{"fact":"a"}],"view":{"name_key":"g","show":"stages"}})"));
+    CHECK_FALSE(compile(R"({"id":"g","prefix":[{"fact":"a"}],"view":{"name_key":"g","show":"cycle"}})"));
+    CHECK_FALSE(compile(R"({"id":"g","fact":"a","view":{"name_key":"g","show":"cycle"}})"));
+    CHECK_FALSE(compile(R"({"id":"g","fact":"a","view":{"name_key":"g","show":"all"}})"));
+}
+
+TEST_CASE("overlay groups reserve a progress line when any item can show a statistic") {
     const auto compiled = beacon::compile_template_json(R"({
       "name_key":"stages", "minecraft":{"min_version":1,"max_version":1},
       "goals":[
         {"id":"stats","prefix":[{"fact":"stat/a","target":1},{"fact":"stat/b","target":2}]},
         {"id":"advancements","prefix":[{"fact":"adv/a"}]},
-        {"id":"targetless","prefix":[{"fact":"stat/a"}]}
+        {"id":"targetless","prefix":[{"fact":"stat/a"}]},
+        {"id":"whole","prefix":[{"fact":"stat/a","target":1}],"view":{"name_key":"whole","show":"self"}}
       ], "completion_rule":"stats"
     })");
     REQUIRE(compiled);
     auto layout = std::make_shared<beacon::Layout>();
-    for (const auto id : {"stats", "advancements", "targetless"})
-        layout->main.push_back({id, beacon::LayoutSource::Nodes, {id}, {}});
+    for (const auto id : {"stats", "advancements", "targetless", "whole"})
+        layout->main.push_back({.id = id, .source = beacon::LayoutSource::Nodes, .nodes = {id}});
     layout->overlay = layout->main;
     beacon::PublishedState state{.compiled = std::make_shared<const beacon::CompiledTemplate>(*compiled),
                                  .localization = std::make_shared<const beacon::Localization>(),
@@ -215,8 +377,7 @@ TEST_CASE("fixed statistic groups only accept stages with explicit statistic tar
     state.snapshot.results = *results;
     beacon::ProgressViewModel view;
     view.update(state);
-    CHECK(view.main_stats == std::vector<bool>{true, false, false});
-    CHECK(view.overlay_stats == view.main_stats);
+    CHECK(view.overlay_progress == std::vector<bool>{true, false, true, false});
 }
 
 TEST_CASE("template presentation compiles without changing rule identity") {
@@ -232,6 +393,12 @@ TEST_CASE("template presentation compiles without changing rule identity") {
     REQUIRE(typed);
     REQUIRE(typed->presentation_by_node[0]->frame_type == beacon::Presentation::FrameType::Challenge);
     REQUIRE_FALSE(compiled->presentation_by_node[2]);
+    REQUIRE_FALSE(compiled->presentation_by_node[0]->enchanted);
+    const auto enchanted = beacon::compile_template_json(replace_once(
+        std::string(presented_template), "\"icon\":\"icons/a.bmp\"", "\"icon\":\"icons/a.bmp\",\"enchanted\":true"));
+    REQUIRE(enchanted);
+    REQUIRE(enchanted->presentation_by_node[0]->enchanted);
+    REQUIRE(enchanted->same_rules(*compiled));
 
     const auto relabeled =
         beacon::compile_template_json(replace_once(std::string(presented_template), "goal.shown", "goal.renamed"));
@@ -245,6 +412,8 @@ TEST_CASE("template presentation compiles without changing rule identity") {
         replace_once(std::string(presented_template), "\"name_key\":\"goal.shown\"", "\"name_key\":\"\""),
         replace_once(std::string(presented_template), "\"icon\":\"icons/a.bmp\"",
                      "\"icon\":\"icons/a.bmp\",\"type\":\"bad\""),
+        replace_once(std::string(presented_template), "\"icon\":\"icons/a.bmp\"",
+                     "\"icon\":\"icons/a.bmp\",\"enchanted\":1"),
         replace_once(std::string(presented_template), "\"icon\":\"icons/a.bmp\"",
                      "\"icon\":\"icons/a.bmp\",\"unknown\":true")};
     for (const auto& json : invalid) {
@@ -267,34 +436,35 @@ TEST_CASE("localization falls back from selected language to default and then ke
 TEST_CASE("layout validates responsive groups and keeps unknown node IDs as warnings") {
     const auto compiled = beacon::compile_template_json(presented_template);
     REQUIRE(compiled);
-    const auto layout = beacon::compile_layout_json(
-        R"({"main":[{"id":"main","source":"nodes","nodes":["shown","old"],"exclude":[],"x":0,"y":0,"width":1,"height":1, "margin": 0, "padding": 0}],"overlay":[]})",
-        *compiled);
+    const auto layout = beacon::compile_layout_json(R"({"main":[{"id":"main","nodes":["shown","old"]}]})", *compiled);
     REQUIRE(layout);
     REQUIRE(layout->warnings.size() == 1);
     REQUIRE(layout->warnings.front().context == "old");
 
-    REQUIRE_FALSE(beacon::compile_layout_json(
-        R"({"main":[{"id":"main","source":"nodes","nodes":[],"exclude":[],"x":-0.1,"y":0,"width":1,"height":1, "margin": 0, "padding": 0}],"overlay":[]})",
-        *compiled));
-    REQUIRE_FALSE(beacon::compile_layout_json(
-        R"({"main":[{"id":"main","source":"nodes","nodes":[],"exclude":[],"x":0,"y":0,"width":1,"height":1, "margin": 0, "padding": 0,"columns":0}],"overlay":[]})",
-        *compiled));
-    REQUIRE_FALSE(beacon::compile_layout_json(
-        R"({"main":[{"id":"main","source":"nodes","nodes":[],"exclude":[],"x":0,"y":0,"width":1,"height":1}],"overlay":[]})",
-        *compiled));
-    REQUIRE_FALSE(beacon::compile_layout_json(R"({"main":[]})", *compiled));
+    const auto invalid = [&](const std::string& json, const std::string& context) {
+        CAPTURE(json);
+        const auto result = beacon::compile_layout_json(json, *compiled);
+        REQUIRE_FALSE(result);
+        CHECK(result.error().context == context);
+    };
+    invalid(R"({"main":[{"x":-0.1}]})", "layout.json/main/0/x");
+    invalid(R"({"main":[{"width":0}]})", "layout.json/main/0/width");
+    invalid(R"({"main":[{"columns":0}]})", "layout.json/main/0/columns");
+    invalid(R"({"main":[{"nodes":["shown"],"prefix":["goal"]}]})", "layout.json/main/0");
+    invalid(R"({"main":[{"nodes":["shown"],"children":[]}]})", "layout.json/main/0");
+    invalid(R"({"main":[{"exclude":["shown"]}]})", "layout.json/main/0/exclude");
+    invalid(R"({"main":[{"children":[{"nodes":"shown"}]}]})", "layout.json/main/0/children/0/nodes");
+    invalid(R"({"main":{}})", "layout.json/main");
+    invalid(R"({"main":[],"windows":[]})", "layout.json/windows");
 
     std::string many = R"({"main":[)";
     for (std::size_t index = 0; index <= beacon::max_diagnostics; ++index) {
         if (index != 0) {
             many += ',';
         }
-        many += "{\"id\":\"group" + std::to_string(index) + "\",\"source\":\"nodes\",\"nodes\":[\"old" +
-                std::to_string(index) +
-                "\"],\"exclude\":[],\"x\":0,\"y\":0,\"width\":1,\"height\":1,\"margin\":0,\"padding\":0}";
+        many += R"({"nodes":["old)" + std::to_string(index) + R"("]})";
     }
-    many += "],\"overlay\":[]}";
+    many += "]}";
     const auto capped = beacon::compile_layout_json(many, *compiled);
     REQUIRE(capped);
     REQUIRE(capped->warnings.size() == beacon::max_diagnostics);
@@ -303,12 +473,9 @@ TEST_CASE("layout validates responsive groups and keeps unknown node IDs as warn
 TEST_CASE("child item styles validate states fields and supported effects") {
     const auto compiled = beacon::compile_template_json(presented_template);
     REQUIRE(compiled);
-    const auto parse = [&](const std::string& style, const std::string& source = "children") {
+    const auto parse = [&](const std::string& style, const std::string& selector = "collections") {
         return beacon::compile_layout_json(
-            R"({"main":[{"id":"children","source":")" + source +
-                R"(","nodes":["hidden"],"exclude":[],"x":0,"y":0,"width":1,"height":1,"margin":0,"padding":0,"item_style":)" +
-                style + R"(}],"overlay":[]})",
-            *compiled);
+            R"({"main":[{")" + selector + R"(":["hidden"],"item_style":)" + style + "}]}", *compiled);
     };
     const auto layout = parse(
         R"({"pending":{"emphasis":"highlight"},"done":{"visibility":"blank","emphasis":"muted","decoration":"strikethrough"}})");
@@ -332,9 +499,7 @@ TEST_CASE("child item styles validate states fields and supported effects") {
     const auto highlighted = parse(R"({"done":{"visibility":"visible","emphasis":"highlight","decoration":"none"}})");
     REQUIRE(highlighted);
     CHECK(highlighted->main.front().item_style.done == beacon::ItemStyle{});
-    const auto omitted = beacon::compile_layout_json(
-        R"({"main":[{"id":"children","source":"children","nodes":["hidden"],"exclude":[],"x":0,"y":0,"width":1,"height":1,"margin":0,"padding":0}],"overlay":[]})",
-        *compiled);
+    const auto omitted = beacon::compile_layout_json(R"({"main":[{"collections":["hidden"]}]})", *compiled);
     REQUIRE(omitted);
     CHECK(omitted->main.front().item_style == defaults->main.front().item_style);
     for (const auto* invalid :
@@ -347,20 +512,36 @@ TEST_CASE("child item styles validate states fields and supported effects") {
     }
     CHECK_FALSE(parse("{}", "nodes"));
     CHECK_FALSE(parse("{}", "prefix"));
+    CHECK_FALSE(beacon::compile_layout_json(R"({"overlay":[{"collections":["hidden"],"item_style":{}}]})", *compiled));
     CHECK_FALSE(beacon::compile_layout_json(
-        R"({"main":[],"overlay":[{"id":"children","source":"children","nodes":["hidden"],"exclude":[],"x":0,"y":0,"width":1,"height":1,"margin":0,"padding":0,"item_style":{}}]})",
-        *compiled));
-    CHECK_FALSE(beacon::compile_layout_json(
-        R"({"main":[],"overlay":[{"id":"outer","source":"nodes","nodes":[],"exclude":[],"x":0,"y":0,"width":1,"height":1,"margin":0,"padding":0,"children":[{"id":"inner","source":"children","nodes":["hidden"],"exclude":[],"x":0,"y":0,"width":1,"height":1,"margin":0,"padding":0,"item_style":{}}]}]})",
-        *compiled));
+        R"({"overlay":[{"children":[{"collections":["hidden"],"item_style":{}}]}]})", *compiled));
+}
+
+TEST_CASE("overlay scrolling follows the layout scroll field") {
+    const auto compiled = beacon::compile_template_json(presented_template);
+    REQUIRE(compiled);
+    const auto parse = [&](const std::string& extra, const bool main = false) {
+        const auto group = R"({"nodes":["hidden"])" + extra + "}";
+        return beacon::compile_layout_json((main ? R"({"main":[)" : R"({"overlay":[)") + group + "]}", *compiled);
+    };
+    const auto omitted = parse("");
+    REQUIRE(omitted);
+    CHECK(omitted->overlay.front().scroll);
+    const auto fixed = parse(R"(,"scroll":false)");
+    REQUIRE(fixed);
+    CHECK_FALSE(fixed->overlay.front().scroll);
+    const auto rolling = parse(R"(,"scroll":true)");
+    REQUIRE(rolling);
+    CHECK(rolling->overlay.front().scroll);
+    CHECK_FALSE(parse(R"(,"scroll":0)"));
+    CHECK_FALSE(parse(R"(,"scroll":false)", true));
 }
 
 TEST_CASE("layout normalizes arbitrary positive coordinates and sizes") {
     const auto compiled = beacon::compile_template_json(presented_template);
     REQUIRE(compiled);
     const auto layout = beacon::compile_layout_json(
-        R"({"main":[{"id":"main","source":"nodes","nodes":["shown"],"exclude":[],"x":100,"y":50,"width":300,"height":150, "margin": 0, "padding": 0}],"overlay":[]})",
-        *compiled);
+        R"({"main":[{"nodes":["shown"],"x":100,"y":50,"width":300,"height":150}]})", *compiled);
     REQUIRE(layout);
     REQUIRE(layout->main[0].x == 0.25F);
     REQUIRE(layout->main[0].y == 0.25F);
@@ -368,19 +549,40 @@ TEST_CASE("layout normalizes arbitrary positive coordinates and sizes") {
     REQUIRE(layout->main[0].height == 0.75F);
 }
 
-TEST_CASE("layout supports nested groups with parent-relative geometry") {
+TEST_CASE("layout fills omitted group fields with defaults") {
+    const auto compiled = beacon::compile_template_json(presented_template);
+    REQUIRE(compiled);
+    const auto layout = beacon::compile_layout_json(R"({"main":[{}]})", *compiled);
+    REQUIRE(layout);
+    REQUIRE(layout->overlay.empty());
+    const auto expected = beacon::LayoutGroup{.spacing = beacon::default_spacing(false, beacon::LayoutSource::None)};
+    CHECK(layout->main == std::vector{expected});
+    CHECK(layout->main.front().source == beacon::LayoutSource::None);
+    CHECK(beacon::resolve_layout_nodes(layout->main.front(), *compiled, compiled->graph.nodes.size()).empty());
+}
+
+TEST_CASE("layout scales every level of nested groups to fill its parent") {
     const auto compiled = beacon::compile_template_json(presented_template);
     REQUIRE(compiled);
     const auto layout = beacon::compile_layout_json(
-        R"({"main":[{"id":"outer","source":"nodes","nodes":[],"exclude":[],"x":0,"y":0,"width":2,"height":2, "margin": 0, "padding": 0,"children":[{"id":"inner","source":"nodes","nodes":["shown"],"exclude":[],"x":0.25,"y":0.25,"width":0.5,"height":0.5, "margin": 0, "padding": 0}]}],"overlay":[]})",
+        R"({"main":[{"id":"outer","x":1,"children":[{"id":"left","nodes":["shown"]},{"id":"right","x":1,"width":3}]}]})",
         *compiled);
     REQUIRE(layout);
-    REQUIRE(layout->main.size() == 2);
-    REQUIRE(layout->main[1].id == "inner");
-    REQUIRE(layout->main[1].x == 0.25F);
-    REQUIRE(layout->main[1].y == 0.25F);
-    REQUIRE(layout->main[1].width == 0.5F);
-    REQUIRE(layout->main[1].height == 0.5F);
+    REQUIRE(layout->main.size() == 3);
+    const auto& outer = layout->main[0];
+    CHECK(outer.source == beacon::LayoutSource::None);
+    CHECK(outer.x == 0.5F);
+    CHECK(outer.width == 0.5F);
+    CHECK(outer.height == 1.0F);
+    const auto& left = layout->main[1];
+    CHECK(left.id == "left");
+    CHECK(left.x == 0.5F);
+    CHECK(left.width == 0.125F);
+    const auto& right = layout->main[2];
+    CHECK(right.x == 0.625F);
+    CHECK(right.width == 0.375F);
+    CHECK(right.y == 0.0F);
+    CHECK(right.height == 1.0F);
 }
 
 TEST_CASE("presentation resolves reusable layout nodes and fallback labels") {
@@ -393,11 +595,11 @@ TEST_CASE("presentation resolves reusable layout nodes and fallback labels") {
     const auto child = compiled->graph.nodes[hidden].children.front();
     REQUIRE(beacon::display_label(child, *compiled, localization) == "b");
 
-    const beacon::LayoutGroup children{"children", beacon::LayoutSource::Children, {"hidden"}, {}, 0, 0, 1, 1};
+    const beacon::LayoutGroup children{.source = beacon::LayoutSource::Collections, .nodes = {"hidden"}};
     REQUIRE(beacon::resolve_layout_nodes(children, *compiled, compiled->graph.nodes.size()) ==
             compiled->graph.nodes[hidden].children);
 
-    const beacon::LayoutGroup prefix{"prefix", beacon::LayoutSource::Prefix, {""}, {"hidden"}, 0, 0, 1, 1};
+    const beacon::LayoutGroup prefix{.source = beacon::LayoutSource::Prefix, .nodes = {""}, .exclude = {"hidden"}};
     const auto nodes = beacon::resolve_layout_nodes(prefix, *compiled, 2);
     REQUIRE(nodes == std::vector<std::uint32_t>{compiled->graph.index_by_id.at("shown")});
 }
@@ -413,7 +615,10 @@ TEST_CASE("collection cache preserves group order exclusions and layout changes"
     REQUIRE(compiled_value);
     auto compiled = std::make_shared<const beacon::CompiledTemplate>(*compiled_value);
     auto layout = std::make_shared<beacon::Layout>();
-    layout->main.push_back({"collections", beacon::LayoutSource::Children, {"second", "first"}, {"c", "b"}});
+    layout->main.push_back({.id = "collections",
+                            .source = beacon::LayoutSource::Collections,
+                            .nodes = {"second", "first"},
+                            .exclude = {"c", "b"}});
     layout->overlay = layout->main;
     beacon::PublishedState state{
         .compiled = compiled, .localization = std::make_shared<const beacon::Localization>(), .layout = layout};
@@ -504,8 +709,9 @@ TEST_CASE("progress summary includes collection goals but excludes statistic cou
 
 TEST_CASE("layout metrics derive collection geometry from the group and scale consistently") {
     for (const bool overlay : {false, true}) {
-        for (const auto source : {beacon::LayoutSource::Nodes, beacon::LayoutSource::Children}) {
-            const beacon::LayoutGroup group{.source = source, .margin = 2, .padding = 3};
+        for (const auto source : {beacon::LayoutSource::Nodes, beacon::LayoutSource::Collections}) {
+            const beacon::LayoutGroup group{
+                .margin = 2, .padding = 3, .source = source, .spacing = beacon::default_spacing(overlay, source)};
             const auto normal = beacon::calculate_layout_metrics(group, overlay, 7, 300, 300, 10, 20);
             const auto doubled = beacon::calculate_layout_metrics(group, overlay, 7, 600, 600, 20, 40, 2);
             REQUIRE(doubled.rows == normal.rows);
@@ -513,18 +719,23 @@ TEST_CASE("layout metrics derive collection geometry from the group and scale co
             CHECK(doubled.y == Catch::Approx(normal.y * 2));
             CHECK(doubled.cell_width == Catch::Approx(normal.cell_width * 2));
             CHECK(doubled.cell_height == Catch::Approx(normal.cell_height * 2));
-            CHECK(normal.gap == (!overlay && source == beacon::LayoutSource::Children ? 16 : 0));
+            const bool collection = source == beacon::LayoutSource::Collections;
+            CHECK(normal.gap == (collection ? (overlay ? 32 : 16) : 0));
             if (overlay) {
                 CHECK(normal.rows == 1);
-                CHECK(normal.cell_width == (source == beacon::LayoutSource::Children ? 64 : 84));
+                // Overlay collection icons keep their one-icon stride as cell plus gap.
+                CHECK(normal.cell_width == (collection ? 32 : 84));
             }
         }
     }
 }
 
 TEST_CASE("overlay group heights count frames labels and statistic lines") {
-    const beacon::LayoutGroup nodes{.source = beacon::LayoutSource::Nodes, .padding = 3};
-    const beacon::LayoutGroup collections{.source = beacon::LayoutSource::Children, .padding = 3};
+    const auto group = [](const beacon::LayoutSource source) {
+        return beacon::LayoutGroup{.padding = 3, .source = source, .spacing = beacon::default_spacing(true, source)};
+    };
+    const auto nodes = group(beacon::LayoutSource::Nodes);
+    const auto collections = group(beacon::LayoutSource::Collections);
     const float frame = 52.0F;
     CHECK(beacon::overlay_group_min_height(collections, true, true, 12) == Catch::Approx(6 + frame));
     CHECK(beacon::overlay_group_min_height(nodes, false, false, 12) == Catch::Approx(6 + frame + 2));
@@ -532,9 +743,79 @@ TEST_CASE("overlay group heights count frames labels and statistic lines") {
     CHECK(beacon::overlay_group_min_height(nodes, true, true, 12) == Catch::Approx(6 + frame + 2 + 12 + 13));
     CHECK(beacon::overlay_group_min_height(nodes, true, true, 24, 2) ==
           Catch::Approx(2 * beacon::overlay_group_min_height(nodes, true, true, 12)));
+
+    // Main groups need a frame, the label gap and two text lines; the body grows until a group's share fits.
+    const beacon::LayoutGroup main{.height = 0.25F,
+                                   .margin = 2,
+                                   .padding = 3,
+                                   .spacing = beacon::default_spacing(false, beacon::LayoutSource::Nodes)};
+    const auto main_height = beacon::main_group_min_height(main, 12);
+    CHECK(main_height == Catch::Approx(6 + frame + main.spacing.label + 24));
+    CHECK(beacon::body_height_for_content(main, main_height) == Catch::Approx((main_height + 4) * 4));
 }
 
-TEST_CASE("full-width overlay bands share spare height equally") {
+TEST_CASE("layout spacing overrides window defaults and is validated per group kind") {
+    const auto compiled = beacon::compile_template_json(presented_template);
+    REQUIRE(compiled);
+    const auto parse = [&](const std::string& spacing, const bool overlay, const std::string& selector = "nodes") {
+        const auto group = R"({")" + selector + R"(":["hidden"],"spacing":)" + spacing + "}";
+        return beacon::compile_layout_json((overlay ? R"({"overlay":[)" : R"({"main":[)") + group + "]}", *compiled);
+    };
+    const auto main = parse(R"({"item":8,"row":5,"label":1,"collection":20})", false, "collections");
+    REQUIRE(main);
+    const auto& configured = main->main.front().spacing;
+    CHECK(configured.item == 8.0F);
+    CHECK(configured.row == 5.0F);
+    CHECK(configured.label == 1.0F);
+    CHECK(configured.collection == 20.0F);
+    const auto resolved = beacon::group_spacing(main->main.front(), 2);
+    CHECK(resolved.item == 16.0F);
+    CHECK(resolved.row == 10.0F);
+    CHECK(resolved.label == 2.0F);
+    CHECK(resolved.collection == 40.0F);
+    const auto metrics = beacon::calculate_layout_metrics(main->main.front(), false, 7, 300, 300, 0, 0);
+    CHECK(metrics.gap == 8.0F);
+    CHECK(metrics.row_gap == 5.0F);
+
+    const auto partial = parse(R"({"label":7})", true);
+    REQUIRE(partial);
+    const auto& overlay_group = partial->overlay.front();
+    // Fields left out keep the defaults for the group's window and source.
+    CHECK(overlay_group.spacing ==
+          beacon::LayoutSpacing{.item = 0.0F, .row = 0.0F, .label = 7.0F, .collection = 48.0F});
+    CHECK(beacon::group_spacing(overlay_group).label == 7.0F);
+    CHECK(beacon::overlay_group_min_height(overlay_group, false, false, 12) == Catch::Approx(52 + 7));
+    REQUIRE(parse("{}", true));
+
+    CHECK_FALSE(parse(R"({"row":4})", true));
+    CHECK_FALSE(parse(R"({"collection":4})", false));
+    CHECK_FALSE(parse(R"({"item":-1})", false));
+    CHECK_FALSE(parse(R"({"item":"4"})", false));
+    CHECK_FALSE(parse(R"({"gap":4})", false));
+    CHECK_FALSE(parse("[]", false));
+}
+
+TEST_CASE("layout spacing defaults match the built-in geometry") {
+    const auto spacing = [](const beacon::LayoutSource source, const bool overlay) {
+        return beacon::default_spacing(overlay, source);
+    };
+    const auto main_nodes = spacing(beacon::LayoutSource::Nodes, false);
+    CHECK(main_nodes.item == 0.0F);
+    CHECK(main_nodes.row == 0.0F);
+    CHECK(main_nodes.label == 4.0F);
+    const auto main_collections = spacing(beacon::LayoutSource::Collections, false);
+    CHECK(main_collections.item == 16.0F);
+    CHECK(main_collections.row == 6.0F);
+    CHECK(main_collections.label == 3.0F);
+    CHECK(main_collections.collection == 0.0F);
+    CHECK(spacing(beacon::LayoutSource::Nodes, true).item == 0.0F);
+    const auto overlay = spacing(beacon::LayoutSource::Collections, true);
+    CHECK(overlay.item == 32.0F);
+    CHECK(overlay.label == 2.0F);
+    CHECK(overlay.collection == 48.0F);
+}
+
+TEST_CASE("full-width overlay bands split height by weight") {
     const beacon::LayoutGroup top{.y = 0, .width = 1};
     const beacon::LayoutGroup bottom{.y = 0.5F, .width = 1};
     CHECK(beacon::stacks_full_width({top, bottom}));
@@ -543,17 +824,41 @@ TEST_CASE("full-width overlay bands share spare height equally") {
     CHECK_FALSE(beacon::stacks_full_width({top, beacon::LayoutGroup{.y = 0.5F, .width = 0.5F}}));
 
     const std::vector<float> contents{10, 30};
-    const auto bands = beacon::stack_layout_bands(contents, 5, 65);
+    const std::vector<float> equal{1, 1};
+    const auto bands = beacon::stack_layout_bands(contents, equal, 5, 65);
     REQUIRE(bands.size() == 2);
     CHECK(bands[0].y == 5);
-    CHECK(bands[0].height == 20);
-    CHECK(bands[1].y == 25);
-    CHECK(bands[1].height == 40);
+    CHECK(bands[0].height == 30);
+    CHECK(bands[1].y == 35);
+    CHECK(bands[1].height == 30);
     // Content taller than the body keeps its height instead of shrinking.
-    const auto crowded = beacon::stack_layout_bands(contents, 0, 20);
+    const auto crowded = beacon::stack_layout_bands(contents, equal, 0, 20);
+    CHECK(crowded[0].height == 10);
     CHECK(crowded[1].y == 10);
     CHECK(crowded[1].height == 30);
-    CHECK(beacon::stack_layout_bands({}, 0, 20).empty());
+    const std::vector<float> weighted{1, 3};
+    const auto tall = beacon::stack_layout_bands(contents, weighted, 0, 80);
+    CHECK(tall[0].height == 20);
+    CHECK(tall[1].y == 20);
+    CHECK(tall[1].height == 60);
+    // A band too small for its content keeps the content height; the others split the rest by weight.
+    const std::vector<float> inverted{3, 1};
+    const auto pinned = beacon::stack_layout_bands(contents, inverted, 0, 80);
+    CHECK(pinned[0].height == 50);
+    CHECK(pinned[1].height == 30);
+    CHECK(beacon::stack_layout_min_height(contents, equal) == 60);
+    CHECK(beacon::stack_layout_min_height(contents, weighted) == 40);
+    CHECK(beacon::stack_layout_bands({}, {}, 0, 20).empty());
+
+    // Space before, between and after the groups' y positions becomes empty rows.
+    const std::vector<beacon::LayoutGroup> spaced{{.y = 0.25F, .height = 0.25F}, {.y = 0.5F, .height = 0.25F}};
+    const auto stack = beacon::stack_layout_rows(spaced, contents);
+    CHECK(stack.contents == std::vector<float>{0, 10, 30, 0});
+    CHECK(stack.weights == std::vector<float>{0.25F, 0.25F, 0.25F, 0.25F});
+    CHECK(stack.group_bands == std::vector<std::size_t>{1, 2});
+    CHECK(beacon::stack_layout_rows(
+              std::vector<beacon::LayoutGroup>{{.y = 0, .height = 0.5F}, {.y = 0.5F, .height = 0.5F}}, contents)
+              .group_bands == std::vector<std::size_t>{0, 1});
 }
 
 TEST_CASE("collection grids place members below the header and in widening columns") {
@@ -905,76 +1210,7 @@ TEST_CASE("template resources load as one validated package") {
     REQUIRE_FALSE(beacon::load_template_resources(root / "template.json", root));
 }
 
-TEST_CASE("settings round-trip validates fields and ranges") {
-    const beacon::test::TemporaryDirectory temporary;
-    const auto& root = temporary.path;
-    const auto path = root / "config/settings.json";
-    beacon::Persistence persistence(root);
-    beacon::Settings settings;
-    settings.game_root = root / ".minecraft";
-    settings.template_path = "/tmp/template.json";
-    settings.language = "en";
-    settings.ui_language = "en";
-    settings.auto_detect = true;
-    settings.overlay_transparent = false;
-    settings.main_window_background_color = {0.1F, 0.2F, 0.3F};
-    settings.overlay_window_background_color = {0.4F, 0.5F, 0.6F};
-    settings.overlay_scroll_speed = 120.0F;
-    settings.overlay_scroll_right = true;
-    settings.main_window_scale = 0.75F;
-    settings.overlay_window_scale = 1.5F;
-    REQUIRE(persistence.save_settings(settings));
-
-    const auto loaded = persistence.load_settings();
-    REQUIRE(loaded);
-    REQUIRE(*loaded);
-    REQUIRE((**loaded).game_root == settings.game_root);
-    REQUIRE((**loaded).language == settings.language);
-    REQUIRE((**loaded).ui_language == settings.ui_language);
-    REQUIRE((**loaded).auto_detect == settings.auto_detect);
-    REQUIRE((**loaded).overlay_transparent == settings.overlay_transparent);
-    REQUIRE((**loaded).main_window_background_color == settings.main_window_background_color);
-    REQUIRE((**loaded).overlay_window_background_color == settings.overlay_window_background_color);
-    REQUIRE((**loaded).overlay_scroll_speed == settings.overlay_scroll_speed);
-    REQUIRE((**loaded).overlay_scroll_right == settings.overlay_scroll_right);
-    REQUIRE((**loaded).main_window_scale == settings.main_window_scale);
-    REQUIRE((**loaded).overlay_window_scale == settings.overlay_window_scale);
-
-    settings.language = std::string("en\0ignored", 10);
-    REQUIRE_FALSE(persistence.save_settings(settings));
-    settings.language = "en";
-    settings.overlay_window_background_color = {0.0F, 1.0F, 0.0F};
-    REQUIRE(persistence.save_settings(settings));
-    REQUIRE((**persistence.load_settings()).overlay_window_background_color ==
-            settings.overlay_window_background_color);
-    auto backup = path;
-    backup += ".bak";
-    std::filesystem::remove(backup);
-
-    settings.main_window_scale = 0.25F;
-    REQUIRE_FALSE(persistence.save_settings(settings));
-    settings.main_window_scale = 0.75F;
-
-    {
-        std::ofstream output(path, std::ios::trunc);
-        output
-            << R"({"game_root":"/tmp/game","template_path":"/tmp/template","overlay_visible":false,"overlay_scroll_speed":60,"main_window_background_color":[0.2,0.2,0.2],"overlay_window_background_color":[0,1,0]})";
-    }
-    REQUIRE_FALSE(persistence.load_settings());
-
-    {
-        std::ofstream output(path, std::ios::trunc);
-        output << R"({"saves_root":"/tmp","worlds":[]})";
-    }
-    REQUIRE_FALSE(persistence.load_settings());
-    {
-        std::ofstream output(path, std::ios::trunc);
-        output << R"({"game_root":"/tmp"})";
-    }
-    REQUIRE_FALSE(persistence.load_settings());
-}
-
-TEST_CASE("interface language supports Chinese and English and old settings") {
+TEST_CASE("interface language supports Chinese and English and defaults to Chinese") {
     const beacon::test::TemporaryDirectory temporary;
     beacon::Persistence persistence(temporary.path);
     beacon::Settings settings{.game_root = temporary.path, .template_path = temporary.path / "template.json"};
@@ -996,22 +1232,50 @@ TEST_CASE("interface language supports Chinese and English and old settings") {
     }
     const auto path = temporary.path / "config/settings.json";
     std::filesystem::remove(temporary.path / "config/settings.json.bak");
-    auto json = beacon::read_bounded_file(path, "settings");
-    REQUIRE(json);
-    const std::string field = ",\n  \"ui_language\" : \"en\"";
-    const auto offset = json->find(field);
-    REQUIRE(offset != std::string::npos);
-    json->erase(offset, field.size());
-    {
-        std::ofstream output(path);
-        output << *json;
-    }
-    const auto loaded = persistence.load_settings();
-    REQUIRE(loaded);
-    REQUIRE(*loaded);
-    REQUIRE((**loaded).ui_language == "zh");
     for (const auto* invalid : {"null", "true", "42", "\"fr\"", "\"en\\u0000ignored\""}) {
-        std::ofstream(path) << "{\"ui_language\":" << invalid << "," << json->substr(1);
+        std::ofstream(path) << R"({"game_root":"game","template_path":"template.json","ui_language":)" << invalid
+                            << "}";
         REQUIRE_FALSE(persistence.load_settings());
     }
+}
+
+TEST_CASE("frame schedule keeps the earliest request of each pace") {
+    beacon::FrameSchedule schedule;
+    schedule.begin(1010);
+    CHECK(schedule.next() == beacon::FrameSchedule::idle);
+    schedule.step(beacon::soft_animation_ms);
+    CHECK(schedule.next() == 1050);
+    schedule.at(2000);
+    CHECK(schedule.next() == 1050);
+    schedule.every(16);
+    CHECK(schedule.next() == 1026);
+    schedule.begin(1500);
+    CHECK(schedule.next() == beacon::FrameSchedule::idle);
+    schedule.step(1500);
+    CHECK(schedule.next() == 3000);
+}
+
+TEST_CASE("settings applier saves only after a changed template loads") {
+    const beacon::test::TemporaryDirectory temporary;
+    beacon::Persistence persistence(temporary.path);
+    beacon::Runtime runtime;
+    beacon::SettingsApplier applier(runtime, persistence, temporary.path, {});
+    const beacon::Settings applied{.game_root = temporary.path / "game",
+                                   .template_path = temporary.path / "current/template.json"};
+
+    auto broken = applied;
+    broken.template_path = temporary.path / "missing/template.json";
+    CHECK_FALSE(applier.apply(applied, broken));
+    const auto unsaved = persistence.load_settings();
+    REQUIRE(unsaved);
+    CHECK_FALSE(unsaved->has_value());
+
+    auto faster = applied;
+    faster.overlay_scroll_speed = 90.0F;
+    REQUIRE(applier.apply(applied, faster));
+    const auto saved = persistence.load_settings();
+    REQUIRE(saved);
+    REQUIRE(saved->has_value());
+    CHECK((*saved)->overlay_scroll_speed == 90.0F);
+    CHECK((*saved)->template_path == applied.template_path);
 }

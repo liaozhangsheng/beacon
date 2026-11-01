@@ -22,9 +22,8 @@ Beacon 是一个面向 Minecraft 速通的进度追踪器。它读取本地存�
 ### 快速开始
 
 1. 构建或下载对应平台的 Beacon。
-2. 在安装根目录的 `templates/` 下放入至少一个模板包，格式见[自定义模板](#自定义模板)。
-3. 启动 `beacon`，打开设置，选择 Minecraft 游戏目录和模板。
-4. 选择世界与玩家，开始游戏；存档变化后，Beacon 会自动更新清单。
+2. 启动 `beacon`，默认使用内置的“1.16.1 全进度”模板；打开设置可选择 Minecraft 游戏目录，或安装根目录 `templates/` 下的其他模板（格式见[自定义模板](#自定义模板)）。
+3. 选择世界与玩家，开始游戏；存档变化后，Beacon 会自动更新清单。
 
 默认会自动检测以下 Minecraft 游戏目录：
 
@@ -34,7 +33,7 @@ Beacon 是一个面向 Minecraft 速通的进度追踪器。它读取本地存�
 | macOS | `~/Library/Application Support/minecraft` |
 | Linux | `~/.minecraft` |
 
-安装根目录是 `beacon` 启动器所在目录。Beacon 不附带模板；没有模板时，会以 `no templates found` 退出。
+安装根目录是 `beacon` 启动器所在目录。Beacon 附带 `templates/1.16.1` 模板，追踪 Minecraft Java 版 1.16.1 的全部进度，支持中文和英文。没有任何模板时，会以 `no templates found` 退出。
 
 界面默认使用中文，可在设置中的“界面语言”切换为 English。
 
@@ -99,7 +98,7 @@ cmake -S . -B build -G Ninja \
   -DVCPKG_TARGET_TRIPLET=x64-windows
 ```
 
-运行开发构建前，先把完整模板目录放在 `build/templates/<名称>/` 下，然后运行：
+构建时会把内置模板复制到 `build/templates/`，自己的模板目录放在旁边即可。然后运行：
 
 ```sh
 ./build/beacon
@@ -191,12 +190,12 @@ templates/<name>/
 `lang.json` 提供模板的默认文本。设置中的“模板语言”可选择 `langs/` 下的翻译，缺失条目回退到 `lang.json`；“界面语言”单独控制 Beacon 自身的文字。新增模板后需重启程序。修改已有模板后，应重启程序，或先切换到其他模板再切回；直接选择当前模板不会触发重新加载。
 
 统计计数器可用 `prefix` 配置有序的多个阶段。每个直接子项使用一个 `stat/` 事实、正整数 `target` 和自己的 `view`，
-布局通过 `source: "nodes"` 引用父节点。同一个位置显示首个未完成阶段的图标、名称和数量，全部完成后保留最后阶段并高亮；
+布局在分组的 `nodes` 中引用父节点。同一个位置显示首个未完成阶段的图标、名称和数量，全部完成后保留最后阶段并高亮；
 主窗口的手动加一增加当前阶段的计数，全部完成后不再增加；手动减一减少当前阶段的计数，当前计数为 0 时重新打开上一阶段。计数器在悬浮窗中保持固定位置。普通计数器可与多阶段计数器放在同一组。
 各阶段使用存档中的累计统计，消耗物品不会减少计数，也无需单独持久化阶段状态。
 重复捡起同一物品也会增加拾取统计，因此这些计数不代表当前持有量。各阶段必须依次完成。
 
-`layout.json` 的 `main` 中，`source: "children"` 的分组可以配置子项状态样式：
+`layout.json` 的 `main` 中，`collections` 分组可以配置子项状态样式：
 
 ```json
 "item_style": {
@@ -211,7 +210,7 @@ templates/<name>/
 跳过图标、文字、光晕、装饰和点击处理。`overlay` 不支持此配置，悬浮窗通过自己的完成动画和轮播逻辑处理收集项。
 这些样式不作用于收集组的标题和总进度；嵌套布局组需要各自配置，不继承父组样式。
 `pending` 和 `done` 及其属性均可省略，省略时使用上述默认值；`blank` 优先于明暗和删除线。
-留空的子项无法直接点击撤销完成。不要把 `item_style` 放在 `template.json`、`overlay` 或其他 `source` 的分组中，
+留空的子项无法直接点击撤销完成。不要把 `item_style` 放在 `template.json`、`overlay` 或 `nodes`、`prefix` 分组中，
 否则加载会报错；未知状态、属性、枚举值以及非字符串属性值同样会被拒绝。
 
 ## Minecraft 商标声明

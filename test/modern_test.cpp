@@ -779,32 +779,6 @@ TEST_CASE("game directory follows the newest save and switches when another save
     REQUIRE(runtime.state()->snapshot.run_epoch == 3);
 }
 
-TEST_CASE("settings persistence recovers from backup") {
-    const beacon::test::TemporaryDirectory temporary;
-    const auto& root = temporary.path;
-    beacon::Persistence persistence(root);
-    beacon::Settings settings;
-    settings.game_root = root / ".minecraft";
-    settings.template_path = fixture("template.json");
-    REQUIRE(persistence.save_settings(settings));
-    settings.game_root = root / "changed";
-    REQUIRE(persistence.save_settings(settings));
-    for (const auto invalid : {"{}", "[]", "[1]", "null", "42", "true", "\"invalid\""}) {
-        CAPTURE(invalid);
-        write_text(root / "config/settings.json", invalid);
-        const auto recovered_settings = persistence.load_settings();
-        REQUIRE(recovered_settings);
-        REQUIRE(*recovered_settings);
-        REQUIRE((**recovered_settings).game_root == root / ".minecraft");
-        REQUIRE(persistence.save_settings(settings));
-    }
-    write_text(root / "config/settings.json", "[]");
-    write_text(root / "config/settings.json.bak", "[1]");
-    const auto invalid = persistence.load_settings();
-    REQUIRE_FALSE(invalid);
-    REQUIRE(invalid.error().code == beacon::ErrorCode::Validation);
-}
-
 TEST_CASE("runtime rebuilds atomically and skips unchanged files") {
     const beacon::test::TemporaryDirectory temporary;
     const auto& root = temporary.path;

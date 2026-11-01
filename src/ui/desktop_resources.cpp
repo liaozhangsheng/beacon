@@ -41,6 +41,7 @@ WindowRenderer::Impl::Impl(const std::string& title, const WindowSettings& setti
         SDL_Log("Could not load window icon %s: %s", icon_file.c_str(), SDL_GetError());
     }
     assets_.emplace(context_.renderer(), asset_root_);
+    glint_.emplace(context_.renderer());
     context_.make_current();
     load_cjk_font();
     ready_ = true;
@@ -85,6 +86,7 @@ void WindowRenderer::Impl::prepare_template(const std::shared_ptr<const Publishe
         atlas_texture_.reset();
         atlas_regions_.clear();
         assets_->clear();
+        glint_->clear();
         if (remote_avatar_texture_ == nullptr) {
             avatar_texture_ = nullptr;
         }
@@ -129,7 +131,8 @@ void WindowRenderer::Impl::resolve_node_sprites(const std::vector<NodeImages>& i
     for (const auto& node : images) {
         node_sprites_.push_back({.icon = sprite(node.icon),
                                  .frame_obtained = sprite(node.frame_obtained),
-                                 .frame_unobtained = sprite(node.frame_unobtained)});
+                                 .frame_unobtained = sprite(node.frame_unobtained),
+                                 .glint = node.enchanted ? node.icon : std::filesystem::path{}});
     }
 }
 

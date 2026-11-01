@@ -78,7 +78,6 @@ if(TARGET beacon-updater)
 endif()
 
 if(TARGET beacon)
-    find_package(Python3 REQUIRED COMPONENTS Interpreter)
     add_executable(beacon_ui_test ui_assets_test.cpp window_context_test.cpp
         ../src/ui/widgets.cpp ../src/ui/window_context.cpp ../src/ui/settings_panel.cpp)
     target_link_libraries(beacon_ui_test PRIVATE beacon_imgui beacon_runtime beacon_resources SDL3_image::SDL3_image Catch2::Catch2WithMain)
