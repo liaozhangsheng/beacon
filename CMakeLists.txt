@@ -170,6 +170,7 @@ if(BEACON_BUILD_DESKTOP)
         src/ui/settings_panel.cpp
         src/ui/window_context.cpp
         src/ui/widgets.cpp
+        src/ui/apng.cpp
     )
     target_link_libraries(beacon PRIVATE
         beacon_install_lock

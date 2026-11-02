@@ -1,6 +1,7 @@
 #include <beacon/ui/widgets.hpp>
 #include <beacon/io/file.hpp>
 #include <beacon/ui/sizing.hpp>
+#include "apng.hpp"
 
 #include <SDL3_image/SDL_image.h>
 
@@ -316,7 +317,7 @@ std::size_t draw_progress_text(ImDrawList* draw, const std::string& text, const 
 SDL_Texture* UiAssets::animated_frame(const std::filesystem::path& path, const std::uint64_t now_ms) {
     auto found = animations_.find(path);
     if (found == animations_.end()) {
-        // Share decoded GIF frames across windows; each renderer uploads only its current frame.
+        // Share decoded animation frames across windows; each renderer uploads only its current frame.
         struct Decoded {
             FileStamp stamp;
             std::weak_ptr<IMG_Animation> frames;
@@ -331,8 +332,7 @@ SDL_Texture* UiAssets::animated_frame(const std::filesystem::path& path, const s
         if (stamp && *stamp == cached.stamp)
             animation.frames = cached.frames.lock();
         if (!animation.frames) {
-            const auto file = path_to_utf8(path);
-            animation.frames.reset(IMG_LoadAnimation(file.c_str()), IMG_FreeAnimation);
+            animation.frames.reset(load_animation(path), IMG_FreeAnimation);
             cached = {stamp ? *stamp : FileStamp{}, animation.frames};
         }
         if (const auto& frames = animation.frames; frames && frames->count > 0) {

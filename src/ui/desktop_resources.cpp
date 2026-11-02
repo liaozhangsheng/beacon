@@ -1,4 +1,5 @@
 #include "desktop_renderer_internal.hpp"
+#include "apng.hpp"
 
 #include <beacon/io/file.hpp>
 #include <beacon/ui/sizing.hpp>
@@ -14,14 +15,6 @@
 #include <unordered_set>
 
 namespace beacon {
-namespace {
-
-bool is_animation(const std::filesystem::path& path) {
-    const auto extension = path.extension();
-    return extension == ".gif" || extension == ".GIF";
-}
-
-}  // namespace
 
 WindowRenderer::Impl::Impl(const std::string& title, const WindowSettings& settings, const bool overlay,
                            const std::filesystem::path& asset_root, const ProgressViewModel& view, const float scale,
@@ -110,7 +103,7 @@ void WindowRenderer::Impl::resolve_node_sprites(const std::vector<NodeImages>& i
         Sprite result;
         if (path.empty())
             return result;
-        if (is_animation(path)) {
+        if (is_animated_image(path)) {
             result.animation = path;
         } else if (const auto found = atlas_regions_.find(path); found != atlas_regions_.end()) {
             result = {.texture = atlas_texture_.get(), .uv_min = found->second.uv_min, .uv_max = found->second.uv_max};
@@ -145,7 +138,7 @@ void WindowRenderer::Impl::build_atlas(const std::vector<std::filesystem::path>&
     float row_height = 0.0F;
     for (const auto& path : paths) {
         // Icon paths are canonicalized while loading the template, so they are atlas keys as is.
-        if (is_animation(path)) {
+        if (is_animated_image(path)) {
             continue;
         }
         if (!seen.emplace(path).second) {
