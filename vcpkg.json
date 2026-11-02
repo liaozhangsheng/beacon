@@ -1,0 +1,25 @@
+{
+  "name": "beacon",
+  "version-string": "1.0.0",
+  "builtin-baseline": "9eec002df1cd109f8f104cd966a763daf9751489",
+  "dependencies": [
+    {
+      "name": "libarchive",
+      "default-features": false
+    },
+    "openssl",
+    "sdl3",
+    {
+      "name": "freetype",
+      "default-features": false
+    }
+  ],
+  "features": {
+    "tests": {
+      "description": "Build the regression checks",
+      "dependencies": [
+        "catch2"
+      ]
+    }
+  }
+}

@@ -1,0 +1,38 @@
+Beacon
+Copyright (c) 2026 Beacon contributors. Licensed under the MIT License (see LICENSE).
+
+Minecraft assets
+----------------
+
+The following images are taken or derived from Minecraft textures. Minecraft and
+its assets are copyright Mojang AB / Microsoft Corporation; they are used under
+the Minecraft Usage Guidelines (https://www.minecraft.net/usage-guidelines) and
+are not covered by Beacon's MIT License.
+
+  assets/app-icon.png
+  assets/default-avatar.png
+  assets/settings-background.png
+  assets/leaderboard/*.png
+  assets/progress/*.png
+  assets/widgets/*.png
+  templates/*/assets/**/*.png
+
+Player heads shown at run time are cropped from skins downloaded from Mojang's
+texture service and remain the property of their owners.
+
+NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG
+OR MICROSOFT.
+
+Fonts
+-----
+
+  assets/fonts/Minecraft.otf  SIL Open Font License 1.1, see assets/fonts/Minecraft-Font-LICENSE.txt
+  assets/fonts/Unifont.ttf    SIL Open Font License 1.1, see assets/fonts/Unifont-LICENSE.txt
+
+Third-party software
+--------------------
+
+Licenses of the libraries Beacon is built with are installed in
+versions/<version>/licenses/ (the program) and updater/licenses/ (the updater),
+one directory per component. Portions of this software are copyright The
+FreeType Project (https://freetype.org); all rights reserved.

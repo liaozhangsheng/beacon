@@ -1,0 +1,14 @@
+set(updater_root "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/updater")
+file(GET_RUNTIME_DEPENDENCIES
+    EXECUTABLES "${updater_root}/beacon-updater"
+    RESOLVED_DEPENDENCIES_VAR updater_dependencies
+    UNRESOLVED_DEPENDENCIES_VAR updater_unresolved
+    POST_EXCLUDE_REGEXES "/ld-linux[^/]*$" "/lib(c|m|pthread|dl|rt)\\.so(\\.[0-9]+)*$")
+if(updater_unresolved)
+    message(FATAL_ERROR "Unresolved updater libraries: ${updater_unresolved}")
+endif()
+foreach(dependency IN LISTS updater_dependencies)
+    get_filename_component(name "${dependency}" NAME)
+    file(REAL_PATH "${dependency}" source)
+    file(COPY_FILE "${source}" "${updater_root}/${name}")
+endforeach()
