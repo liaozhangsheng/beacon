@@ -19,6 +19,7 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -86,6 +87,146 @@ SDL_Process* start_process(const std::vector<std::string>& arguments, const bool
     return process;
 }
 
+// The startup update check: the updater's one-line answer on stdout and its exit code. SDL gives Windows no way to
+// start a console program without a console window, so there the process is created directly.
+class UpdateCheck {
+public:
+    UpdateCheck(const UpdateCheck&) = delete;
+    UpdateCheck& operator=(const UpdateCheck&) = delete;
+
+    struct Result {
+        int exit_code = 0;
+        std::string output;
+    };
+
+#if defined(_WIN32)
+    static std::unique_ptr<UpdateCheck> start(const std::filesystem::path& updater, const std::filesystem::path& root) {
+        SECURITY_ATTRIBUTES inherit{.nLength = sizeof(SECURITY_ATTRIBUTES), .bInheritHandle = TRUE};
+        HANDLE read = nullptr;
+        HANDLE write = nullptr;
+        if (!CreatePipe(&read, &write, &inherit, 0)) {
+            SDL_SetError("cannot create the updater pipe (error %lu)", GetLastError());
+            return nullptr;
+        }
+        std::unique_ptr<UpdateCheck> check(new UpdateCheck);
+        check->output_ = read;
+        const HANDLE null = CreateFileW(L"NUL", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                        &inherit, OPEN_EXISTING, 0, nullptr);
+        STARTUPINFOW startup{.cb = sizeof(STARTUPINFOW), .dwFlags = STARTF_USESTDHANDLES};
+        startup.hStdInput = null;
+        startup.hStdOutput = write;
+        startup.hStdError = null;
+        auto command = quoted(updater.native()) + L" --check --machine-check --root " + quoted(root.native());
+        PROCESS_INFORMATION process{};
+        const bool started =
+            SetHandleInformation(read, HANDLE_FLAG_INHERIT, 0) &&
+            CreateProcessW(nullptr, command.data(), nullptr, nullptr, TRUE,
+                           CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT, nullptr, nullptr, &startup, &process);
+        const auto error = GetLastError();
+        CloseHandle(write);
+        if (null != INVALID_HANDLE_VALUE)
+            CloseHandle(null);
+        if (!started) {
+            SDL_SetError("cannot start the updater (error %lu)", error);
+            return nullptr;
+        }
+        CloseHandle(process.hThread);
+        check->process_ = process.hProcess;
+        return check;
+    }
+
+    ~UpdateCheck() {
+        if (WaitForSingleObject(process_, 0) != WAIT_OBJECT_0) {
+            TerminateProcess(process_, 1);
+            WaitForSingleObject(process_, INFINITE);
+        }
+        CloseHandle(process_);
+        CloseHandle(output_);
+    }
+
+    // The result once the updater has exited; until then, drains its output so it never blocks on a full pipe.
+    std::optional<Result> poll() {
+        drain();
+        DWORD exit_code = 0;
+        if (WaitForSingleObject(process_, 0) != WAIT_OBJECT_0 || !GetExitCodeProcess(process_, &exit_code))
+            return std::nullopt;
+        drain();
+        return Result{.exit_code = static_cast<int>(exit_code), .output = std::move(text_)};
+    }
+
+private:
+    UpdateCheck() = default;
+
+    // Quotes one argument the way CommandLineToArgvW splits it.
+    static std::wstring quoted(const std::wstring& argument) {
+        std::wstring result = L"\"";
+        std::size_t backslashes = 0;
+        for (const wchar_t c : argument) {
+            if (c == L'\\') {
+                ++backslashes;
+                continue;
+            }
+            result.append(c == L'"' ? backslashes * 2 + 1 : backslashes, L'\\');
+            backslashes = 0;
+            result.push_back(c);
+        }
+        result.append(backslashes * 2, L'\\');
+        result.push_back(L'"');
+        return result;
+    }
+
+    void drain() {
+        DWORD available = 0;
+        while (PeekNamedPipe(output_, nullptr, 0, nullptr, &available, nullptr) && available > 0) {
+            char buffer[4096];
+            DWORD read = 0;
+            if (!ReadFile(output_, buffer, std::min<DWORD>(available, sizeof(buffer)), &read, nullptr) || read == 0)
+                return;
+            text_.append(buffer, read);
+        }
+    }
+
+    HANDLE process_ = nullptr;
+    HANDLE output_ = nullptr;
+    std::string text_;
+#else
+    static std::unique_ptr<UpdateCheck> start(const std::filesystem::path& updater, const std::filesystem::path& root) {
+        auto* process =
+            start_process({path_to_utf8(updater), "--check", "--machine-check", "--root", path_to_utf8(root)}, true);
+        if (process == nullptr)
+            return nullptr;
+        std::unique_ptr<UpdateCheck> check(new UpdateCheck);
+        check->process_ = process;
+        return check;
+    }
+
+    ~UpdateCheck() {
+        if (!SDL_WaitProcess(process_, false, nullptr))
+            SDL_KillProcess(process_, true);
+        SDL_DestroyProcess(process_);
+    }
+
+    // The result once the updater has exited.
+    std::optional<Result> poll() {
+        int exit_code = 0;
+        if (!SDL_WaitProcess(process_, false, &exit_code))
+            return std::nullopt;
+        std::size_t size = 0;
+        auto* output = static_cast<char*>(SDL_ReadProcess(process_, &size, nullptr));
+        if (output == nullptr)
+            return Result{.exit_code = -1};
+        Result result{.exit_code = exit_code, .output = std::string(output, size)};
+        SDL_free(output);
+        return result;
+    }
+
+private:
+    UpdateCheck() = default;
+
+    SDL_Process* process_ = nullptr;
+#endif
+};
+
 std::uint64_t current_process_id() {
 #if defined(_WIN32)
     return GetCurrentProcessId();
@@ -136,14 +277,6 @@ public:
         if (frame_limit_ == 0 && !fixed_state_)
             start_update_check();
         ready_ = true;
-    }
-
-    ~Impl() {
-        if (update_check_ != nullptr) {
-            if (!SDL_WaitProcess(update_check_, false, nullptr))
-                SDL_KillProcess(update_check_, true);
-            SDL_DestroyProcess(update_check_);
-        }
     }
 
     [[nodiscard]] bool ready() const {
@@ -298,30 +431,21 @@ private:
         if (!std::filesystem::is_regular_file(manifest, ec) || ec)
             return;
         update_program_ = updater;
-        update_check_ = start_process(
-            {path_to_utf8(updater), "--check", "--machine-check", "--root", path_to_utf8(install_root_)}, true);
+        update_check_ = UpdateCheck::start(updater, install_root_);
         if (update_check_ == nullptr)
             SDL_Log("Startup update check could not start: %s", SDL_GetError());
     }
 
     void poll_update_check() {
-        int exit_code = 0;
-        if (update_check_ == nullptr || !SDL_WaitProcess(update_check_, false, &exit_code))
+        auto result = update_check_ != nullptr ? update_check_->poll() : std::nullopt;
+        if (!result)
             return;
-        std::size_t size = 0;
-        auto* output = static_cast<char*>(SDL_ReadProcess(update_check_, &size, nullptr));
-        SDL_DestroyProcess(update_check_);
-        update_check_ = nullptr;
-        if (output == nullptr) {
-            SDL_Log("Startup update check failed: %s", SDL_GetError());
+        update_check_.reset();
+        if (result->exit_code != 0) {
+            SDL_Log("Startup update check failed with exit code %d", result->exit_code);
             return;
         }
-        std::string response(output, size);
-        SDL_free(output);
-        if (exit_code != 0) {
-            SDL_Log("Startup update check failed with exit code %d", exit_code);
-            return;
-        }
+        auto& response = result->output;
         trim_line_end(response);
         constexpr std::string_view available = "BEACON_UPDATE_AVAILABLE\t";
         constexpr std::string_view current = "BEACON_UPDATE_CURRENT\t";
@@ -377,7 +501,7 @@ private:
     std::optional<Error> runtime_error_;
     std::optional<Error> settings_error_;
     bool apply_settings_ = false;
-    SDL_Process* update_check_ = nullptr;
+    std::unique_ptr<UpdateCheck> update_check_;
     std::filesystem::path update_program_;
     UpdateNotice update_notice_;
     ProgressViewModel view_;
