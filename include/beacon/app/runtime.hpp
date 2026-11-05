@@ -18,13 +18,14 @@ struct Layout;
 struct Localization;
 
 struct RunSelection {
+    std::filesystem::path game_root;
     WorldLocation world;
     PlayerIdentity player;
-    std::shared_ptr<const CompiledTemplate> compiled;
     VersionProfile profile;
+
+    std::shared_ptr<const CompiledTemplate> compiled;
     std::shared_ptr<const Localization> localization;
     std::shared_ptr<const Layout> layout;
-    std::filesystem::path game_root;
 };
 
 struct RebuildRequest {
@@ -51,11 +52,13 @@ struct WorkerMessage {
 enum class DataStatus { Ready, Stale, Unavailable };
 
 struct PublishedState {
-    RunIdentity run;
     std::shared_ptr<const CompiledTemplate> compiled;
-    Snapshot snapshot;
     std::shared_ptr<const Localization> localization;
     std::shared_ptr<const Layout> layout;
+
+    RunIdentity run;
+    Snapshot snapshot;
+
     DataStatus data_status = DataStatus::Ready;
     std::int64_t last_successful_read_at = 0;
     std::optional<Error> error;
@@ -130,12 +133,14 @@ private:
     ylt::expected<bool, Error> apply_worker_message(WorkerMessage message);
 
     RebuildWorker worker_;
-    std::optional<ActiveMinecraftSource> source_;
     bool in_flight_ = false;
+
     std::filesystem::path game_root_;
     std::shared_ptr<const CompiledTemplate> template_;
     std::shared_ptr<const Localization> localization_;
     std::shared_ptr<const Layout> layout_;
+
+    std::optional<ActiveMinecraftSource> source_;
     std::shared_ptr<const PublishedState> state_;
     std::uint64_t generation_ = 0;
     std::uint64_t run_epoch_ = 0;

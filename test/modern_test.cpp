@@ -40,13 +40,12 @@ beacon::RunSelection selection(const std::filesystem::path& world,
     const auto layout = beacon::compile_layout_json(R"({"main":[],"overlay":[]})", *compiled);
     REQUIRE(localization);
     REQUIRE(layout);
-    return {{{"Fixture world", std::move(world_key)}, world},
-            {"player-one"},
-            std::move(compiled),
-            std::move(profile),
-            std::make_shared<const beacon::Localization>(*localization),
-            std::make_shared<const beacon::Layout>(*layout),
-            {}};
+    return {.world = {{"Fixture world", std::move(world_key)}, world},
+            .player = {"player-one"},
+            .profile = std::move(profile),
+            .compiled = std::move(compiled),
+            .localization = std::make_shared<const beacon::Localization>(*localization),
+            .layout = std::make_shared<const beacon::Layout>(*layout)};
 }
 
 // Reads a player's files as the runtime does; without an advancements file only the stats are read.

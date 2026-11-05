@@ -146,11 +146,11 @@ void Runtime::begin_run(Snapshot empty) {
 
 void Runtime::replace_state(RunIdentity run, std::shared_ptr<const CompiledTemplate> compiled, Snapshot snapshot,
                             const DataStatus status, const std::int64_t last_read, std::vector<Error> warnings) {
-    state_ = std::make_shared<const PublishedState>(PublishedState{.run = std::move(run),
-                                                                   .compiled = std::move(compiled),
-                                                                   .snapshot = std::move(snapshot),
+    state_ = std::make_shared<const PublishedState>(PublishedState{.compiled = std::move(compiled),
                                                                    .localization = localization_,
                                                                    .layout = layout_,
+                                                                   .run = std::move(run),
+                                                                   .snapshot = std::move(snapshot),
                                                                    .data_status = status,
                                                                    .last_successful_read_at = last_read,
                                                                    .warnings = std::move(warnings)});

@@ -69,8 +69,8 @@ public:
 private:
     MinecraftPaths paths_;
     std::optional<std::string> stats_data_;
-    std::optional<std::string> advancements_data_;
     ModernStats stats_;
+    std::optional<std::string> advancements_data_;
     Facts advancements_;
 };
 

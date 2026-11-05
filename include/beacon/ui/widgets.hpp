@@ -73,13 +73,15 @@ private:
     using NamedTextures = std::unordered_map<std::string, SDL_Texture*, NameHash, std::equal_to<>>;
     SDL_Texture* named(NamedTextures& textures, const char* directory, std::string_view name);
 
-    std::uint64_t next_frame_ms_ = UINT64_MAX;
     SDL_Renderer* renderer_ = nullptr;
     std::filesystem::path asset_root_;
+
     std::unordered_map<std::filesystem::path, SdlTexturePtr> textures_;
     std::unordered_map<std::filesystem::path, AnimatedTexture> animations_;
     NamedTextures image_textures_;
     NamedTextures widget_textures_;
+
+    std::uint64_t next_frame_ms_ = UINT64_MAX;
 };
 
 // Texel insets of a nine-slice texture: corners keep their size, edges and center stretch.

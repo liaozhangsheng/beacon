@@ -734,9 +734,7 @@ TEST_CASE("progress summary includes collection goals but excludes statistic cou
     const auto layout_value = beacon::compile_layout_json(R"({"main":[],"overlay":[]})", *compiled);
     REQUIRE(localization_value);
     REQUIRE(layout_value);
-    beacon::PublishedState state{.run = {},
-                                 .compiled = compiled,
-                                 .snapshot = {},
+    beacon::PublishedState state{.compiled = compiled,
                                  .localization = std::make_shared<const beacon::Localization>(*localization_value),
                                  .layout = std::make_shared<const beacon::Layout>(*layout_value)};
     state.snapshot.results.resize(compiled->graph.nodes.size());

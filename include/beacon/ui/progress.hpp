@@ -30,11 +30,13 @@ struct ProgressViewModel {
 
     std::vector<std::uint32_t> goal_nodes;
     std::vector<std::string> labels;
+
     std::vector<std::vector<std::uint32_t>> main_groups;
+    std::vector<std::vector<Collection>> main_collections;
+
     std::vector<std::vector<std::uint32_t>> overlay_groups;
     // Overlay groups with an item that can show a statistic line under its label.
     std::vector<bool> overlay_progress;
-    std::vector<std::vector<Collection>> main_collections;
     std::vector<std::vector<std::uint32_t>> overlay_collection_starts;
 
     void update(const PublishedState& state);
