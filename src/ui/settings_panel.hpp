@@ -36,7 +36,7 @@ private:
     std::string ui_language_ = "zh";
     bool open_ = false;
     std::optional<ImVec2> drag_grab_;
-    std::array<char, max_string_bytes + 1> game_root_input_{};
+    std::array<char, 4096> game_root_input_{};
     bool game_root_input_loaded_ = false;
     std::filesystem::path languages_template_path_;
     std::vector<std::string> languages_;

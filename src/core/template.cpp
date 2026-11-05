@@ -10,7 +10,6 @@
 #include <initializer_list>
 #include <limits>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -21,45 +20,6 @@ namespace {
 constexpr auto no_index = std::numeric_limits<std::uint32_t>::max();
 
 }  // namespace
-
-bool valid_utf8(std::string_view text) {
-    for (std::size_t index = 0; index < text.size();) {
-        const auto first = static_cast<unsigned char>(text[index]);
-        std::size_t length = 0;
-        std::uint32_t codepoint = 0;
-        if (first <= 0x7F) {
-            length = 1;
-            codepoint = first;
-        } else if (first >= 0xC2 && first <= 0xDF) {
-            length = 2;
-            codepoint = first & 0x1F;
-        } else if (first >= 0xE0 && first <= 0xEF) {
-            length = 3;
-            codepoint = first & 0x0F;
-        } else if (first >= 0xF0 && first <= 0xF4) {
-            length = 4;
-            codepoint = first & 0x07;
-        } else {
-            return false;
-        }
-        if (index + length > text.size()) {
-            return false;
-        }
-        for (std::size_t offset = 1; offset < length; ++offset) {
-            const auto byte = static_cast<unsigned char>(text[index + offset]);
-            if ((byte & 0xC0) != 0x80) {
-                return false;
-            }
-            codepoint = (codepoint << 6) | (byte & 0x3F);
-        }
-        if ((length == 3 && codepoint < 0x800) || (length == 4 && codepoint < 0x10000) ||
-            (codepoint >= 0xD800 && codepoint <= 0xDFFF) || codepoint > 0x10FFFF) {
-            return false;
-        }
-        index += length;
-    }
-    return true;
-}
 
 bool valid_language(const std::string_view value) {
     return !value.empty() && value.size() <= 64 && std::all_of(value.begin(), value.end(), [](const char character) {
@@ -159,39 +119,28 @@ bool integer(const Json::Value& value) {
 }
 
 std::optional<Error> check_string(const Json::Value& value, const std::string& path) {
-    if (!value.isString()) {
+    if (!value.isString())
         return Error{ErrorCode::Validation, "expected a string", path};
-    }
-    const auto text = value.asString();
-    if (text.size() > max_string_bytes) {
-        return Error{ErrorCode::SecurityLimit, "string exceeds the byte limit", path};
-    }
-    if (!valid_utf8(text)) {
-        return Error{ErrorCode::Validation, "string is not valid UTF-8", path};
-    }
     return std::nullopt;
 }
 
-std::optional<Error> validate_rule_shape(const Json::Value& value, const std::string& path, std::size_t& node_count);
+std::optional<Error> validate_rule_shape(const Json::Value& value, const std::string& path);
 
-std::optional<Error> validate_children(const Json::Value& children, const std::string& path, std::size_t& node_count) {
+std::optional<Error> validate_children(const Json::Value& children, const std::string& path) {
     if (!children.isArray()) {
         return Error{ErrorCode::Validation, "expected an array", path};
     }
     for (Json::ArrayIndex index = 0; index < children.size(); ++index) {
-        if (auto failure = validate_rule_shape(children[index], child_path(path, std::to_string(index)), node_count)) {
+        if (auto failure = validate_rule_shape(children[index], child_path(path, std::to_string(index)))) {
             return failure;
         }
     }
     return std::nullopt;
 }
 
-std::optional<Error> validate_rule_shape(const Json::Value& value, const std::string& path, std::size_t& node_count) {
+std::optional<Error> validate_rule_shape(const Json::Value& value, const std::string& path) {
     if (!value.isObject()) {
         return Error{ErrorCode::Validation, "expected a rule object", path};
-    }
-    if (++node_count > max_rule_nodes) {
-        return Error{ErrorCode::SecurityLimit, "template exceeds the rule node limit", path};
     }
     if (value.isMember("id")) {
         if (auto failure = check_string(value["id"], child_path(path, "id"))) {
@@ -289,13 +238,13 @@ std::optional<Error> validate_rule_shape(const Json::Value& value, const std::st
         if (!count.isMember("of")) {
             return Error{ErrorCode::Validation, "missing required field 'of'", child_path(count_path, "of")};
         }
-        return validate_children(count["of"], child_path(count_path, "of"), node_count);
+        return validate_children(count["of"], child_path(count_path, "of"));
     }
 
     if (auto failure = reject_unknown_fields(value, path, {"id", operation, "view"})) {
         return failure;
     }
-    return validate_children(value[std::string(operation)], child_path(path, operation), node_count);
+    return validate_children(value[std::string(operation)], child_path(path, operation));
 }
 
 std::optional<Error> validate_document_shape(const Json::Value& root) {
@@ -337,9 +286,8 @@ std::optional<Error> validate_document_shape(const Json::Value& root) {
         return failure;
     }
 
-    std::size_t node_count = 0;
     for (Json::ArrayIndex index = 0; index < root["goals"].size(); ++index) {
-        if (auto failure = validate_rule_shape(root["goals"][index], "/goals/" + std::to_string(index), node_count)) {
+        if (auto failure = validate_rule_shape(root["goals"][index], "/goals/" + std::to_string(index))) {
             return failure;
         }
     }
@@ -349,14 +297,8 @@ std::optional<Error> validate_document_shape(const Json::Value& root) {
 class Diagnostics {
 public:
     void add(std::string message, std::string context) {
-        if (errors_.size() < max_diagnostics) {
-            errors_.push_back(Error{ErrorCode::Validation, std::move(message), std::move(context)});
-        } else if (!truncated_) {
-            errors_.back() = Error{ErrorCode::Validation, "additional diagnostics were truncated", ""};
-            truncated_ = true;
-        }
+        errors_.push_back(Error{ErrorCode::Validation, std::move(message), std::move(context)});
     }
-
     [[nodiscard]] bool empty() const {
         return errors_.empty();
     }
@@ -366,7 +308,6 @@ public:
 
 private:
     TemplateErrors errors_;
-    bool truncated_ = false;
 };
 
 struct Compiler {
@@ -511,60 +452,33 @@ struct Compiler {
         return compiled.graph.nodes[index].id.empty() ? paths[index] : compiled.graph.nodes[index].id;
     }
 
+    // Depth-first post-order, so every dependency is evaluated before the rules that use it.
     void build_evaluation_order() {
-        struct Frame {
-            std::uint32_t index;
-            std::size_t next_dependency = 0;
+        std::vector<std::uint8_t> state(compiled.graph.nodes.size());  // 0 new, 1 visiting, 2 done
+        std::vector<std::uint32_t> stack;
+        const auto visit = [&](const auto& self, const std::uint32_t index) -> void {
+            if (state[index] == 2)
+                return;
+            if (state[index] == 1) {
+                std::string message = "dependency cycle: ";
+                for (auto it = std::find(stack.begin(), stack.end(), index); it != stack.end(); ++it)
+                    message += label(*it) + " -> ";
+                diagnostics.add(message + label(index), paths[index]);
+                return;
+            }
+            state[index] = 1;
+            stack.push_back(index);
+            const auto& node = compiled.graph.nodes[index];
+            for (const auto child : node.children)
+                self(self, child);
+            if (node.op == RuleOp::Ref && node.reference_node != no_index)
+                self(self, node.reference_node);
+            stack.pop_back();
+            state[index] = 2;
+            compiled.graph.evaluation_order.push_back(index);
         };
-
-        std::vector<std::uint8_t> colors(compiled.graph.nodes.size());
-        std::vector<Frame> stack;
-        stack.reserve(compiled.graph.nodes.size());
-
-        for (std::uint32_t root = 0; root < compiled.graph.nodes.size(); ++root) {
-            if (colors[root] != 0) {
-                continue;
-            }
-            colors[root] = 1;
-            stack.push_back({root});
-
-            while (!stack.empty()) {
-                auto& frame = stack.back();
-                const auto& node = compiled.graph.nodes[frame.index];
-                const auto has_ref = node.op == RuleOp::Ref && node.reference_node != no_index;
-                const auto dependency_count = node.children.size() + (has_ref ? 1U : 0U);
-
-                if (frame.next_dependency == dependency_count) {
-                    colors[frame.index] = 2;
-                    compiled.graph.evaluation_order.push_back(frame.index);
-                    stack.pop_back();
-                    continue;
-                }
-
-                const auto dependency = frame.next_dependency < node.children.size()
-                                            ? node.children[frame.next_dependency]
-                                            : node.reference_node;
-                ++frame.next_dependency;
-                if (colors[dependency] == 0) {
-                    colors[dependency] = 1;
-                    stack.push_back({dependency});
-                } else if (colors[dependency] == 1) {
-                    const auto cycle_start = std::find_if(stack.begin(), stack.end(), [&](const Frame& candidate) {
-                        return candidate.index == dependency;
-                    });
-                    std::ostringstream message;
-                    message << "dependency cycle: ";
-                    for (auto current = cycle_start; current != stack.end(); ++current) {
-                        if (current != cycle_start) {
-                            message << " -> ";
-                        }
-                        message << label(current->index);
-                    }
-                    message << " -> " << label(dependency);
-                    diagnostics.add(message.str(), paths[dependency]);
-                }
-            }
-        }
+        for (std::uint32_t root = 0; root < compiled.graph.nodes.size(); ++root)
+            visit(visit, root);
     }
 };
 

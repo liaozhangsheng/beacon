@@ -45,7 +45,7 @@ std::optional<std::filesystem::path> minecraft_game_directory(std::span<const st
             value = argument.substr(10);
         else
             continue;
-        if (value.empty() || value.find('\0') != std::string::npos || !valid_utf8(value))
+        if (value.empty())
             return std::nullopt;
         auto path = path_from_utf8(value);
         // A relative path belongs to the target process, never to Beacon's working directory.

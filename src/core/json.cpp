@@ -30,14 +30,6 @@ std::string child_path(const std::string& path, std::string_view child) {
 std::optional<Error> reject_unknown_fields(const Json::Value& object, const std::string& path,
                                            std::initializer_list<std::string_view> allowed) {
     for (const auto& name : object.getMemberNames()) {
-        if (name.size() > max_string_bytes) {
-            return Error{.code = ErrorCode::SecurityLimit,
-                         .message = "field name exceeds the byte limit",
-                         .context = child_path(path, name)};
-        }
-        if (!valid_utf8(name)) {
-            return Error{.code = ErrorCode::Validation, .message = "field name is not valid UTF-8", .context = path};
-        }
         if (std::find(allowed.begin(), allowed.end(), name) == allowed.end()) {
             return Error{.code = ErrorCode::Validation,
                          .message = "unknown field '" + name + "'",
@@ -49,32 +41,20 @@ std::optional<Error> reject_unknown_fields(const Json::Value& object, const std:
 
 ylt::expected<Json::Value, Error> parse_json(std::string_view json, std::string_view context,
                                              std::string_view invalid_message) {
-    if (json.size() > max_json_bytes) {
-        return ylt::unexpected<Error>{
-            {.code = ErrorCode::SecurityLimit, .message = "JSON exceeds byte limit", .context = std::string(context)}};
-    }
     Json::CharReaderBuilder builder;
     Json::CharReaderBuilder::strictMode(&builder.settings_);
     builder["collectComments"] = false;
     builder["rejectDupKeys"] = true;
-    builder["stackLimit"] = static_cast<Json::UInt>(max_json_depth + 1);
+    const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
     Json::Value root;
-    std::string parser_error;
-    try {
-        const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-        if (!reader) {
-            return ylt::unexpected<Error>{
-                {.code = ErrorCode::Internal, .message = "cannot create JSON reader", .context = std::string(context)}};
-        }
-        if (!reader->parse(json.data(), json.data() + json.size(), &root, &parser_error)) {
-            return ylt::unexpected<Error>{
-                {.code = ErrorCode::Parse, .message = std::string(invalid_message), .context = std::string(context)}};
-        }
+    bool parsed = false;
+    try {  // jsoncpp throws once nesting exceeds its stack limit.
+        parsed = reader->parse(json.data(), json.data() + json.size(), &root, nullptr);
     } catch (const std::exception&) {
-        return ylt::unexpected<Error>{{.code = ErrorCode::SecurityLimit,
-                                       .message = "JSON nesting exceeds the limit",
-                                       .context = std::string(context)}};
     }
+    if (!parsed)
+        return ylt::unexpected<Error>{
+            {.code = ErrorCode::Parse, .message = std::string(invalid_message), .context = std::string(context)}};
     return root;
 }
 

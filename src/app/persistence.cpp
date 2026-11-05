@@ -55,8 +55,7 @@ ylt::expected<void, Error> save_json(const std::filesystem::path& target, const 
 bool short_string(const Json::Value& value) {
     if (!value.isString())
         return false;
-    const auto text = value.asString();
-    return text.size() <= max_string_bytes && text.find('\0') == std::string::npos && valid_utf8(text);
+    return value.asString().find('\0') == std::string::npos;
 }
 
 bool valid_dimension(const Json::Value& value) {

@@ -15,11 +15,7 @@
 
 namespace beacon {
 
-inline constexpr std::size_t max_json_depth = 128;
 inline constexpr std::size_t max_json_bytes = 16U * 1024U * 1024U;
-inline constexpr std::size_t max_rule_nodes = 10'000;
-inline constexpr std::size_t max_string_bytes = 4'096;
-inline constexpr std::size_t max_diagnostics = 100;
 
 enum class ErrorCode {
     Io,
@@ -147,7 +143,6 @@ struct CompiledTemplate {
 
 using TemplateErrors = std::vector<Error>;
 
-bool valid_utf8(std::string_view text);
 bool valid_icon_reference(std::string_view value);
 bool valid_language(std::string_view value);
 bool valid_path_component(std::string_view value);

@@ -158,8 +158,7 @@ ylt::expected<std::optional<SourceCandidate>, Error> inspect_source(const WorldL
 }
 
 void add_warning(std::vector<Error>& warnings, Error error) {
-    if (warnings.size() < max_diagnostics)
-        warnings.push_back(std::move(error));
+    warnings.push_back(std::move(error));
 }
 
 ylt::expected<std::vector<SourceCandidate>, Error> scan_world_layout(const WorldLocation& world, SaveLayout layout,
@@ -212,11 +211,7 @@ ylt::expected<std::vector<SourceCandidate>, Error> scan_world_layout(const World
     return candidates;
 }
 
-bool valid_json_key(std::string_view value) {
-    return !value.empty() && value.size() <= max_string_bytes && valid_utf8(value);
-}
-
-// Parses data already read by read_consistent; path only names the file in errors.
+// path only names the file in errors.
 ylt::expected<ModernStats, Error> parse_modern_stats(const std::string_view data, const std::filesystem::path& path) {
     auto root = beacon::parse_json(data, path_to_utf8(path.filename()), "invalid Minecraft JSON");
     if (!root) {
@@ -235,10 +230,6 @@ ylt::expected<ModernStats, Error> parse_modern_stats(const std::string_view data
     const auto& categories = (*root)["stats"];
     for (auto category_it = categories.begin(); category_it != categories.end(); ++category_it) {
         const auto category = category_it.name();
-        if (!valid_json_key(category)) {
-            return ylt::unexpected<Error>{
-                file_error(ErrorCode::SecurityLimit, "stat category exceeds string limit", path)};
-        }
         const auto& values = *category_it;
         if (!values.isObject()) {
             return ylt::unexpected<Error>{file_error(ErrorCode::Validation, "stats category must be an object", path)};
@@ -247,10 +238,6 @@ ylt::expected<ModernStats, Error> parse_modern_stats(const std::string_view data
                                         category == "minecraft:dropped" || category == "minecraft:used";
         for (auto value_it = values.begin(); value_it != values.end(); ++value_it) {
             const auto key = value_it.name();
-            if (!valid_json_key(key)) {
-                return ylt::unexpected<Error>{
-                    file_error(ErrorCode::SecurityLimit, "stat key exceeds string limit", path)};
-            }
             const auto& value = *value_it;
             if (!value.isInt64() || value.asInt64() < 0) {
                 return ylt::unexpected<Error>{
@@ -270,18 +257,9 @@ ylt::expected<ModernStats, Error> parse_modern_stats(const std::string_view data
         return value == result.facts.end() ? std::int64_t{0} : value->second;
     };
     for (const auto& key : item_keys) {
-        auto estimated = stat("minecraft:picked_up", key);
-        const auto crafted = stat("minecraft:crafted", key);
-        if (estimated > std::numeric_limits<std::int64_t>::max() - crafted) {
-            estimated = std::numeric_limits<std::int64_t>::max();
-        } else {
-            estimated += crafted;
-        }
-        for (const auto category : {"minecraft:dropped", "minecraft:used"}) {
-            const auto removed = stat(category, key);
-            estimated = estimated > removed ? estimated - removed : 0;
-        }
-        result.facts.insert_or_assign("stat/minecraft:estimated/" + key, estimated);
+        const auto estimated = stat("minecraft:picked_up", key) + stat("minecraft:crafted", key) -
+                               stat("minecraft:dropped", key) - stat("minecraft:used", key);
+        result.facts.insert_or_assign("stat/minecraft:estimated/" + key, std::max<std::int64_t>(0, estimated));
     }
 
     auto playtime = result.facts.find("stat/minecraft:custom/minecraft:play_time");
@@ -307,31 +285,15 @@ ylt::expected<Facts, Error> parse_advancements(const std::string_view data, cons
     for (auto entry = root->begin(); entry != root->end(); ++entry) {
         const auto advancement = entry.name();
         const auto& value = *entry;
-        if (advancement == "DataVersion") {
-            if (!value.isInt64() || value.asInt64() < 0) {
-                return ylt::unexpected<Error>{file_error(ErrorCode::Validation, "invalid advancement metadata", path)};
-            }
+        if (advancement == "DataVersion")
             continue;
-        }
-        if (!valid_json_key(advancement)) {
-            return ylt::unexpected<Error>{
-                file_error(ErrorCode::SecurityLimit, "advancement key exceeds string limit", path)};
-        }
         if (!value.isObject() || !value["criteria"].isObject() || !value["done"].isBool()) {
             return ylt::unexpected<Error>{file_error(ErrorCode::Validation, "invalid advancement entry", path)};
         }
         facts.emplace("adv/" + advancement, value["done"].asBool() ? 1 : 0);
         const auto& criteria = value["criteria"];
         for (auto criterion_it = criteria.begin(); criterion_it != criteria.end(); ++criterion_it) {
-            const auto criterion = criterion_it.name();
-            if (!valid_json_key(criterion) || !criterion_it->isString()) {
-                return ylt::unexpected<Error>{file_error(ErrorCode::Validation, "invalid advancement criterion", path)};
-            }
-            const auto timestamp = criterion_it->asString();
-            if (timestamp.size() > max_string_bytes || !valid_utf8(timestamp)) {
-                return ylt::unexpected<Error>{file_error(ErrorCode::Validation, "invalid advancement criterion", path)};
-            }
-            facts.emplace("criterion/" + advancement + '/' + criterion, 1);
+            facts.emplace("criterion/" + advancement + '/' + criterion_it.name(), 1);
         }
         constexpr std::string_view recipe_prefix = "minecraft:recipes/";
         if (advancement.starts_with(recipe_prefix) && value["done"].asBool()) {

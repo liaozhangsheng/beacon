@@ -61,22 +61,18 @@ ylt::expected<std::unordered_map<std::string, std::string>, Error> localization_
     if (!root) {
         return ylt::unexpected<Error>{std::move(root.error())};
     }
-    if (!root->isObject() || root->size() > max_rule_nodes) {
+    if (!root->isObject()) {
         return ylt::unexpected<Error>{
-            Error{ErrorCode::Validation, "localization must be a bounded flat object", std::string(name)}};
+            Error{ErrorCode::Validation, "localization must be a flat object", std::string(name)}};
     }
     std::unordered_map<std::string, std::string> strings;
     strings.reserve(root->size());
     for (const auto& key : root->getMemberNames()) {
         const auto& value = (*root)[key];
-        if (key.empty() || key.size() > max_string_bytes || !valid_utf8(key) || !value.isString()) {
+        if (key.empty() || !value.isString()) {
             return ylt::unexpected<Error>{Error{ErrorCode::Validation, "invalid localization entry", key}};
         }
-        const auto text = value.asString();
-        if (text.size() > max_string_bytes || !valid_utf8(text)) {
-            return ylt::unexpected<Error>{Error{ErrorCode::Validation, "invalid localization value", key}};
-        }
-        strings.emplace(key, text);
+        strings.emplace(key, value.asString());
     }
     return strings;
 }

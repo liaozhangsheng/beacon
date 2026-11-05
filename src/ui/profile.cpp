@@ -157,7 +157,7 @@ std::optional<std::string> decode_base64(std::string_view text) {
 // Only Mojang's texture host is trusted, upgraded to HTTPS because the profile still lists http:// URLs.
 std::optional<std::string> skin_url(const Json::Value& textures) {
     const auto& url = textures["textures"]["SKIN"]["url"];
-    if (!url.isString() || url.asString().size() > max_string_bytes)
+    if (!url.isString())
         return std::nullopt;
     std::string_view value = url.asCString();
     for (const std::string_view scheme : {"http://", "https://"}) {
@@ -188,7 +188,7 @@ std::optional<PlayerCard> download_player_card(const std::string& uuid, const st
         return std::nullopt;
     }
     const auto name = (*root)["name"].asString();
-    if (name.empty() || name.size() > max_string_bytes || !valid_utf8(name)) {
+    if (name.empty()) {
         return std::nullopt;
     }
     std::optional<std::string> url;
