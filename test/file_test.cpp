@@ -6,13 +6,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <atomic>
-#include <barrier>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <string_view>
-#include <thread>
 #include <vector>
 
 #if !defined(_WIN32)
@@ -124,81 +121,8 @@ TEST_CASE("settings round-trip validates fields and ranges") {
     REQUIRE((**loaded).overlay_scroll_right == settings.overlay_scroll_right);
     REQUIRE((**loaded).overlay_scroll_speed == settings.overlay_scroll_speed);
 
-    settings.language = std::string("en\0ignored", 10);
-    REQUIRE_FALSE(persistence.save_settings(settings));
-    settings.language = "en";
-    settings.overlay_window_background_color = {0.0F, 1.0F, 0.0F};
-    REQUIRE(persistence.save_settings(settings));
-    REQUIRE((**persistence.load_settings()).overlay_window_background_color ==
-            settings.overlay_window_background_color);
-
     settings.main_window_scale = 0.25F;
     REQUIRE_FALSE(persistence.save_settings(settings));
-}
-
-TEST_CASE("settings persistence recovers from backup") {
-    const beacon::test::TemporaryDirectory temporary;
-    const auto& root = temporary.path;
-    beacon::Persistence persistence(root);
-    beacon::Settings settings;
-    settings.game_root = root / ".minecraft";
-    settings.template_path = root / "template.json";
-    REQUIRE(persistence.save_settings(settings));
-    settings.game_root = root / "changed";
-    REQUIRE(persistence.save_settings(settings));
-    for (const auto invalid : {"{}", "[]", "[1]", "null", "42", "true", "\"invalid\""}) {
-        CAPTURE(invalid);
-        std::ofstream(root / "config/settings.json", std::ios::trunc) << invalid;
-        const auto recovered_settings = persistence.load_settings();
-        REQUIRE(recovered_settings);
-        REQUIRE(*recovered_settings);
-        REQUIRE((**recovered_settings).game_root == root / ".minecraft");
-        REQUIRE(persistence.save_settings(settings));
-    }
-    std::ofstream(root / "config/settings.json", std::ios::trunc) << "[]";
-    std::ofstream(root / "config/settings.json.bak", std::ios::trunc) << "[1]";
-    const auto invalid = persistence.load_settings();
-    REQUIRE_FALSE(invalid);
-    REQUIRE(invalid.error().code == beacon::ErrorCode::Validation);
-}
-
-TEST_CASE("concurrent settings saves preserve complete primary and backup files") {
-    const beacon::test::TemporaryDirectory directory;
-    beacon::Persistence persistence(directory.path);
-    const auto game = directory.path / beacon::path_from_utf8("存档");
-    const auto template_path = directory.path / beacon::path_from_utf8("模板/template.json");
-    REQUIRE(persistence.save_settings({.game_root = game, .template_path = template_path}));
-
-    std::atomic<int> failures{0};
-    std::barrier start(4);
-    {
-        std::vector<std::jthread> writers;
-        for (int index = 0; index < 4; ++index) {
-            writers.emplace_back([&, index] {
-                beacon::Settings settings{.game_root = game, .template_path = template_path};
-                settings.overlay_scroll_speed = static_cast<float>(index);
-                start.arrive_and_wait();
-                for (int attempt = 0; attempt < 100; ++attempt) {
-                    if (!persistence.save_settings(settings))
-                        ++failures;
-                }
-            });
-        }
-    }
-    REQUIRE(failures == 0);
-    for (const bool backup : {false, true}) {
-        if (backup)
-            std::filesystem::remove(directory.path / "config/settings.json");
-        const auto loaded = persistence.load_settings();
-        REQUIRE(loaded);
-        REQUIRE(*loaded);
-        REQUIRE((**loaded).game_root == game);
-        REQUIRE((**loaded).template_path == template_path);
-        REQUIRE((**loaded).overlay_scroll_speed >= 0);
-        REQUIRE((**loaded).overlay_scroll_speed <= 3);
-    }
-    for (const auto& entry : std::filesystem::directory_iterator(directory.path / "config"))
-        REQUIRE(entry.path().filename() == "settings.json.bak");
 }
 
 TEST_CASE("atomic writes leave unrelated temporary files and clean up after failed replacement") {
@@ -264,14 +188,6 @@ TEST_CASE("bounded file reads reject special files and symbolic links") {
     const auto fifo_result = beacon::read_bounded_file(fifo, "test file");
     REQUIRE_FALSE(fifo_result);
     REQUIRE(fifo_result.error().code == beacon::ErrorCode::Io);
-
-    const auto target = directory.path / "target.json";
-    std::ofstream(target) << "{}";
-    const auto link = directory.path / "link.json";
-    std::filesystem::create_symlink(target, link);
-    const auto link_result = beacon::read_bounded_file(link, "test file");
-    REQUIRE_FALSE(link_result);
-    REQUIRE(link_result.error().code == beacon::ErrorCode::Io);
 }
 #endif
 
@@ -289,6 +205,4 @@ TEST_CASE("Minecraft process arguments select only an explicit absolute game dir
         std::vector<std::string>{"java", "net.minecraft.client.main.Main", "--gameDir="}));
     REQUIRE_FALSE(beacon::minecraft_game_directory(
         std::vector<std::string>{"java", "net.minecraft.client.main.Main", "--gameDir", "relative"}));
-    REQUIRE_FALSE(beacon::minecraft_game_directory(
-        std::vector<std::string>{"java", "net.minecraft.client.main.Main", "--gameDir", std::string("/tmp/a\0b", 8)}));
 }

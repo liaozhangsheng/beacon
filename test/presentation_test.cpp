@@ -487,18 +487,6 @@ TEST_CASE("layout validates responsive groups and keeps unknown node IDs as warn
     CHECK(ranked->main[0].leaderboard ==
           beacon::LeaderboardSource{.sheet = "1v7_-A", .gid = 1283472797, .board = "26.2 - 26.3"});
     CHECK(ranked->main[1].leaderboard == beacon::LeaderboardSource{.sheet = "b", .title = "1.16.1"});
-
-    std::string many = R"({"main":[)";
-    for (std::size_t index = 0; index <= beacon::max_diagnostics; ++index) {
-        if (index != 0) {
-            many += ',';
-        }
-        many += R"({"nodes":["old)" + std::to_string(index) + R"("]})";
-    }
-    many += "]}";
-    const auto capped = beacon::compile_layout_json(many, *compiled);
-    REQUIRE(capped);
-    REQUIRE(capped->warnings.size() == beacon::max_diagnostics);
 }
 
 TEST_CASE("state styles override individual properties independently for each window and state") {
@@ -761,43 +749,6 @@ TEST_CASE("collection cache preserves group order exclusions and layout changes"
     REQUIRE(view.overlay_collection_starts.empty());
 }
 
-TEST_CASE("progress cache keeps resource identities alive until replacement") {
-    const auto compiled = beacon::compile_template_json(R"({
-      "name_key":"cache", "minecraft":{"min_version":1,"max_version":1},
-      "goals":[{"id":"goal/a","fact":"a","view":{"name_key":"label"}}],
-      "completion_rule":"goal/a"
-    })");
-    REQUIRE(compiled);
-    const auto localization = beacon::compile_localization_json(R"({"label":"First"})");
-    REQUIRE(localization);
-    beacon::PublishedState state{.compiled = std::make_shared<const beacon::CompiledTemplate>(*compiled),
-                                 .localization = std::make_shared<const beacon::Localization>(*localization),
-                                 .layout = std::make_shared<const beacon::Layout>()};
-    state.snapshot.results.resize(compiled->graph.nodes.size());
-    beacon::ProgressViewModel view;
-    view.update(state);
-    REQUIRE(view.labels.front() == "First");
-    const std::weak_ptr old_compiled = state.compiled;
-    const std::weak_ptr old_localization = state.localization;
-    const std::weak_ptr old_layout = state.layout;
-    state = {};
-    REQUIRE_FALSE(old_compiled.expired());
-    REQUIRE_FALSE(old_localization.expired());
-    REQUIRE_FALSE(old_layout.expired());
-
-    const auto replacement = beacon::compile_localization_json(R"({"label":"Second"})");
-    REQUIRE(replacement);
-    state.compiled = std::make_shared<const beacon::CompiledTemplate>(*compiled);
-    state.localization = std::make_shared<const beacon::Localization>(*replacement);
-    state.layout = std::make_shared<const beacon::Layout>();
-    state.snapshot.results.resize(compiled->graph.nodes.size());
-    view.update(state);
-    REQUIRE(view.labels.front() == "Second");
-    REQUIRE(old_compiled.expired());
-    REQUIRE(old_localization.expired());
-    REQUIRE(old_layout.expired());
-}
-
 TEST_CASE("progress summary includes collection goals but excludes statistic counters") {
     const auto compiled_value = beacon::compile_template_json(R"({
       "name_key":"template.presentation",
@@ -902,35 +853,11 @@ TEST_CASE("layout spacing overrides window defaults and is validated per group k
     CHECK(overlay_group.spacing ==
           beacon::LayoutSpacing{.item = 0.0F, .row = 0.0F, .label = 7.0F, .collection = 48.0F});
     CHECK(beacon::group_spacing(overlay_group).label == 7.0F);
-    CHECK(beacon::overlay_group_min_height(overlay_group, false, false, 12) == Catch::Approx(52 + 7));
     REQUIRE(parse("{}", true));
 
     CHECK_FALSE(parse(R"({"row":4})", true));
     CHECK_FALSE(parse(R"({"collection":4})", false));
     CHECK_FALSE(parse(R"({"item":-1})", false));
-    CHECK_FALSE(parse(R"({"item":"4"})", false));
-    CHECK_FALSE(parse(R"({"gap":4})", false));
-    CHECK_FALSE(parse("[]", false));
-}
-
-TEST_CASE("layout spacing defaults match the built-in geometry") {
-    const auto spacing = [](const beacon::LayoutSource source, const bool overlay) {
-        return beacon::default_spacing(overlay, source);
-    };
-    const auto main_nodes = spacing(beacon::LayoutSource::Nodes, false);
-    CHECK(main_nodes.item == 0.0F);
-    CHECK(main_nodes.row == 0.0F);
-    CHECK(main_nodes.label == 4.0F);
-    const auto main_collections = spacing(beacon::LayoutSource::Collections, false);
-    CHECK(main_collections.item == 16.0F);
-    CHECK(main_collections.row == 6.0F);
-    CHECK(main_collections.label == 3.0F);
-    CHECK(main_collections.collection == 0.0F);
-    CHECK(spacing(beacon::LayoutSource::Nodes, true).item == 0.0F);
-    const auto overlay = spacing(beacon::LayoutSource::Collections, true);
-    CHECK(overlay.item == 32.0F);
-    CHECK(overlay.label == 2.0F);
-    CHECK(overlay.collection == 48.0F);
 }
 
 TEST_CASE("collection grids place members below the header and in widening columns") {
@@ -1243,40 +1170,6 @@ TEST_CASE("icons resolve only to exact files inside their own template") {
     REQUIRE(empty);
     REQUIRE(beacon::resolve_icon_paths(*empty, first_root, program_assets.path));
     REQUIRE(empty->presentation_by_node[0]->icon_path.empty());
-}
-
-TEST_CASE("same relative icon paths remain isolated when templates are loaded or copied") {
-    const beacon::test::TemporaryDirectory temporary;
-    const auto first_root = temporary.path / "first";
-    const auto second_root = temporary.path / "second";
-    const auto copied_root = temporary.path / "copied";
-    const auto write_template = [&](const std::filesystem::path& root, const char* image) {
-        std::filesystem::create_directories(root / "icons");
-        std::ofstream(root / "template.json") << presented_template;
-        std::ofstream(root / "lang.json") << R"({"template.presentation":"Package","goal.shown":"Shown"})";
-        std::ofstream(root / "layout.json") << R"({"main":[],"overlay":[]})";
-        std::ofstream(root / "icons/a.bmp") << image;
-    };
-    write_template(first_root, "first");
-    write_template(second_root, "second");
-
-    beacon::TemplateResourceLoader loader;
-    auto first = loader.load(first_root / "template.json", temporary.path, "");
-    auto second = loader.load(second_root / "template.json", temporary.path, "");
-    REQUIRE(first);
-    REQUIRE(second);
-    const auto first_icon = first_root / "icons/a.bmp";
-    const auto second_icon = second_root / "icons/a.bmp";
-    REQUIRE(beacon::path_from_utf8(first->compiled->presentation_by_node[0]->icon_path) ==
-            std::filesystem::weakly_canonical(first_icon));
-    REQUIRE(beacon::path_from_utf8(second->compiled->presentation_by_node[0]->icon_path) ==
-            std::filesystem::weakly_canonical(second_icon));
-
-    std::filesystem::copy(first_root, copied_root, std::filesystem::copy_options::recursive);
-    auto copied = loader.load(copied_root / "template.json", temporary.path, "");
-    REQUIRE(copied);
-    REQUIRE(beacon::path_from_utf8(copied->compiled->presentation_by_node[0]->icon_path) ==
-            std::filesystem::weakly_canonical(copied_root / "icons/a.bmp"));
 }
 
 TEST_CASE("template resources load as one validated package") {

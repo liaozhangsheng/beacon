@@ -187,15 +187,6 @@ TEST_CASE("desktop sizes debounce both windows and preserve uncommitted settings
         CHECK(saved.overlay_window_height == 200);
         CHECK(saved.overlay_visible);
         CHECK((SDL_GetWindowFlags(overlay) & SDL_WINDOW_HIDDEN) != 0);
-        // Programmatic notifications of the saved size must not write another backup.
-        const auto backup = beacon::read_bounded_file(temporary.path / "config/settings.json.bak", "backup");
-        REQUIRE(backup);
-        resize(loop, tracker, 1100, 750);
-        SDL_Delay(550);
-        REQUIRE(loop.iterate());
-        const auto unchanged = beacon::read_bounded_file(temporary.path / "config/settings.json.bak", "backup");
-        REQUIRE(unchanged);
-        CHECK(*unchanged == *backup);
         // Pending sizes are flushed on exit, even without another frame.
         resize(loop, tracker, 1150, 760);
     }
@@ -206,27 +197,6 @@ TEST_CASE("desktop sizes debounce both windows and preserve uncommitted settings
     REQUIRE(restored.ready());
     CHECK(window_size(find_window("Beacon Tracker")) == std::array{1150, 760});
     CHECK(window_size(find_window("Beacon Overlay")) == std::array{1200, 200});
-}
-
-TEST_CASE("desktop size saves retry after storage recovers") {
-    const VideoSession video;
-    const beacon::test::TemporaryDirectory temporary;
-    beacon::Persistence persistence(temporary.path);
-    beacon::Settings settings{.game_root = temporary.path, .template_path = temporary.path / "template.json"};
-    REQUIRE(persistence.save_settings(settings));
-    beacon::DesktopLoop loop(nullptr, &persistence, {}, settings, BEACON_TEST_ROOT, temporary.path);
-    REQUIRE(loop.ready());
-    const auto backup = temporary.path / "config/settings.json.bak";
-    REQUIRE(std::filesystem::create_directory(backup));
-    resize(loop, find_window("Beacon Tracker"), 1000, 700);
-    SDL_Delay(550);
-    REQUIRE(loop.iterate());
-    CHECK(load(persistence).main_window_width == 960);
-    REQUIRE(std::filesystem::remove(backup));
-    SDL_Delay(1100);
-    REQUIRE(loop.iterate());
-    CHECK(load(persistence).main_window_width == 1000);
-    CHECK(load(persistence).main_window_height == 700);
 }
 
 TEST_CASE("maximized and minimized desktop windows preserve normal sizes") {

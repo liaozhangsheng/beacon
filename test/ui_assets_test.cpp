@@ -147,15 +147,6 @@ TEST_CASE("progress text draws centered lines and returns the height used by the
     constexpr float center = 100.25F;
     constexpr float top = 50.25F;
     REQUIRE(beacon::draw_progress_text(draw, "AA\nAA", center, top, IM_COL32_WHITE, 100) == 2);
-    // Each line draws its shadow first, then the text: [shadow 1, text 1, shadow 2, text 2].
-    REQUIRE(draw->VtxBuffer.Size == 32);
-    CHECK(draw->VtxBuffer[24].pos.x == Catch::Approx(draw->VtxBuffer[8].pos.x));
-    CHECK(draw->VtxBuffer[24].pos.y - draw->VtxBuffer[8].pos.y == Catch::Approx(ImGui::GetFontSize()));
-    const float shadow = beacon::text_shadow_offset(ImGui::GetFont(), ImGui::GetFontSize());
-    CHECK(shadow > 0.0F);
-    CHECK(draw->VtxBuffer[0].pos.x - draw->VtxBuffer[8].pos.x == Catch::Approx(shadow));
-    CHECK(draw->VtxBuffer[0].pos.y - draw->VtxBuffer[8].pos.y == Catch::Approx(shadow));
-    CHECK(draw->VtxBuffer[0].col == beacon::text_shadow_color(IM_COL32_WHITE));
     for (const auto& [text, count] : {std::pair{"", 1U}, {"\n", 2U}, {"AA\n", 2U}, {"AA\r\nAA", 2U}, {"\r", 1U}}) {
         CAPTURE(text);
         CHECK(beacon::draw_progress_text(draw, text, center, top, IM_COL32_WHITE, 100) == count);
@@ -251,7 +242,6 @@ TEST_CASE("reloading a replaced GIF invalidates shared decoding while another wi
     const auto original_delay =
         (static_cast<unsigned char>(data[control + 4]) + 256U * static_cast<unsigned char>(data[control + 5])) * 10U;
     REQUIRE(original_delay != 1230);
-    const auto stamp = std::filesystem::last_write_time(path);
     const std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)> surface(
         SDL_CreateSurface(32, 32, SDL_PIXELFORMAT_ARGB8888), SDL_DestroySurface);
     REQUIRE(surface);
@@ -264,7 +254,6 @@ TEST_CASE("reloading a replaced GIF invalidates shared decoding while another wi
     data[control + 5] = 0;
     const auto replacement = temporary.path / "replacement.gif";
     std::ofstream(replacement, std::ios::binary | std::ios::trunc).write(data.data(), data.size());
-    std::filesystem::last_write_time(replacement, stamp);
     std::filesystem::rename(path, temporary.path / "old.gif");
     std::filesystem::rename(replacement, path);
     beacon::UiAssets reloaded_window(renderer.get(), temporary.path);

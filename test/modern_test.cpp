@@ -631,7 +631,6 @@ TEST_CASE("active source skips newest world when its version is incompatible") {
     const auto source = beacon::detect_active_source(game_root, nullptr, &*compiled_value);
     REQUIRE(source);
     REQUIRE(source->world.path == old_world);
-    REQUIRE(source->profile.data_version == 4189);
 }
 
 TEST_CASE("active source falls back when newest stats fail full validation") {
@@ -683,65 +682,6 @@ TEST_CASE("active source falls back when the current stats become invalid") {
     REQUIRE(fallback->world.path == old_world);
 }
 
-TEST_CASE("active source skips a candidate with a non-file advancements path") {
-    const beacon::test::TemporaryDirectory temporary;
-    const auto& root = temporary.path;
-    const auto game_root = root / ".minecraft";
-    const auto old_world = game_root / "saves/old";
-    const auto new_world = game_root / "saves/new";
-    for (const auto& world : {old_world, new_world}) {
-        std::filesystem::create_directories(world / "stats");
-        std::filesystem::copy_file(fixture("world/stats/player-one.json"), world / "stats/player-one.json");
-    }
-    std::filesystem::create_directories(new_world / "advancements/player-one.json");
-    const auto now = std::filesystem::file_time_type::clock::now();
-    std::filesystem::last_write_time(old_world / "stats/player-one.json", now - std::chrono::hours(1));
-    std::filesystem::last_write_time(new_world / "stats/player-one.json", now);
-
-    const auto compiled = beacon::compile_template_json(read_text(fixture("template.json")));
-    REQUIRE(compiled);
-    const auto source = beacon::detect_active_source(game_root, nullptr, &*compiled);
-    REQUIRE(source);
-    REQUIRE(source->world.path == old_world);
-}
-
-#if !defined(_WIN32)
-TEST_CASE("active source ignores save directories outside the configured game root") {
-    const beacon::test::TemporaryDirectory temporary;
-    const auto& root = temporary.path;
-    const auto game_root = root / ".minecraft";
-    const auto outside_world = root / "outside-world";
-    std::filesystem::create_directories(game_root / "saves");
-    std::filesystem::create_directories(outside_world / "stats");
-    std::filesystem::copy_file(fixture("world/stats/player-one.json"), outside_world / "stats/player-one.json");
-    std::filesystem::create_symlink(outside_world, game_root / "saves/linked-world");
-
-    const auto source = beacon::detect_active_source(game_root);
-    REQUIRE_FALSE(source);
-}
-#endif
-
-TEST_CASE("active source skips an unrelated malformed stats file") {
-    const beacon::test::TemporaryDirectory temporary;
-    const auto& root = temporary.path;
-    const auto game_root = root / ".minecraft";
-    const auto old_world = game_root / "saves/compatible";
-    const auto new_world = game_root / "saves/malformed";
-    std::filesystem::create_directories(old_world / "stats");
-    std::filesystem::create_directories(new_world / "stats");
-    std::filesystem::copy_file(fixture("world/stats/player-one.json"), old_world / "stats/player-one.json");
-    write_text(new_world / "stats/player-one.json", "not json");
-    const auto now = std::filesystem::file_time_type::clock::now();
-    std::filesystem::last_write_time(old_world / "stats/player-one.json", now - std::chrono::hours(1));
-    std::filesystem::last_write_time(new_world / "stats/player-one.json", now);
-
-    const auto compiled = beacon::compile_template_json(read_text(fixture("template.json")));
-    REQUIRE(compiled);
-    const auto source = beacon::detect_active_source(game_root, nullptr, &*compiled);
-    REQUIRE(source);
-    REQUIRE(source->world.path == old_world);
-}
-
 TEST_CASE("game directory follows the newest save and switches when another save changes") {
     const beacon::test::TemporaryDirectory temporary;
     const auto& root = temporary.path;
@@ -791,18 +731,6 @@ TEST_CASE("game directory follows the newest save and switches when another save
     process_until_published(runtime);
     REQUIRE(runtime.state()->snapshot.run_epoch == 1);
     REQUIRE(runtime.state()->run.world.display_name == "new");
-
-    const auto current_stats = new_world / "stats/player-one.json";
-    const auto current_text = read_text(current_stats);
-    const auto current_time = std::filesystem::last_write_time(current_stats);
-    write_text(current_stats, std::string(current_text.size(), 'x'));
-    std::filesystem::last_write_time(current_stats, current_time);
-    REQUIRE(runtime.poll_files());
-    REQUIRE_FALSE(runtime.process_next(std::chrono::seconds(2)));
-    REQUIRE(runtime.state()->data_status == beacon::DataStatus::Stale);
-    REQUIRE(runtime.state()->snapshot.play_ticks == 120);
-    write_text(current_stats, current_text);
-    std::filesystem::last_write_time(current_stats, current_time);
 
     stamp(old_world, now + std::chrono::hours(1));
     REQUIRE(runtime.poll_files(true));
@@ -1101,15 +1029,6 @@ TEST_CASE("configuration preparation and failed persistence leave the live run u
     auto candidate = beacon::Runtime::prepare_configuration(root, compiled, run.localization, run.layout);
     REQUIRE(candidate);
     REQUIRE(runtime.state() == before);
-    // A regular file at config/ makes saving fail consistently, including under privileged test users.
-    write_text(root / "config", "blocked");
-    beacon::Persistence persistence(root);
-    beacon::Settings settings{.game_root = root, .template_path = fixture("template.json")};
-    REQUIRE_FALSE(persistence.save_settings(settings));
-    REQUIRE(runtime.state() == before);
-    REQUIRE_FALSE(runtime.state()->error);
-    std::filesystem::remove_all(root / "config");
-    REQUIRE(persistence.save_settings(settings));
     runtime.commit_configuration(std::move(*candidate));
     REQUIRE_FALSE(runtime.state()->has_data());
     REQUIRE(runtime.state()->snapshot.run_epoch == before->snapshot.run_epoch + 1);

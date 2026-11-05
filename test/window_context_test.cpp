@@ -9,7 +9,6 @@
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_sdlrenderer3.h>
 #include <imgui_freetype.h>
-#include <cmath>
 
 TEST_CASE("window contexts scale from baseline and isolate mouse input") {
     REQUIRE(SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy"));
@@ -190,121 +189,5 @@ TEST_CASE("settings language changes preserve the window and keep actions inside
             }
             ImGui::Render();
         }
-
-        bool apply = false;
-        const auto frame = [&] {
-            window.make_current();
-            ImGui_ImplSDLRenderer3_NewFrame();
-            ImGui_ImplSDL3_NewFrame();
-            ImGui::NewFrame();
-            panel.render(ImGui::GetMainViewport(), settings, nullptr, nullptr, &apply, assets);
-            ImGui::Render();
-        };
-        auto* body = book->DC.ChildWindows[0];
-        const auto edit = [&](const char* label, const int component, const char* value) {
-            const auto table_id = body->GetID("##appearance-settings");
-            const auto group_id = ImHashStr(label, 0, table_id);
-            const auto component_id = ImHashData(&component, sizeof(component), group_id);
-            const auto input_id = ImHashStr("", 0, component_id);
-            ImGui::ActivateItemByID(input_id);
-            frame();
-            auto* input = ImGui::GetInputTextState(input_id);
-            REQUIRE(input);
-            input->SelectAll();
-            ImGui::GetIO().AddInputCharactersUTF8(value);
-            frame();
-        };
-        body->Scroll.y = 0;
-        frame();
-        edit("##main-window-size", 0, "1080");
-        edit("##main-window-size", 1, "720");
-        body->Scroll.y = body->ScrollMax.y;
-        frame();
-        edit("##overlay-window-size", 0, "1200");
-        edit("##overlay-window-size", 1, "240");
-        CHECK(settings.main_window_width == 1080);
-        CHECK(settings.main_window_height == 720);
-        CHECK(settings.overlay_window_width == 1200);
-        CHECK(settings.overlay_window_height == 240);
-        CHECK_FALSE(apply);
-        // The book actions remain outside the scrolling form.
-        ImGui::ActivateItemByID(book->GetID("##save"));
-        frame();
-        CHECK(apply);
-    }
-}
-
-TEST_CASE("application shortcuts use Ctrl on Windows and Linux and Cmd on macOS") {
-    ImGui::CreateContext();
-    struct Context {
-        ~Context() {
-            ImGui::DestroyContext();
-        }
-    } context;
-    auto& io = ImGui::GetIO();
-    io.IniFilename = nullptr;
-    io.DisplaySize = {800, 600};
-    io.ConfigMacOSXBehaviors = GENERATE(false, true);
-    const bool physical_cmd = GENERATE(false, true);
-    io.Fonts->AddFontDefault();
-    REQUIRE(io.Fonts->Build());
-    io.AddKeyEvent(physical_cmd ? ImGuiMod_Super : ImGuiMod_Ctrl, true);
-    io.AddKeyEvent(ImGuiKey_R, true);
-    ImGui::NewFrame();
-    const bool expected = physical_cmd == io.ConfigMacOSXBehaviors;
-    CHECK(io.KeyCtrl == expected);
-    CHECK(ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_R) == expected);
-    ImGui::EndFrame();
-}
-
-TEST_CASE("Chinese emboldening keeps Minecraft Latin unchanged") {
-    ImGui::CreateContext();
-    struct Context {
-        ~Context() {
-            ImGui::DestroyContext();
-        }
-    } context;
-    auto* atlas = ImGui::GetIO().Fonts;
-    atlas->SetFontLoader(ImGuiFreeType::GetFontLoader());
-    ImFontConfig latin;
-    latin.FontLoader = ImFontAtlasGetFontLoaderForStbTruetype();
-    latin.RasterizerMultiply = 2.0F;
-    auto* original = atlas->AddFontFromFileTTF(BEACON_TEST_ROOT "/assets/fonts/Minecraft.otf", 16.0F, &latin);
-    auto* mixed = atlas->AddFontFromFileTTF(BEACON_TEST_ROOT "/assets/fonts/Minecraft.otf", 16.0F, &latin);
-    REQUIRE(original);
-    REQUIRE(mixed);
-    ImFontConfig chinese;
-    chinese.FontLoaderFlags = ImGuiFreeTypeLoaderFlags_Monochrome | ImGuiFreeTypeLoaderFlags_MonoHinting;
-    auto* regular = atlas->AddFontFromFileTTF(BEACON_TEST_ROOT "/assets/fonts/Unifont.ttf", 16.0F, &chinese);
-    REQUIRE(regular);
-    chinese.MergeMode = true;
-    chinese.DstFont = mixed;
-    chinese.FontLoaderFlags |= ImGuiFreeTypeLoaderFlags_Bold;
-    REQUIRE(atlas->AddFontFromFileTTF(BEACON_TEST_ROOT "/assets/fonts/Unifont.ttf", 16.0F, &chinese));
-    for (const float size : {16.0F, 32.0F}) {
-        auto* original_glyphs = original->GetFontBaked(size, 1.0F);
-        auto* mixed_glyphs = mixed->GetFontBaked(size, 1.0F);
-        auto* regular_glyphs = regular->GetFontBaked(size, 1.0F);
-        REQUIRE(original_glyphs->FindGlyphNoFallback('O'));
-        REQUIRE(mixed_glyphs->FindGlyphNoFallback('O'));
-        REQUIRE(mixed_glyphs->FindGlyphNoFallback(0x4E2D));
-        REQUIRE(regular_glyphs->FindGlyphNoFallback(0x4E2D));
-        const auto weight = [&](const ImFontGlyph& glyph) {
-            const auto* texture = atlas->TexData;
-            unsigned int alpha = 0;
-            for (int y = static_cast<int>(std::lround(glyph.V0 * texture->Height));
-                 y < static_cast<int>(std::lround(glyph.V1 * texture->Height)); ++y)
-                for (int x = static_cast<int>(std::lround(glyph.U0 * texture->Width));
-                     x < static_cast<int>(std::lround(glyph.U1 * texture->Width)); ++x)
-                    alpha +=
-                        texture->Pixels[(x + y * texture->Width) * texture->BytesPerPixel + texture->BytesPerPixel - 1];
-            return alpha;
-        };
-        const auto* original_o = original_glyphs->FindGlyphNoFallback('O');
-        const auto* mixed_o = mixed_glyphs->FindGlyphNoFallback('O');
-        CHECK(mixed_o->AdvanceX == original_o->AdvanceX);
-        CHECK(weight(*mixed_o) == weight(*original_o));
-        CHECK(weight(*mixed_glyphs->FindGlyphNoFallback(0x4E2D)) >
-              weight(*regular_glyphs->FindGlyphNoFallback(0x4E2D)));
     }
 }

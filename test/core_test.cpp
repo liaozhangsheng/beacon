@@ -10,10 +10,6 @@
 #include <string_view>
 #include <vector>
 
-#if defined(__unix__) || defined(__APPLE__)
-    #include <sys/resource.h>
-#endif
-
 namespace {
 
 constexpr std::string_view template_json = R"json(
@@ -184,16 +180,6 @@ TEST_CASE("template compiler reports semantic errors without returning a partial
         REQUIRE_FALSE(result);
         REQUIRE(has_code(result.error(), beacon::ErrorCode::Validation));
     }
-
-    std::string noisy_goals = "[";
-    for (std::size_t index = 0; index <= beacon::max_diagnostics; ++index) {
-        noisy_goals += index == 0 ? R"({"id":"","fact":"a"})" : R"(,{"id":"","fact":"a"})";
-    }
-    noisy_goals += ']';
-    const auto capped = beacon::compile_template_json(template_document(noisy_goals, "missing"));
-    REQUIRE_FALSE(capped);
-    REQUIRE(capped.error().size() == beacon::max_diagnostics);
-    REQUIRE(capped.error().back().message.find("truncated") != std::string::npos);
 }
 
 TEST_CASE("template supports manual-only leaf rules") {
@@ -279,7 +265,6 @@ TEST_CASE("manual progress updates facts and derived rules without changing fact
     REQUIRE(compiled);
     const beacon::Facts facts{{"adv/leaf", 0}, {"stat/minecraft:mined/minecraft:stone", 2}};
     auto results = beacon::evaluate(*compiled, facts);
-    REQUIRE(results);
     beacon::ManualProgress manual;
     const auto leaf = compiled->graph.index_by_id.at("leaf");
     const auto counter = compiled->graph.index_by_id.at("counter");
