@@ -58,16 +58,13 @@ std::optional<CachedSkin> read_cached_skin(const std::string& uuid, const std::f
         if (ec) {
             return std::nullopt;
         }
-        std::error_code file_ec;
-        if (!std::filesystem::is_regular_file(path, file_ec) || file_ec || path.extension() != ".png") {
-            continue;
-        }
         const auto filename = path_to_utf8(path.filename());
-        if (!filename.starts_with(prefix)) {
+        if (!filename.starts_with(prefix) || path.extension() != ".png") {
             continue;
         }
         auto skin = read_bounded_file(path, "cached skin", max_skin_bytes);
         if (skin && !skin->empty()) {
+            std::error_code file_ec;
             const auto written = std::filesystem::last_write_time(path, file_ec);
             const bool fresh =
                 !file_ec && std::filesystem::file_time_type::clock::now() - written < skin_cache_lifetime;

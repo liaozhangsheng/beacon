@@ -22,6 +22,9 @@ std::filesystem::path cache_skin(const std::filesystem::path& root, const std::s
 TEST_CASE("a fresh cached skin is used without asking Mojang") {
     const beacon::test::TemporaryDirectory temporary;
     const std::string uuid = "069a79f4-44e9-4726-a5be-fca90e38aaf5";
+    cache_skin(temporary.path, "another-player_Other.png", "other skin");
+    cache_skin(temporary.path, uuid + "_Ignored.txt", "not a skin");
+    std::filesystem::create_directory(temporary.path / "cache/skins" / (uuid + "_Directory.png"));
     cache_skin(temporary.path, uuid + "_Notch.png", "skin");
 
     const auto card = beacon::fetch_player_card(uuid, temporary.path);
