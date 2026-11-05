@@ -134,7 +134,7 @@ TEST_CASE("scrolling text preserves the same fractional translation as images") 
     ImGui::EndFrame();
 }
 
-TEST_CASE("progress text draws centered lines and returns the height used by the next row") {
+TEST_CASE("progress text returns the number of lines it drew") {
     const std::unique_ptr<ImGuiContext, decltype(&ImGui::DestroyContext)> context(ImGui::CreateContext(),
                                                                                   ImGui::DestroyContext);
     auto& io = ImGui::GetIO();

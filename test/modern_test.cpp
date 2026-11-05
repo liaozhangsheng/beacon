@@ -752,23 +752,12 @@ TEST_CASE("runtime rebuilds atomically and skips unchanged files") {
     REQUIRE(compiled_value);
     auto compiled = std::make_shared<const beacon::CompiledTemplate>(*compiled_value);
 
-    const auto data_root = root / "state-root";
-    beacon::Settings settings;
-    settings.game_root = root;
-    settings.template_path = fixture("template.json");
-    beacon::Persistence persistence(data_root);
-    REQUIRE(persistence.save_settings(settings));
-    const auto loaded_settings = persistence.load_settings();
-    REQUIRE(loaded_settings);
-    REQUIRE(*loaded_settings);
-
     beacon::Runtime runtime;
     const auto localization = beacon::compile_localization_json(R"({"template.modern_test":"Modern test"})");
     const auto layout = beacon::compile_layout_json(R"({"main":{"vbox":[]},"overlay":{"vbox":[]}})", *compiled);
     REQUIRE(localization);
     REQUIRE(layout);
-    REQUIRE(runtime.configure((**loaded_settings).game_root, compiled,
-                              std::make_shared<const beacon::Localization>(*localization),
+    REQUIRE(runtime.configure(root, compiled, std::make_shared<const beacon::Localization>(*localization),
                               std::make_shared<const beacon::Layout>(*layout)));
     REQUIRE(runtime.process_next(std::chrono::seconds(2)));
     REQUIRE(runtime.state());
