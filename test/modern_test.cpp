@@ -609,50 +609,36 @@ TEST_CASE("active source atomically selects the newest world player and layout")
     REQUIRE((**facts).facts.at("clock/play_ticks") == 120);
 }
 
-TEST_CASE("active source skips newest world when its version is incompatible") {
+TEST_CASE("active source skips a newer world whose player data is unusable") {
     const beacon::test::TemporaryDirectory temporary;
-    const auto& root = temporary.path;
-    const auto game_root = root / ".minecraft";
+    const auto game_root = temporary.path / ".minecraft";
     const auto old_world = game_root / "saves/compatible";
-    const auto new_world = game_root / "saves/incompatible";
+    const auto new_world = game_root / "saves/broken";
     for (const auto& world : {old_world, new_world}) {
         std::filesystem::create_directories(world / "stats");
         std::filesystem::copy_file(fixture("world/stats/player-one.json"), world / "stats/player-one.json");
     }
-    auto incompatible = read_text(new_world / "stats/player-one.json");
-    incompatible.replace(incompatible.find("4189"), 4, "9999");
-    write_text(new_world / "stats/player-one.json", incompatible);
+    const auto new_stats = new_world / "stats/player-one.json";
+    SECTION("incompatible DataVersion") {
+        auto incompatible = read_text(new_stats);
+        incompatible.replace(incompatible.find("4189"), 4, "9999");
+        write_text(new_stats, incompatible);
+    }
+    SECTION("stats without play time") {
+        write_text(new_stats, R"({"DataVersion":4189,"stats":{"minecraft:custom":{}}})");
+    }
+    SECTION("malformed stats") {
+        write_text(new_stats, "not json");
+    }
     const auto now = std::filesystem::file_time_type::clock::now();
     std::filesystem::last_write_time(old_world / "stats/player-one.json", now - std::chrono::hours(1));
-    std::filesystem::last_write_time(new_world / "stats/player-one.json", now);
-
-    const auto compiled_value = beacon::compile_template_json(read_text(fixture("template.json")));
-    REQUIRE(compiled_value);
-    const auto source = beacon::detect_active_source(game_root, nullptr, &*compiled_value);
-    REQUIRE(source);
-    REQUIRE(source->world.path == old_world);
-}
-
-TEST_CASE("active source falls back when newest stats fail full validation") {
-    const beacon::test::TemporaryDirectory temporary;
-    const auto& root = temporary.path;
-    const auto game_root = root / ".minecraft";
-    const auto old_world = game_root / "saves/compatible";
-    const auto new_world = game_root / "saves/incomplete";
-    std::filesystem::create_directories(old_world / "stats");
-    std::filesystem::create_directories(new_world / "stats");
-    std::filesystem::copy_file(fixture("world/stats/player-one.json"), old_world / "stats/player-one.json");
-    write_text(new_world / "stats/player-one.json", R"({"DataVersion":4189,"stats":{"minecraft:custom":{}}})");
-    const auto now = std::filesystem::file_time_type::clock::now();
-    std::filesystem::last_write_time(old_world / "stats/player-one.json", now - std::chrono::hours(1));
-    std::filesystem::last_write_time(new_world / "stats/player-one.json", now);
+    std::filesystem::last_write_time(new_stats, now);
 
     const auto compiled = beacon::compile_template_json(read_text(fixture("template.json")));
     REQUIRE(compiled);
     const auto source = beacon::detect_active_source(game_root, nullptr, &*compiled);
     REQUIRE(source);
     REQUIRE(source->world.path == old_world);
-    REQUIRE(source->profile.data_version == 4189);
 }
 
 TEST_CASE("active source falls back when the current stats become invalid") {

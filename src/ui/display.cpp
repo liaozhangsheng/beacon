@@ -477,7 +477,7 @@ std::filesystem::path frame_glow_path(const std::filesystem::path& frame_obtaine
     return frame_obtained.parent_path() / "frame_glow.png";
 }
 
-ylt::expected<IconFiles, Error> icon_file_stamps(const CompiledTemplate& compiled) {
+IconFiles icon_file_stamps(const CompiledTemplate& compiled) {
     std::vector<std::filesystem::path> paths;
     for (const auto& images : node_images(compiled)) {
         for (const auto* path : {&images.icon, &images.frame_obtained, &images.frame_unobtained}) {
@@ -491,10 +491,8 @@ ylt::expected<IconFiles, Error> icon_file_stamps(const CompiledTemplate& compile
     paths.erase(std::unique(paths.begin(), paths.end()), paths.end());
     IconFiles files;
     for (auto& path : paths) {
-        auto stamp = file_stamp(path);
-        if (!stamp)
-            return ylt::unexpected<Error>{std::move(stamp.error())};
-        files.emplace_back(std::move(path), *stamp);
+        const auto stamp = file_stamp(path);
+        files.emplace_back(std::move(path), stamp);
     }
     return files;
 }
@@ -502,10 +500,8 @@ ylt::expected<IconFiles, Error> icon_file_stamps(const CompiledTemplate& compile
 TemplateResourceLoader::TemplateResourceLoader(std::filesystem::path template_path, std::filesystem::path asset_root,
                                                TemplateResources resources)
     : template_path_(std::move(template_path)), asset_root_(std::move(asset_root)), resources_(std::move(resources)) {
-    if (resources_.compiled) {
-        if (auto icons = icon_file_stamps(*resources_.compiled))
-            icons_ = std::move(*icons);
-    }
+    if (resources_.compiled)
+        icons_ = icon_file_stamps(*resources_.compiled);
 }
 
 ylt::expected<TemplateResources, Error> TemplateResourceLoader::load(const std::filesystem::path& template_path,
@@ -523,13 +519,11 @@ ylt::expected<TemplateResources, Error> TemplateResourceLoader::load(const std::
     if (!resources)
         return resources;
     auto icons = icon_file_stamps(*resources->compiled);
-    if (!icons)
-        return ylt::unexpected<Error>{std::move(icons.error())};
     if (same_package) {
         const auto& old = *resources_.compiled;
         const auto& next = *resources->compiled;
         if (old.same_rules(next) && old.template_name_key == next.template_name_key &&
-            old.presentation_by_node == next.presentation_by_node && icons_ == *icons)
+            old.presentation_by_node == next.presentation_by_node && icons_ == icons)
             resources->compiled = resources_.compiled;
         if (*resources->layout == *resources_.layout)
             resources->layout = resources_.layout;
@@ -540,7 +534,7 @@ ylt::expected<TemplateResources, Error> TemplateResourceLoader::load(const std::
     template_path_ = template_path;
     asset_root_ = asset_root;
     resources_ = *resources;
-    icons_ = std::move(*icons);
+    icons_ = std::move(icons);
     return resources;
 }
 

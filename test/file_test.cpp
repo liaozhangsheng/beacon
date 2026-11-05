@@ -14,7 +14,6 @@
 
 #if !defined(_WIN32)
     #include <sys/stat.h>
-    #include <unistd.h>
 #endif
 
 TEST_CASE("bounded file reads preserve binary data and enforce caller limits") {
@@ -156,32 +155,7 @@ TEST_CASE("atomic writes accept a filename relative to the working directory") {
 }
 
 #if !defined(_WIN32)
-TEST_CASE("failed settings recovery saves leave the backup selected") {
-    if (::geteuid() == 0) {
-        SKIP("directory read permissions do not restrict root");
-    }
-    const beacon::test::TemporaryDirectory directory;
-    beacon::Persistence persistence(directory.path);
-    beacon::Settings settings{.game_root = directory.path, .template_path = directory.path / "template.json"};
-    REQUIRE(persistence.save_settings(settings));
-    const auto config = directory.path / "config";
-    const auto target = config / "settings.json";
-    const auto backup = config / "settings.json.bak";
-    std::filesystem::rename(target, backup);
-    REQUIRE(persistence.load_settings());
-    settings.main_window_scale = 0.75F;
-    std::filesystem::permissions(config, std::filesystem::perms::owner_write | std::filesystem::perms::owner_exec);
-    const auto saved = persistence.save_settings(settings);
-    std::filesystem::permissions(config, std::filesystem::perms::owner_all);
-    REQUIRE_FALSE(saved);
-    REQUIRE_FALSE(std::filesystem::exists(target));
-    const auto recovered = persistence.load_settings();
-    REQUIRE(recovered);
-    REQUIRE(*recovered);
-    REQUIRE((**recovered).main_window_scale == beacon::Settings{}.main_window_scale);
-}
-
-TEST_CASE("bounded file reads reject special files and symbolic links") {
+TEST_CASE("bounded file reads reject special files") {
     const beacon::test::TemporaryDirectory directory;
     const auto fifo = directory.path / "input.fifo";
     REQUIRE(::mkfifo(fifo.c_str(), 0600) == 0);

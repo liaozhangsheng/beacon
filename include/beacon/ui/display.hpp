@@ -132,7 +132,7 @@ std::vector<NodeImages> node_images(const CompiledTemplate& compiled);
 std::filesystem::path frame_glow_path(const std::filesystem::path& frame_obtained);
 
 using IconFiles = std::vector<std::pair<std::filesystem::path, FileStamp>>;
-ylt::expected<IconFiles, Error> icon_file_stamps(const CompiledTemplate& compiled);
+IconFiles icon_file_stamps(const CompiledTemplate& compiled);
 
 class TemplateResourceLoader {
 public:

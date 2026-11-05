@@ -68,8 +68,8 @@ void WindowRenderer::Impl::prepare_template(const std::shared_ptr<const Publishe
     }
     const auto images = node_images(*compiled_);
     auto icons = icon_file_stamps(*compiled_);
-    if (!had_template || !icons || *icons != icon_files_) {
-        icon_files_ = icons ? std::move(*icons) : IconFiles{};
+    if (!had_template || icons != icon_files_) {
+        icon_files_ = std::move(icons);
         atlas_texture_.reset();
         atlas_regions_.clear();
         assets_->clear();

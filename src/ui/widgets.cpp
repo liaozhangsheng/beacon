@@ -329,11 +329,11 @@ SDL_Texture* UiAssets::animated_frame(const std::filesystem::path& path, const s
         AnimatedTexture animation;
         const auto stamp = file_stamp(path);
         auto& cached = decoded[path];
-        if (stamp && *stamp == cached.stamp)
+        if (stamp.exists && stamp == cached.stamp)
             animation.frames = cached.frames.lock();
         if (!animation.frames) {
             animation.frames.reset(load_animation(path), IMG_FreeAnimation);
-            cached = {stamp ? *stamp : FileStamp{}, animation.frames};
+            cached = {stamp, animation.frames};
         }
         if (const auto& frames = animation.frames; frames && frames->count > 0) {
             animation.texture.reset(SDL_CreateTexture(renderer_, frames->frames[0]->format, SDL_TEXTUREACCESS_STREAMING,

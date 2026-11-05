@@ -4,35 +4,17 @@
 #include <json/json.h>
 
 #include <algorithm>
-#include <chrono>
 #include <cstdint>
 #include <iomanip>
-#include <limits>
 #include <sstream>
-#include <thread>
 #include <unordered_set>
 #include <utility>
 
 namespace beacon {
 namespace {
 
-ylt::expected<std::string, Error> read_consistent(const std::filesystem::path& path) {
-    for (int attempt = 0; attempt < 2; ++attempt) {
-        const auto before = file_stamp(path);
-        if (!before)
-            return ylt::unexpected<Error>{before.error()};
-        if (!before->exists)
-            return ylt::unexpected<Error>{file_error(ErrorCode::Io, "Minecraft file is missing", path)};
-        auto data = read_bounded_file(path, "Minecraft JSON");
-        if (!data && data.error().code != ErrorCode::Io)
-            return ylt::unexpected<Error>{std::move(data.error())};
-        const auto after = file_stamp(path);
-        if (data && after && *before == *after)
-            return data;
-        if (attempt == 0)
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-    return ylt::unexpected<Error>{file_error(ErrorCode::Io, "Minecraft file remained unstable", path)};
+ylt::expected<std::string, Error> read_minecraft_file(const std::filesystem::path& path) {
+    return read_bounded_file(path, "Minecraft JSON");
 }
 
 std::filesystem::path save_root(const WorldLocation& world, const SaveLayout layout) {
@@ -48,12 +30,6 @@ std::string world_storage_key(const std::filesystem::path& path) {
     std::ostringstream output;
     output << "world-" << std::hex << std::setfill('0') << std::setw(16) << hash;
     return output.str();
-}
-
-bool path_is_within_root(const std::filesystem::path& root, const std::filesystem::path& candidate,
-                         std::error_code& ec) {
-    const auto canonical = std::filesystem::weakly_canonical(candidate, ec);
-    return !ec && path_is_within(root, canonical);
 }
 
 struct SourceCandidate {
@@ -77,136 +53,35 @@ bool newer(const SourceCandidate& candidate, const SourceCandidate& current) {
     return static_cast<int>(current.layout) < static_cast<int>(candidate.layout);
 }
 
-ylt::expected<std::optional<SourceCandidate>, Error> inspect_source(const WorldLocation& world, std::string uuid,
-                                                                    SaveLayout layout,
-                                                                    const std::filesystem::path& canonical_game_root) {
+std::optional<SourceCandidate> inspect_source(const WorldLocation& world, std::string uuid, SaveLayout layout) {
     const auto root = save_root(world, layout);
     const auto stats = root / "stats" / (uuid + ".json");
-    const auto advancements = root / "advancements" / (uuid + ".json");
-    std::error_code ec;
-    const auto stats_status = std::filesystem::symlink_status(stats, ec);
-    if (ec) {
-        if (ec == std::errc::no_such_file_or_directory)
-            return std::optional<SourceCandidate>{};
-        return ylt::unexpected<Error>{file_error(ErrorCode::Io, "cannot inspect player stats", stats)};
-    }
-    if (!std::filesystem::exists(stats_status))
-        return std::optional<SourceCandidate>{};
-    if (std::filesystem::is_symlink(stats_status)) {
-        return ylt::unexpected<Error>{
-            file_error(ErrorCode::Validation, "player stats must not be a symbolic link", stats)};
-    }
-    if (!std::filesystem::is_regular_file(stats_status))
-        return std::optional<SourceCandidate>{};
-    ec.clear();
-    const auto stats_in_root = path_is_within_root(canonical_game_root, stats, ec);
-    if (ec) {
-        return ylt::unexpected<Error>{file_error(ErrorCode::Io, "cannot resolve player stats path", stats)};
-    }
-    if (!stats_in_root) {
-        return ylt::unexpected<Error>{
-            file_error(ErrorCode::Validation, "player stats path is outside game directory", stats)};
-    }
     const auto stats_stamp = file_stamp(stats);
-    if (!stats_stamp) {
-        return ylt::unexpected<Error>{file_error(ErrorCode::Io, "cannot inspect player stats", stats)};
-    }
-    if (!stats_stamp->exists) {
-        return std::optional<SourceCandidate>{};
-    }
-    auto activity = stats_stamp->mtime;
-    ec.clear();
-    const auto advancements_status = std::filesystem::symlink_status(advancements, ec);
-    if (ec) {
-        if (ec == std::errc::no_such_file_or_directory)
-            ec.clear();
-        else
-            return ylt::unexpected<Error>{
-                file_error(ErrorCode::Io, "cannot inspect player advancements", advancements)};
-    } else if (!std::filesystem::exists(advancements_status)) {
-        ec.clear();
-    } else if (std::filesystem::is_symlink(advancements_status) ||
-               !std::filesystem::is_regular_file(advancements_status)) {
-        return ylt::unexpected<Error>{
-            file_error(ErrorCode::Validation, "player advancements must be a regular file", advancements)};
-    } else {
-        const auto advancements_in_root = path_is_within_root(canonical_game_root, advancements, ec);
-        if (ec) {
-            return ylt::unexpected<Error>{
-                file_error(ErrorCode::Io, "cannot resolve player advancements path", advancements)};
-        }
-        if (!advancements_in_root) {
-            return ylt::unexpected<Error>{
-                file_error(ErrorCode::Validation, "player advancements path is outside game directory", advancements)};
-        }
-        const auto advancements_stamp = file_stamp(advancements);
-        if (!advancements_stamp) {
-            return ylt::unexpected<Error>{
-                file_error(ErrorCode::Io, "cannot inspect player advancements", advancements)};
-        }
-        if (advancements_stamp->exists) {
-            activity = std::max(activity, advancements_stamp->mtime);
-        }
-    }
-    return std::optional<SourceCandidate>{SourceCandidate{
-        .world = world,
-        .player = {.uuid = std::move(uuid)},
-        .layout = layout,
-        .stats = stats,
-        .activity = activity,
-    }};
+    if (!stats_stamp.exists)
+        return std::nullopt;
+    const auto advancements_stamp = file_stamp(root / "advancements" / (uuid + ".json"));
+    return SourceCandidate{.world = world,
+                           .player = {.uuid = std::move(uuid)},
+                           .layout = layout,
+                           .stats = stats,
+                           .activity = std::max(stats_stamp.mtime, advancements_stamp.mtime)};
 }
 
-void add_warning(std::vector<Error>& warnings, Error error) {
-    warnings.push_back(std::move(error));
-}
-
-ylt::expected<std::vector<SourceCandidate>, Error> scan_world_layout(const WorldLocation& world, SaveLayout layout,
-                                                                     const std::filesystem::path& canonical_game_root,
-                                                                     std::vector<Error>& warnings) {
+ylt::expected<std::vector<SourceCandidate>, Error> scan_world_layout(const WorldLocation& world, SaveLayout layout) {
     const auto directory = save_root(world, layout) / "stats";
     std::error_code ec;
     std::filesystem::directory_iterator files(directory, ec);
-    if (ec == std::errc::no_such_file_or_directory) {
+    if (ec == std::errc::no_such_file_or_directory)
         return std::vector<SourceCandidate>{};
-    }
-    if (ec) {
+    if (ec)
         return ylt::unexpected<Error>{file_error(ErrorCode::Io, "cannot scan player stats directory", directory)};
-    }
-    if (!path_is_within_root(canonical_game_root, directory, ec) || ec) {
-        return ylt::unexpected<Error>{
-            file_error(ErrorCode::Validation, "player stats directory is outside game directory", directory)};
-    }
-
     std::vector<SourceCandidate> candidates;
-    for (; files != std::filesystem::directory_iterator{};) {
-        const auto file_path = files->path();
-        files.increment(ec);
-        if (ec) {
-            return ylt::unexpected<Error>{file_error(ErrorCode::Io, "cannot scan player stats directory", directory)};
-        }
-        std::error_code file_ec;
-        if (!std::filesystem::is_regular_file(file_path, file_ec)) {
-            if (file_ec && file_ec != std::errc::no_such_file_or_directory) {
-                add_warning(warnings, file_error(ErrorCode::Io, "cannot inspect player stats", file_path));
-            }
+    for (const auto& file : files) {
+        const auto uuid = path_to_utf8(file.path().stem());
+        if (file.path().extension() != ".json" || !valid_player_id(uuid))
             continue;
-        }
-        if (file_path.extension() != ".json") {
-            continue;
-        }
-        const auto uuid = path_to_utf8(file_path.stem());
-        if (!valid_player_id(uuid)) {
-            continue;
-        }
-        auto candidate = inspect_source(world, uuid, layout, canonical_game_root);
-        if (!candidate) {
-            add_warning(warnings, std::move(candidate.error()));
-            continue;
-        }
-        if (*candidate) {
-            candidates.push_back(std::move(**candidate));
-        }
+        if (auto candidate = inspect_source(world, uuid, layout))
+            candidates.push_back(std::move(*candidate));
     }
     return candidates;
 }
@@ -325,28 +200,21 @@ bool valid_player_id(std::string_view value) {
 }
 
 ylt::expected<VersionProfile, Error> SourceDiscovery::profile(const std::filesystem::path& stats, SaveLayout layout) {
-    auto stamp = file_stamp(stats);
-    if (!stamp)
-        return ylt::unexpected<Error>{std::move(stamp.error())};
-    auto data = read_consistent(stats);
+    auto data = read_minecraft_file(stats);
     if (!data)
         return ylt::unexpected<Error>{std::move(data.error())};
-    if (auto cached = profiles_.find(stats);
-        cached != profiles_.end() && cached->second.stamp == *stamp && cached->second.data == *data) {
-        cached->second.scan = scan_;
-        auto profile = cached->second.profile;
-        profile.layout = layout;
-        return profile;
+    auto& cached = profiles_[stats];
+    cached.scan = scan_;
+    if (cached.data != *data) {
+        auto parsed = parse_modern_stats(*data, stats);
+        if (!parsed) {
+            profiles_.erase(stats);
+            return ylt::unexpected<Error>{std::move(parsed.error())};
+        }
+        cached.data = std::move(*data);
+        cached.data_version = parsed->data_version;
     }
-    auto parsed = parse_modern_stats(*data, stats);
-    if (!parsed)
-        return ylt::unexpected<Error>{std::move(parsed.error())};
-    auto after = file_stamp(stats);
-    if (!after || *after != *stamp)
-        return ylt::unexpected<Error>{file_error(ErrorCode::Io, "stats changed during version detection", stats)};
-    VersionProfile profile{.data_version = parsed->data_version, .layout = layout};
-    profiles_.insert_or_assign(stats, Entry{*stamp, profile, std::move(*data), scan_});
-    return profile;
+    return VersionProfile{.data_version = cached.data_version, .layout = layout};
 }
 
 ylt::expected<ActiveMinecraftSource, Error> SourceDiscovery::scan(const std::filesystem::path& game_root,
@@ -356,15 +224,6 @@ ylt::expected<ActiveMinecraftSource, Error> SourceDiscovery::scan(const std::fil
     ++scan_;
     const auto saves = game_root / "saves";
     std::error_code ec;
-    const auto canonical_game_root = std::filesystem::weakly_canonical(game_root, ec);
-    if (ec) {
-        return ylt::unexpected<Error>{file_error(ErrorCode::Io, "cannot resolve Minecraft game directory", game_root)};
-    }
-    ec.clear();
-    if (!path_is_within_root(canonical_game_root, saves, ec) || ec) {
-        return ylt::unexpected<Error>{
-            file_error(ErrorCode::Validation, "Minecraft saves directory is outside game directory", saves)};
-    }
     std::filesystem::directory_iterator worlds(saves, ec);
     if (ec == std::errc::no_such_file_or_directory) {
         return ylt::unexpected<Error>{file_error(ErrorCode::NoSave, "Minecraft saves directory was not found", saves)};
@@ -377,18 +236,14 @@ ylt::expected<ActiveMinecraftSource, Error> SourceDiscovery::scan(const std::fil
     std::optional<VersionProfile> current_fallback_profile;
     std::vector<SourceCandidate> candidates;
     if (current) {
-        auto candidate =
-            inspect_source(current->world, current->player.uuid, current->profile.layout, canonical_game_root);
-        if (!candidate) {
-            add_warning(warnings, std::move(candidate.error()));
-        } else if (*candidate) {
-            auto detected = profile((**candidate).stats, current->profile.layout);
+        if (auto candidate = inspect_source(current->world, current->player.uuid, current->profile.layout)) {
+            auto detected = profile(candidate->stats, current->profile.layout);
             if (detected && (!compiled || supports_template(*detected, *compiled))) {
-                selected = std::move(**candidate);
+                selected = std::move(*candidate);
                 selected_profile = *detected;
             } else if (!detected) {
                 // Preserve the last source only when no valid fallback is available.
-                current_fallback = std::move(**candidate);
+                current_fallback = std::move(*candidate);
                 current_fallback_profile = current->profile;
             }
         }
@@ -398,28 +253,15 @@ ylt::expected<ActiveMinecraftSource, Error> SourceDiscovery::scan(const std::fil
             break;
         const auto world_path = worlds->path();
         std::error_code entry_ec;
-        const auto world_in_root = path_is_within_root(canonical_game_root, world_path, entry_ec);
-        if (entry_ec) {
-            add_warning(warnings, file_error(ErrorCode::Io, "cannot resolve Minecraft save", world_path));
+        if (!worlds->is_directory(entry_ec))
             continue;
-        }
-        if (!world_in_root) {
-            add_warning(warnings,
-                        file_error(ErrorCode::Validation, "Minecraft save is outside game directory", world_path));
-            continue;
-        }
-        if (!worlds->is_directory(entry_ec)) {
-            if (entry_ec && entry_ec != std::errc::no_such_file_or_directory)
-                add_warning(warnings, file_error(ErrorCode::Io, "cannot inspect Minecraft save", world_path));
-            continue;
-        }
         const WorldLocation world{
             {.display_name = path_to_utf8(world_path.filename()), .storage_key = world_storage_key(world_path)},
             world_path};
         for (const auto layout : {SaveLayout::WorldRoot, SaveLayout::PlayersSubdir}) {
-            auto found = scan_world_layout(world, layout, canonical_game_root, warnings);
+            auto found = scan_world_layout(world, layout);
             if (!found) {
-                add_warning(warnings, std::move(found.error()));
+                warnings.push_back(std::move(found.error()));
                 continue;
             }
             for (auto& candidate : *found) {
@@ -430,7 +272,7 @@ ylt::expected<ActiveMinecraftSource, Error> SourceDiscovery::scan(const std::fil
         }
     }
     if (ec)
-        add_warning(warnings, file_error(ErrorCode::Io, "cannot finish scanning Minecraft saves", saves));
+        warnings.push_back(file_error(ErrorCode::Io, "cannot finish scanning Minecraft saves", saves));
     std::ranges::sort(candidates, [](const auto& left, const auto& right) {
         return newer(left, right);
     });
@@ -441,7 +283,7 @@ ylt::expected<ActiveMinecraftSource, Error> SourceDiscovery::scan(const std::fil
             break;
         auto detected = profile(candidate.stats, candidate.layout);
         if (!detected) {
-            add_warning(warnings, std::move(detected.error()));
+            warnings.push_back(std::move(detected.error()));
             continue;
         }
         if (compiled && !supports_template(*detected, *compiled))
@@ -462,13 +304,9 @@ ylt::expected<ActiveMinecraftSource, Error> SourceDiscovery::scan(const std::fil
         return ylt::unexpected<Error>{
             file_error(ErrorCode::NoSave, "no compatible player stats files were found", saves)};
     }
-    auto instance = directory_identity(selected->world.path);
-    if (!instance)
-        return ylt::unexpected<Error>{std::move(instance.error())};
     return ActiveMinecraftSource{.world = std::move(selected->world),
                                  .player = std::move(selected->player),
-                                 .profile = std::move(*selected_profile),
-                                 .world_instance = std::move(*instance)};
+                                 .profile = std::move(*selected_profile)};
 }
 
 ylt::expected<ActiveMinecraftSource, Error> detect_active_source(const std::filesystem::path& game_root,
@@ -506,23 +344,15 @@ ylt::expected<std::optional<ModernStats>, Error> MinecraftReader::read(const Min
         paths_ = paths;
     }
     const auto fail = [this](Error error) -> ylt::expected<std::optional<ModernStats>, Error> {
-        clear();  // Retry failures even when timestamps did not change.
+        clear();  // Retry failures even when the files did not change.
         return ylt::unexpected<Error>{std::move(error)};
     };
-    auto stats_stamp = file_stamp(paths.stats);
-    auto advancements_stamp = file_stamp(paths.advancements);
-    if (!stats_stamp)
-        return fail(std::move(stats_stamp.error()));
-    if (!advancements_stamp)
-        return fail(std::move(advancements_stamp.error()));
-    if (!stats_stamp->exists)
-        return fail(file_error(ErrorCode::Io, "player stats file is missing", paths.stats));
-    auto stats_data = read_consistent(paths.stats);
+    auto stats_data = read_minecraft_file(paths.stats);
     if (!stats_data)
         return fail(std::move(stats_data.error()));
     std::optional<std::string> advancements_data;
-    if (advancements_stamp->exists) {
-        auto data = read_consistent(paths.advancements);
+    if (file_stamp(paths.advancements).exists) {
+        auto data = read_minecraft_file(paths.advancements);
         if (!data)
             return fail(std::move(data.error()));
         advancements_data = std::move(*data);
@@ -541,7 +371,7 @@ ylt::expected<std::optional<ModernStats>, Error> MinecraftReader::read(const Min
         stats = std::move(*parsed);
     }
     if (advancements_changed) {
-        if (advancements_stamp->exists) {
+        if (advancements_data) {
             auto parsed = parse_advancements(*advancements_data, paths.advancements);
             if (!parsed)
                 return fail(std::move(parsed.error()));
@@ -550,12 +380,6 @@ ylt::expected<std::optional<ModernStats>, Error> MinecraftReader::read(const Min
             advancements.emplace();
         }
     }
-    // Each reader validates its own file; also reject changes spanning the pair of reads.
-    const auto stats_after = file_stamp(paths.stats);
-    const auto advancements_after = file_stamp(paths.advancements);
-    if (!stats_after || !advancements_after || *stats_after != *stats_stamp ||
-        *advancements_after != *advancements_stamp)
-        return fail(file_error(ErrorCode::Io, "Minecraft files changed during refresh", paths.stats));
     if (stats)
         stats_ = std::move(*stats);
     if (advancements)

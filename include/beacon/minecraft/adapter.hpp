@@ -37,10 +37,11 @@ struct ActiveMinecraftSource {
     WorldLocation world;
     PlayerIdentity player;
     VersionProfile profile;
+    // Filled in by the runtime; tells a recreated world apart from the one it replaced.
     std::string world_instance;
 };
 
-// One cache entry per candidate file; only successful validation is cached.
+// Caches the parsed version of each candidate stats file until its contents change.
 class SourceDiscovery {
 public:
     ylt::expected<ActiveMinecraftSource, Error> scan(const std::filesystem::path& game_root,
@@ -50,9 +51,8 @@ public:
 
 private:
     struct Entry {
-        FileStamp stamp;
-        VersionProfile profile;
         std::string data;
+        std::optional<std::int64_t> data_version;
         std::uint64_t scan = 0;
     };
     ylt::expected<VersionProfile, Error> profile(const std::filesystem::path& stats, SaveLayout layout);
