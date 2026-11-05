@@ -30,27 +30,29 @@ public:
     void process_event(const SDL_Event& event);
     void make_current() const;
     void set_scale(float scale);
-    // Sets the minimum size and grows the window if it is smaller.
-    void ensure_minimum_size(int width, int height);
+    // Enforces a height floor without shrinking a taller window or limiting its width.
+    void ensure_minimum_height(int height);
 
 private:
     bool overlay_ = false;
-    bool dragging_ = false;
-    SDL_MouseButtonFlags mouse_buttons_ = 0;
+    float scale_ = 1.0F;
+    ImGuiStyle base_style_{};
+
+    SDL_Window* window_ = nullptr;
+    SDL_Renderer* renderer_ = nullptr;
+    ImGuiContext* context_ = nullptr;
     bool ready_ = false;
     bool platform_ready_ = false;
     bool renderer_ready_ = false;
+
+    bool dragging_ = false;
+    SDL_MouseButtonFlags mouse_buttons_ = 0;
 #if defined(_WIN32)
     float drag_start_mouse_x_ = 0.0F;
     float drag_start_mouse_y_ = 0.0F;
     int drag_start_window_x_ = 0;
     int drag_start_window_y_ = 0;
 #endif
-    SDL_Window* window_ = nullptr;
-    SDL_Renderer* renderer_ = nullptr;
-    ImGuiContext* context_ = nullptr;
-    float scale_ = 1.0F;
-    ImGuiStyle base_style_{};
 };
 
 }  // namespace beacon

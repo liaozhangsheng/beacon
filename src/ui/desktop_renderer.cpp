@@ -112,7 +112,7 @@ void WindowRenderer::Impl::render(const std::shared_ptr<const PublishedState>& s
     const auto flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                        ImGuiWindowFlags_NoBringToFrontOnFocus | (overlay_ ? ImGuiWindowFlags_NoBackground : 0);
     ImGui::PushFont(nullptr, ui::font_size(scale_));
-    layout_min_height_ = 0.0F;
+    overlay_min_height_ = 0.0F;
     const bool transparent_background = overlay_ && (settings ? settings->overlay_transparent : overlay_transparent_);
     const auto background = [&] {
         if (transparent_background) {
@@ -134,7 +134,8 @@ void WindowRenderer::Impl::render(const std::shared_ptr<const PublishedState>& s
         render_progress_view(state, runtime_error, settings ? settings->overlay_scroll_speed : 60.0F,
                              settings != nullptr && settings->overlay_scroll_right);
     }
-    apply_minimum_size();
+    if (overlay_)
+        context_.ensure_minimum_height(static_cast<int>(std::ceil(overlay_min_height_)));
     ImGui::End();
     ImGui::PopStyleColor();
     ImGui::PopFont();

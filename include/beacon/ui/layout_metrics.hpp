@@ -17,15 +17,17 @@ struct LayoutMetrics {
     float y = 0.0F;
     float width = 0.0F;
     float configured_height = 0.0F;
+
     float content_x = 0.0F;
     float content_width = 0.0F;
     float content_height = 0.0F;
     float collection_header_height = 0.0F;
+
     float gap = 0.0F;
     float row_gap = 0.0F;
     float cell_width = 0.0F;
-    std::size_t rows = 1;
     float cell_height = 0.0F;
+    std::size_t rows = 1;
 };
 
 LayoutMetrics calculate_layout_metrics(const LayoutGroup& group, bool overlay, std::size_t node_count,
@@ -37,8 +39,6 @@ float body_height_for_content(const LayoutGroup& group, float content_height, fl
 // The height an overlay group needs for its frames, labels and statistic line before stretching.
 float overlay_group_min_height(const LayoutGroup& group, bool labelled, bool stats, float font_size,
                                float scale = 1.0F);
-// The height a main-window group needs for one row of items with two label lines.
-float main_group_min_height(const LayoutGroup& group, float font_size, float scale = 1.0F);
 
 struct CollectionGrid {
     // The first column starts with the parent's icon, title and progress.

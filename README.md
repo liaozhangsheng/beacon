@@ -61,6 +61,8 @@ The **Auto detect** setting is on by default. When you switch to the Minecraft w
 
 The restart and manual-mark shortcuts are also listed at the bottom of the settings window.
 
+Settings let you set the main window and overlay width and height independently (1–16384 logical pixels). Click **Save** to apply them. Resizing either window by its edges automatically saves its size after about 500 ms; Beacon restores those sizes on the next launch. Maximizing or minimizing does not replace the normal size. The overlay enforces a minimum height based on its layout and scale, growing only when needed and keeping taller sizes. Small widths and main-window heights can clip content and controls.
+
 ### Data and recovery behavior
 
 Beacon reads save files without modifying them. Settings are stored next to the `beacon` launcher under `config/settings.json`; templates belong under `templates/` in that same directory. Installed program files and built-in assets live under `versions/<version>/`, separately from templates and settings. Downloaded skins and leaderboards are cached in `cache/` in that same directory; skins are looked up through Mojang's session server.

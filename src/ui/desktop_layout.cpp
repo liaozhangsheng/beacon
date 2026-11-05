@@ -13,7 +13,6 @@ void WindowRenderer::Impl::prepare_layout(const std::shared_ptr<const PublishedS
     if (state && layout_ != state->layout) {
         layout_ = state->layout;
         overlay_carousels_.assign(layout_->overlay.size(), {});
-        fit_overlay_height_ = overlay_;
     }
 }
 
@@ -22,24 +21,20 @@ void WindowRenderer::Impl::draw_overlay_layout(const PublishedState& state, cons
                                                const bool scroll_right) {
     const auto& groups = state.layout->overlay;
     float required_body_height = 1.0F;
-    std::vector<float> minimum_heights;
-    minimum_heights.reserve(groups.size());
-    for (std::size_t group_index = 0; group_index < groups.size(); ++group_index) {
-        const auto& group = groups[group_index];
-        minimum_heights.push_back(overlay_group_min_height(group, !view_.overlay_groups[group_index].empty(),
-                                                           view_.overlay_progress[group_index], ImGui::GetFontSize(),
-                                                           scale_));
-        required_body_height =
-            std::max(required_body_height, body_height_for_content(group, minimum_heights.back(), scale_));
-    }
-    require_body_height(body_height, required_body_height);
     for (std::size_t group_index = 0; group_index < groups.size(); ++group_index) {
         const auto metrics =
             calculate_layout_metrics(groups[group_index], true, view_.overlay_groups[group_index].size(), available.x,
                                      body_height, origin.x, origin.y, scale_);
-        draw_overlay_group(state, group_index, metrics, minimum_heights[group_index], overlay_scroll_speed,
-                           scroll_right);
+        const auto content_height =
+            overlay_group_min_height(groups[group_index], !view_.overlay_groups[group_index].empty(),
+                                     view_.overlay_progress[group_index], ImGui::GetFontSize(), scale_);
+        required_body_height =
+            std::max(required_body_height, body_height_for_content(groups[group_index], content_height, scale_));
+        draw_overlay_group(state, group_index, metrics, content_height, overlay_scroll_speed, scroll_right);
     }
+    int window_height = 0;
+    SDL_GetWindowSize(context_.window(), nullptr, &window_height);
+    overlay_min_height_ = std::max(0.0F, static_cast<float>(window_height) - body_height) + required_body_height;
     draw_status_footer(origin, available);
 }
 
@@ -189,16 +184,6 @@ std::vector<ImVec2> WindowRenderer::Impl::draw_collections(const PublishedState&
 void WindowRenderer::Impl::draw_main_layout(const PublishedState& state, const ImVec2 origin, const ImVec2 available,
                                             const float body_height) {
     const auto& groups = state.layout->main;
-    float required_body_height = 1.0F;
-    for (std::size_t group_index = 0; group_index < groups.size(); ++group_index) {
-        if (!view_.main_groups[group_index].empty())
-            required_body_height =
-                std::max(required_body_height,
-                         body_height_for_content(
-                             groups[group_index],
-                             main_group_min_height(groups[group_index], ImGui::GetFontSize(), scale_), scale_));
-    }
-    require_body_height(body_height, required_body_height);
     for (std::size_t group_index = 0; group_index < groups.size(); ++group_index) {
         const auto& group = groups[group_index];
         if (group.source == LayoutSource::Leaderboard) {
@@ -287,32 +272,6 @@ void WindowRenderer::Impl::draw_leaderboard_group(const LayoutGroup& group, cons
                            group.leaderboard, leaderboards_->get(group.leaderboard), glow_.texture, *assets_,
                            context_.renderer(), ui_language_, frame_schedule_);
     ImGui::PopID();
-}
-
-void WindowRenderer::Impl::require_body_height(const float body_height, const float required_body_height) {
-    int window_height = 0;
-    SDL_GetWindowSize(context_.window(), nullptr, &window_height);
-    const auto window_overhead = std::max(0.0F, static_cast<float>(window_height) - body_height);
-    layout_min_height_ = window_overhead + required_body_height;
-}
-
-void WindowRenderer::Impl::apply_minimum_size() {
-    float required_width = 0.0F;
-    if (update_notice_ != nullptr && !update_notice_->version.empty()) {
-        // Keep both footer buttons reachable; messages and the header shrink to fit.
-        const float controls_width = from_icon(96.0F) + ImGui::GetStyle().ItemSpacing.x + update_button_width();
-        required_width = controls_width + (from_icon(8.0F) * 2.0F) + (ImGui::GetStyle().WindowPadding.x * 2.0F);
-    }
-    const auto minimum_height = static_cast<int>(std::ceil(layout_min_height_));
-    context_.ensure_minimum_size(static_cast<int>(std::ceil(required_width)), minimum_height);
-    if (fit_overlay_height_ && minimum_height > 0) {
-        fit_overlay_height_ = false;
-        int window_width = 0;
-        int window_height = 0;
-        SDL_GetWindowSize(context_.window(), &window_width, &window_height);
-        if (window_height != minimum_height)
-            SDL_SetWindowSize(context_.window(), window_width, minimum_height);
-    }
 }
 
 void WindowRenderer::Impl::draw_responsive_layout(const PublishedState& state, const float overlay_scroll_speed,

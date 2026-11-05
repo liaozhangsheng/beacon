@@ -155,8 +155,7 @@ if(BEACON_BUILD_DESKTOP)
     target_link_libraries(beacon_profile PRIVATE beacon_runtime beacon_resources beacon_io jsoncpp_static beacon_http)
     beacon_warnings(beacon_profile)
 
-    add_executable(beacon
-        src/main.cpp
+    add_library(beacon_desktop STATIC
         src/ui/desktop.cpp
         src/ui/desktop_renderer.cpp
         src/ui/desktop_resources.cpp
@@ -172,21 +171,24 @@ if(BEACON_BUILD_DESKTOP)
         src/ui/widgets.cpp
         src/ui/apng.cpp
     )
-    target_link_libraries(beacon PRIVATE
-        beacon_install_lock
+    target_link_libraries(beacon_desktop PUBLIC
         beacon_profile
         beacon_runtime
         beacon_resources
         beacon_imgui
         SDL3_image::SDL3_image
     )
+    target_compile_definitions(beacon_desktop PRIVATE BEACON_VERSION="${PROJECT_VERSION}")
+    beacon_warnings(beacon_desktop)
+
+    add_executable(beacon src/main.cpp)
+    target_link_libraries(beacon PRIVATE beacon_desktop beacon_install_lock)
     # Bundled libraries sit next to the executable; vcpkg's macOS libraries are referenced through @rpath.
     if(APPLE)
         set_target_properties(beacon PROPERTIES INSTALL_RPATH "@executable_path")
     elseif(UNIX)
         set_target_properties(beacon PROPERTIES INSTALL_RPATH "$ORIGIN")
     endif()
-    target_compile_definitions(beacon PRIVATE BEACON_VERSION="${PROJECT_VERSION}")
     beacon_warnings(beacon)
 
     if(WIN32)

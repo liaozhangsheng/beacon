@@ -6,7 +6,6 @@
 #include <imgui_impl_sdlrenderer3.h>
 #include <SDL3/SDL_mouse.h>
 
-#include <algorithm>
 #include <cmath>
 
 namespace beacon {
@@ -128,19 +127,18 @@ void WindowContext::set_scale(const float scale) {
     style.FontSizeBase = ui::font_size(scale_);
 }
 
-void WindowContext::ensure_minimum_size(const int width, const int height) {
-    int current_width = 0;
-    int current_height = 0;
-    SDL_GetWindowMinimumSize(window_, &current_width, &current_height);
-    // The system enforces the minimum afterwards; resizing every frame would fight live resizes.
-    if (current_width == width && current_height == height)
+void WindowContext::ensure_minimum_height(const int height) {
+    int minimum_height = 0;
+    SDL_GetWindowMinimumSize(window_, nullptr, &minimum_height);
+    // Let the system enforce the minimum afterwards so live resizing stays smooth.
+    if (minimum_height == height)
         return;
-    SDL_SetWindowMinimumSize(window_, width, height);
-    int window_width = 0;
-    int window_height = 0;
-    SDL_GetWindowSize(window_, &window_width, &window_height);
-    if (window_width < width || window_height < height)
-        SDL_SetWindowSize(window_, std::max(window_width, width), std::max(window_height, height));
+    SDL_SetWindowMinimumSize(window_, 0, height);
+    int width = 0;
+    int current_height = 0;
+    SDL_GetWindowSize(window_, &width, &current_height);
+    if (current_height < height)
+        SDL_SetWindowSize(window_, width, height);
 }
 
 void WindowContext::process_event(const SDL_Event& event) {

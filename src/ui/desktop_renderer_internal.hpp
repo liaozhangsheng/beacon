@@ -182,9 +182,6 @@ private:
     void draw_main_layout(const PublishedState& state, ImVec2 origin, ImVec2 available, float body_height);
     void draw_leaderboard_group(const LayoutGroup& group, std::size_t group_index, ImVec2 origin, ImVec2 available,
                                 float body_height);
-    // Records the window height that fits a layout needing required_body_height of its body_height.
-    void require_body_height(float body_height, float required_body_height);
-    void apply_minimum_size();
     // Draws each collection's parent and returns every member's cell position, indexed like the group's nodes.
     // Positions indexed like the group's nodes; only placed members get one.
     std::vector<ImVec2> draw_collections(const PublishedState& state, std::size_t group_index,
@@ -208,50 +205,12 @@ private:
         return interface_text(ui_language_, chinese, english);
     }
 
-    std::string ui_language_ = "zh";
-    IconFiles icon_files_;
-    std::string title_;
-    std::filesystem::path asset_root_;
-    bool overlay_ = false;
-    bool overlay_transparent_ = true;
-    bool ready_ = false;
-    float scale_ = 1.0F;
-    // Filled while drawing: when the frame next changes.
-    mutable FrameSchedule frame_schedule_;
-    bool pointer_held_ = false;
-    std::uint64_t interactive_until_ = 0;
-    WindowContext context_;
-    mutable std::optional<UiAssets> assets_;
-    mutable std::optional<EnchantmentGlint> glint_;
     struct Glow {
         SDL_Texture* texture = nullptr;
         double time = 0.0;
         // Per node, easing toward 1 once the node is done.
         std::vector<float> brightness;
     };
-    Glow glow_;
-    CompletionAnimator completion_;
-    CompletionFireworks fireworks_;
-    bool completion_view_ = false;
-    std::optional<float> completion_started_;
-    std::vector<CarouselState> overlay_carousels_;
-    const ProgressViewModel& view_;
-    std::shared_ptr<const CompiledTemplate> compiled_;
-    // Held, not just compared, so a new layout at a freed one's address still counts as a change.
-    std::shared_ptr<const Layout> layout_;
-    // A new layout resizes the overlay to its minimum height on the next frame, once fonts are known.
-    bool fit_overlay_height_ = false;
-    // The window height the drawn layout needs this frame; zero when no layout was drawn.
-    float layout_min_height_ = 0.0F;
-    SettingsPanel settings_panel_;
-    LeaderboardView leaderboard_view_;
-    std::shared_ptr<const PlayerCard> player_card_;
-    SdlTexturePtr remote_avatar_texture_;
-    SDL_Texture* avatar_texture_ = nullptr;
-    SdlTexturePtr atlas_texture_;
-    std::unordered_map<std::filesystem::path, AtlasRegion> atlas_regions_;
-    std::vector<NodeSprites> node_sprites_;
-    Runtime* manual_runtime_ = nullptr;
     struct StatusLine {
         std::string message;
         ImVec4 color = warning_text_color;
@@ -260,9 +219,51 @@ private:
         ImVec4 feedback_color{1.0F, 1.0F, 1.0F, 1.0F};
         std::uint64_t feedback_until = 0;
     };
-    StatusLine status_;
+
+    std::string title_;
+    std::filesystem::path asset_root_;
+    bool overlay_ = false;
+    bool overlay_transparent_ = true;
+    float scale_ = 1.0F;
+    std::string ui_language_ = "zh";
+
+    WindowContext context_;
+    bool ready_ = false;
+    mutable std::optional<UiAssets> assets_;
+    mutable std::optional<EnchantmentGlint> glint_;
+
+    const ProgressViewModel& view_;
+    std::shared_ptr<const CompiledTemplate> compiled_;
+    // Held, not just compared, so a new layout at a freed one's address still counts as a change.
+    std::shared_ptr<const Layout> layout_;
+    IconFiles icon_files_;
+    SdlTexturePtr atlas_texture_;
+    std::unordered_map<std::filesystem::path, AtlasRegion> atlas_regions_;
+    std::vector<NodeSprites> node_sprites_;
+
+    std::shared_ptr<const PlayerCard> player_card_;
+    SdlTexturePtr remote_avatar_texture_;
+    SDL_Texture* avatar_texture_ = nullptr;
+
+    Glow glow_;
+    CompletionAnimator completion_;
+    CompletionFireworks fireworks_;
+    bool completion_view_ = false;
+    std::optional<float> completion_started_;
+    std::vector<CarouselState> overlay_carousels_;
+    float overlay_min_height_ = 0.0F;
+
+    SettingsPanel settings_panel_;
+    LeaderboardView leaderboard_view_;
+    Runtime* manual_runtime_ = nullptr;
     UpdateNotice* update_notice_ = nullptr;
     LeaderboardLoaders* leaderboards_ = nullptr;
+    StatusLine status_;
+
+    // Filled while drawing: when the frame next changes.
+    mutable FrameSchedule frame_schedule_;
+    bool pointer_held_ = false;
+    std::uint64_t interactive_until_ = 0;
 };
 
 }  // namespace beacon

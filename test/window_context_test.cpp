@@ -187,10 +187,50 @@ TEST_CASE("settings language changes preserve the window and keep actions inside
                 INFO(language);
                 INFO("book scroll " << book->ScrollMax.y << ", body scroll " << book->DC.ChildWindows[0]->ScrollMax.y);
                 CHECK(book->ScrollMax.y == 0.0F);
-                CHECK(book->DC.ChildWindows[0]->ScrollMax.y == 0.0F);
             }
             ImGui::Render();
         }
+
+        bool apply = false;
+        const auto frame = [&] {
+            window.make_current();
+            ImGui_ImplSDLRenderer3_NewFrame();
+            ImGui_ImplSDL3_NewFrame();
+            ImGui::NewFrame();
+            panel.render(ImGui::GetMainViewport(), settings, nullptr, nullptr, &apply, assets);
+            ImGui::Render();
+        };
+        auto* body = book->DC.ChildWindows[0];
+        const auto edit = [&](const char* label, const int component, const char* value) {
+            const auto table_id = body->GetID("##appearance-settings");
+            const auto group_id = ImHashStr(label, 0, table_id);
+            const auto component_id = ImHashData(&component, sizeof(component), group_id);
+            const auto input_id = ImHashStr("", 0, component_id);
+            ImGui::ActivateItemByID(input_id);
+            frame();
+            auto* input = ImGui::GetInputTextState(input_id);
+            REQUIRE(input);
+            input->SelectAll();
+            ImGui::GetIO().AddInputCharactersUTF8(value);
+            frame();
+        };
+        body->Scroll.y = 0;
+        frame();
+        edit("##main-window-size", 0, "1080");
+        edit("##main-window-size", 1, "720");
+        body->Scroll.y = body->ScrollMax.y;
+        frame();
+        edit("##overlay-window-size", 0, "1200");
+        edit("##overlay-window-size", 1, "240");
+        CHECK(settings.main_window_width == 1080);
+        CHECK(settings.main_window_height == 720);
+        CHECK(settings.overlay_window_width == 1200);
+        CHECK(settings.overlay_window_height == 240);
+        CHECK_FALSE(apply);
+        // The book actions remain outside the scrolling form.
+        ImGui::ActivateItemByID(book->GetID("##save"));
+        frame();
+        CHECK(apply);
     }
 }
 

@@ -249,10 +249,15 @@ public:
         : runtime_(runtime), persistence_(persistence), fixed_state_(std::move(fixed_state)), asset_root_(asset_root),
           install_root_(install_root), template_options_(template_options), current_settings_(settings),
           applied_settings_(settings), frame_limit_(frame_limit), runtime_error_(std::move(initial_error)),
-          tracker_("Beacon Tracker", WindowSettings{}, false, asset_root_, view_, settings.main_window_scale),
-          overlay_("Beacon Overlay", WindowSettings{.x = 120, .y = 120, .width = 1280, .height = 180}, true,
-                   asset_root_, view_, settings.overlay_window_scale, settings.overlay_transparent,
-                   settings.overlay_visible),
+          tracker_("Beacon Tracker",
+                   WindowSettings{.width = settings.main_window_width, .height = settings.main_window_height}, false,
+                   asset_root_, view_, settings.main_window_scale),
+          overlay_(
+              "Beacon Overlay",
+              WindowSettings{
+                  .x = 120, .y = 120, .width = settings.overlay_window_width, .height = settings.overlay_window_height},
+              true, asset_root_, view_, settings.overlay_window_scale, settings.overlay_transparent,
+              settings.overlay_visible),
           profile_loader_(install_root_), leaderboard_loaders_(install_root_) {
         if (runtime_ != nullptr && persistence_ != nullptr) {
             const auto initial_state = runtime_->state();
@@ -279,6 +284,10 @@ public:
         ready_ = true;
     }
 
+    ~Impl() {
+        save_window_sizes();
+    }
+
     [[nodiscard]] bool ready() const {
         return ready_;
     }
@@ -299,6 +308,8 @@ public:
             current_settings_.overlay_visible = false;
         tracker_.process_event(event);
         overlay_.process_event(event);
+        if (event.type == SDL_EVENT_WINDOW_RESIZED)
+            remember_window_size(event.window.windowID, frame_started);
         if (auto* window = SDL_GetWindowFromEvent(&event)) {
             const auto deadline = frame_started + std::chrono::milliseconds(33);
             if (SDL_GetWindowID(window) == tracker_.id())
@@ -312,6 +323,8 @@ public:
         if (!ready_ || !running_)
             return false;
         const auto frame_started = Clock::now();
+        if (resize_save_at_ && frame_started >= *resize_save_at_)
+            save_window_sizes();
         poll_update_check();
         if (runtime_ != nullptr && frame_started >= next_poll_) {
             next_poll_ = frame_started + poll_interval;
@@ -378,9 +391,35 @@ public:
             if (!applied) {
                 settings_error_ = std::move(applied.error());
             } else {
-                applied_settings_ = current_settings_;
+                const auto resize = [&](const SDL_WindowID id, const int width, const int height) {
+                    auto* window = SDL_GetWindowFromID(id);
+                    if ((SDL_GetWindowFlags(window) & (SDL_WINDOW_MAXIMIZED | SDL_WINDOW_MINIMIZED)) != 0 &&
+                        !SDL_RestoreWindow(window)) {
+                        settings_error_ =
+                            Error{.code = ErrorCode::Internal, .message = SDL_GetError(), .context = "window size"};
+                        return;
+                    }
+                    int actual_width = 0;
+                    int actual_height = 0;
+                    SDL_GetWindowSize(window, &actual_width, &actual_height);
+                    if ((actual_width != width || actual_height != height) &&
+                        !SDL_SetWindowSize(window, width, height)) {
+                        settings_error_ =
+                            Error{.code = ErrorCode::Internal, .message = SDL_GetError(), .context = "window size"};
+                    }
+                };
                 settings_error_.reset();
+                if (current_settings_.main_window_width != applied_settings_.main_window_width ||
+                    current_settings_.main_window_height != applied_settings_.main_window_height)
+                    resize(tracker_.id(), current_settings_.main_window_width, current_settings_.main_window_height);
+                if (current_settings_.overlay_window_width != applied_settings_.overlay_window_width ||
+                    current_settings_.overlay_window_height != applied_settings_.overlay_window_height)
+                    resize(overlay_.id(), current_settings_.overlay_window_width,
+                           current_settings_.overlay_window_height);
+                applied_settings_ = current_settings_;
+                resize_save_at_.reset();
                 runtime_error_.reset();
+                next_tracker_frame_ = next_overlay_frame_ = frame_started;
             }
         }
         if (overlay_visible_ != current_settings_.overlay_visible) {
@@ -408,6 +447,8 @@ public:
         if (!ready_ || !running_)
             return 0;
         auto next_wake = Clock::now() + poll_interval;
+        if (resize_save_at_)
+            next_wake = std::min(next_wake, *resize_save_at_);
         if (runtime_ != nullptr)
             next_wake = std::min(next_wake, next_poll_);
         if (window_shown(tracker_.id()))
@@ -421,6 +462,51 @@ public:
     }
 
 private:
+    void remember_window_size(const SDL_WindowID id, const Clock::time_point now) {
+        if (id != tracker_.id() && id != overlay_.id())
+            return;
+        auto* window = SDL_GetWindowFromID(id);
+        if ((SDL_GetWindowFlags(window) & (SDL_WINDOW_MAXIMIZED | SDL_WINDOW_MINIMIZED)) != 0)
+            return;
+        int width = 0;
+        int height = 0;
+        if (!SDL_GetWindowSize(window, &width, &height) || width < 1 || height < 1 || width > max_window_dimension ||
+            height > max_window_dimension)
+            return;
+        const auto remember = [&](const int actual, int& applied, int& draft) {
+            if (actual == applied)
+                return;
+            if (draft == applied)
+                draft = actual;
+            applied = actual;
+            resize_save_at_ = now + std::chrono::milliseconds(500);
+        };
+        if (id == tracker_.id()) {
+            remember(width, applied_settings_.main_window_width, current_settings_.main_window_width);
+            remember(height, applied_settings_.main_window_height, current_settings_.main_window_height);
+        } else {
+            remember(width, applied_settings_.overlay_window_width, current_settings_.overlay_window_width);
+            remember(height, applied_settings_.overlay_window_height, current_settings_.overlay_window_height);
+        }
+    }
+
+    void save_window_sizes() {
+        if (persistence_ == nullptr || !resize_save_at_)
+            return;
+        if (auto result = persistence_->save_settings(applied_settings_); !result) {
+            settings_error_ = std::move(result.error());
+            settings_error_->message += ": " + settings_error_->context;
+            settings_error_->context = "window sizes";
+            SDL_Log("Could not save window sizes: %s", settings_error_->message.c_str());
+            next_tracker_frame_ = Clock::now();
+            resize_save_at_ = next_tracker_frame_ + std::chrono::seconds(1);
+            return;
+        }
+        resize_save_at_.reset();
+        if (settings_error_ && settings_error_->context == "window sizes")
+            settings_error_.reset();
+    }
+
     void start_update_check() {
         const auto updater = update::layout::updater_executable(install_root_);
         const auto manifest = install_root_ / update::layout::current_pointer;
@@ -491,25 +577,31 @@ private:
     std::filesystem::path asset_root_;
     std::filesystem::path install_root_;
     const std::vector<std::filesystem::path>& template_options_;
+
     Settings current_settings_;
     Settings applied_settings_;
+    std::optional<SettingsApplier> settings_applier_;
+    std::optional<Error> settings_error_;
+    bool apply_settings_ = false;
+    std::optional<Clock::time_point> resize_save_at_;
+
     int frame_limit_ = 0;
     int frames_ = 0;
     bool running_ = true;
     bool ready_ = false;
     bool overlay_visible_ = false;
     std::optional<Error> runtime_error_;
-    std::optional<Error> settings_error_;
-    bool apply_settings_ = false;
+
     std::unique_ptr<UpdateCheck> update_check_;
     std::filesystem::path update_program_;
     UpdateNotice update_notice_;
+
     ProgressViewModel view_;
     WindowRenderer tracker_;
     WindowRenderer overlay_;
     ProfileLoader profile_loader_;
     LeaderboardLoaders leaderboard_loaders_;
-    std::optional<SettingsApplier> settings_applier_;
+
     Clock::time_point next_poll_{};
     Clock::time_point next_tracker_frame_{};
     Clock::time_point next_overlay_frame_{};
@@ -664,17 +756,21 @@ int desktop_smoke_test(const std::filesystem::path& asset_root) {
         update_settings.main_window_scale = max_window_scale;
         tracker.prepare({}, {});
         tracker.render({}, {}, &update_settings, nullptr, nullptr, nullptr, nullptr, &notice);
-        int minimum_width = 0;
         int tracker_width = 0;
-        SDL_GetWindowMinimumSize(SDL_GetWindowFromID(tracker.id()), &minimum_width, nullptr);
-        SDL_GetWindowSize(SDL_GetWindowFromID(tracker.id()), &tracker_width, nullptr);
-        if (minimum_width <= 80 || tracker_width < minimum_width) {
-            SDL_Log("Update notification did not keep its button visible in a narrow window");
+        int tracker_height = 0;
+        SDL_GetWindowSize(SDL_GetWindowFromID(tracker.id()), &tracker_width, &tracker_height);
+        if (tracker_width != 80 || tracker_height != 140) {
+            SDL_Log("Update notification changed the configured window size");
             return 1;
         }
         notice.error = "启动更新器失败，请重试";
         tracker.prepare(state, {});
         tracker.render(state, {}, &update_settings, nullptr, nullptr, nullptr, nullptr, &notice);
+        SDL_GetWindowSize(SDL_GetWindowFromID(tracker.id()), &tracker_width, &tracker_height);
+        if (tracker_width != 80 || tracker_height != 140) {
+            SDL_Log("Layout changed the configured window size");
+            return 1;
+        }
         window.prepare({}, {});
         window.render({}, {});
         if (window.refresh_delay_ms() != 1000) {
@@ -695,6 +791,13 @@ int desktop_smoke_test(const std::filesystem::path& asset_root) {
             return 1;
         }
         window.render(state, {});
+        int overlay_width = 0;
+        int overlay_height = 0;
+        SDL_GetWindowSize(SDL_GetWindowFromID(window.id()), &overlay_width, &overlay_height);
+        if (overlay_width != 960 || overlay_height != 640) {
+            SDL_Log("Layout changed the configured overlay size");
+            return 1;
+        }
         if (window.refresh_delay_ms() != 16) {
             SDL_Log("Expected active refresh, got %llu", static_cast<unsigned long long>(window.refresh_delay_ms()));
             return 1;

@@ -177,17 +177,19 @@ void SettingsPanel::render(const ImGuiViewport* viewport, Settings& settings, st
     const ImVec2 form_size{ImGui::GetContentRegionAvail().x, 0.0F};
     const char* const setting_labels[] = {
         text("界面语言：", "Interface language:"),
-        text("模板：", "Template:"),
-        text("模板语言：", "Template language:"),
         text("自动识别游戏目录：", "Auto-detect game:"),
         text("游戏目录：", "Game directory:"),
+        text("模板：", "Template:"),
+        text("模板语言：", "Template language:"),
+        text("主窗口 宽 × 高：", "Main width × height:"),
         text("主窗口 缩放（倍率）：", "Main scale:"),
         text("主窗口 背景色：", "Main background:"),
         text("Overlay 显示：", "Show overlay:"),
-        text("Overlay 透明背景：", "Transparent overlay:"),
-        text("Overlay 滚动方向：", "Scroll direction:"),
+        text("Overlay 宽 × 高：", "Overlay width × height:"),
         text("Overlay 缩放（倍率）：", "Overlay scale:"),
+        text("Overlay 透明背景：", "Transparent overlay:"),
         text("Overlay 背景色：", "Overlay background:"),
+        text("Overlay 滚动方向：", "Scroll direction:"),
         text("Overlay 滚动速度：", "Scroll speed:"),
     };
     float label_width = 0.0F;
@@ -274,6 +276,19 @@ bool SettingsPanel::render_source(Settings& settings, const std::vector<std::fil
         if (apply != nullptr)
             *apply = true;
     };
+    form_row(text("自动识别游戏目录：", "Auto-detect game:"));
+    if (minecraft_checkbox(assets, "##auto-detect", text("开启", "Enabled"), &settings.auto_detect, false,
+                           book_text_color))
+        apply_now();
+    form_row(text("游戏目录：", "Game directory:"));
+    ImGui::BeginDisabled(settings.auto_detect);
+    const bool game_root_changed =
+        textured_input(assets.widget("text_field.png"), assets.widget("text_field_highlighted.png"), "##game-root",
+                       game_root_input_.data(), game_root_input_.size());
+    if (game_root_changed) {
+        settings.game_root = path_from_utf8(game_root_input_.data());
+    }
+    ImGui::EndDisabled();
     refresh_languages(settings.template_path);
     form_row(text("模板：", "Template:"));
     if (templates != nullptr && !templates->empty()) {
@@ -330,19 +345,6 @@ bool SettingsPanel::render_source(Settings& settings, const std::vector<std::fil
         ImGui::EndCombo();
     }
     pop_combo_style();
-    form_row(text("自动识别游戏目录：", "Auto-detect game:"));
-    if (minecraft_checkbox(assets, "##auto-detect", text("开启", "Enabled"), &settings.auto_detect, false,
-                           book_text_color))
-        apply_now();
-    form_row(text("游戏目录：", "Game directory:"));
-    ImGui::BeginDisabled(settings.auto_detect);
-    const bool game_root_changed =
-        textured_input(assets.widget("text_field.png"), assets.widget("text_field_highlighted.png"), "##game-root",
-                       game_root_input_.data(), game_root_input_.size());
-    if (game_root_changed) {
-        settings.game_root = path_from_utf8(game_root_input_.data());
-    }
-    ImGui::EndDisabled();
     ImGui::EndTable();
     return changed || game_root_changed;
 }
@@ -362,6 +364,19 @@ bool SettingsPanel::render_appearance(Settings& settings, const ImVec2 content_s
         return textured_slider(assets.widget("slider.png"), assets.widget("slider_handle.png"),
                                assets.widget("slider_handle_highlighted.png"), id, value, min_value, max_value);
     };
+    const auto dimensions = [&](const char* id, int& width, int& height) {
+        int size[]{width, height};
+        ImGui::PushStyleColor(ImGuiCol_Text, {1.0F, 1.0F, 1.0F, 1.0F});
+        const bool edited = ImGui::InputInt2(id, size);
+        ImGui::PopStyleColor();
+        if (edited) {
+            width = size[0];
+            height = size[1];
+        }
+        return edited;
+    };
+    form_row(text("主窗口 宽 × 高：", "Main width × height:"));
+    changed = dimensions("##main-window-size", settings.main_window_width, settings.main_window_height) || changed;
     form_row(text("主窗口 缩放（倍率）：", "Main scale:"));
     changed = slider("##main-window-scale", &settings.main_window_scale, min_window_scale, max_window_scale) || changed;
     form_row(text("主窗口 背景色：", "Main background:"));
@@ -370,9 +385,19 @@ bool SettingsPanel::render_appearance(Settings& settings, const ImVec2 content_s
     ImGui::PopStyleColor();
     form_row(text("Overlay 显示：", "Show overlay:"));
     changed = checkbox("##overlay-visible", text("开启", "Enabled"), &settings.overlay_visible, false) || changed;
+    form_row(text("Overlay 宽 × 高：", "Overlay width × height:"));
+    changed =
+        dimensions("##overlay-window-size", settings.overlay_window_width, settings.overlay_window_height) || changed;
+    form_row(text("Overlay 缩放（倍率）：", "Overlay scale:"));
+    changed =
+        slider("##overlay-window-scale", &settings.overlay_window_scale, min_window_scale, max_window_scale) || changed;
     form_row(text("Overlay 透明背景：", "Transparent overlay:"));
     changed =
         checkbox("##overlay-transparent", text("开启", "Enabled"), &settings.overlay_transparent, false) || changed;
+    form_row(text("Overlay 背景色：", "Overlay background:"));
+    ImGui::PushStyleColor(ImGuiCol_Text, {1.0F, 1.0F, 1.0F, 1.0F});
+    changed = ImGui::ColorEdit3("##overlay-background", settings.overlay_window_background_color.data()) || changed;
+    ImGui::PopStyleColor();
     form_row(text("Overlay 滚动方向：", "Scroll direction:"));
     bool scroll_left = !settings.overlay_scroll_right;
     if (checkbox("##overlay-scroll-left", text("向左", "Left"), &scroll_left, true)) {
@@ -385,13 +410,6 @@ bool SettingsPanel::render_appearance(Settings& settings, const ImVec2 content_s
         settings.overlay_scroll_right = true;
         changed = true;
     }
-    form_row(text("Overlay 缩放（倍率）：", "Overlay scale:"));
-    changed =
-        slider("##overlay-window-scale", &settings.overlay_window_scale, min_window_scale, max_window_scale) || changed;
-    form_row(text("Overlay 背景色：", "Overlay background:"));
-    ImGui::PushStyleColor(ImGuiCol_Text, {1.0F, 1.0F, 1.0F, 1.0F});
-    changed = ImGui::ColorEdit3("##overlay-background", settings.overlay_window_background_color.data()) || changed;
-    ImGui::PopStyleColor();
     form_row(text("Overlay 滚动速度：", "Scroll speed:"));
     changed = slider("##overlay-scroll-speed", &settings.overlay_scroll_speed, 0.0F, 300.0F) || changed;
     ImGui::EndTable();

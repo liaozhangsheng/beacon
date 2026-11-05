@@ -78,9 +78,8 @@ if(TARGET beacon-updater)
 endif()
 
 if(TARGET beacon)
-    add_executable(beacon_ui_test ui_assets_test.cpp window_context_test.cpp profile_test.cpp apng_test.cpp
-        ../src/ui/widgets.cpp ../src/ui/apng.cpp ../src/ui/window_context.cpp ../src/ui/settings_panel.cpp)
-    target_link_libraries(beacon_ui_test PRIVATE beacon_imgui beacon_profile beacon_runtime beacon_resources SDL3_image::SDL3_image Catch2::Catch2WithMain)
+    add_executable(beacon_ui_test ui_assets_test.cpp window_context_test.cpp profile_test.cpp apng_test.cpp desktop_test.cpp)
+    target_link_libraries(beacon_ui_test PRIVATE beacon_desktop Catch2::Catch2WithMain)
     target_compile_definitions(beacon_ui_test PRIVATE BEACON_TEST_ROOT="${PROJECT_SOURCE_DIR}")
     beacon_warnings(beacon_ui_test)
     catch_discover_tests(beacon_ui_test)

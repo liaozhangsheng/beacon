@@ -71,11 +71,9 @@ std::size_t collection_rows(const float content_height, const float item_height,
 }
 
 float body_height_for_content(const LayoutGroup& group, const float content_height, const float scale) {
-    if (group.height <= 0.0F) {
+    if (group.height <= 0.0F)
         return 0.0F;
-    }
-    const auto margin = ui::from_icon(group.margin, scale);
-    return (content_height + (margin * 2.0F)) / group.height;
+    return (content_height + (ui::from_icon(group.margin, scale) * 2.0F)) / group.height;
 }
 
 float overlay_group_min_height(const LayoutGroup& group, const bool labelled, const bool stats, const float font_size,
@@ -91,12 +89,6 @@ float overlay_group_min_height(const LayoutGroup& group, const bool labelled, co
                                  ? frame_size
                                  : frame_size + label_gap + (labelled ? font_size : 0.0F) +
                                        (stats ? font_size + from_icon(1.0F) : 0.0F));
-}
-
-float main_group_min_height(const LayoutGroup& group, const float font_size, const float scale) {
-    // Item rows and the collection header both stack a frame, the label gap and two text lines.
-    return (ui::from_icon(group.padding, scale) * 2.0F) + ui::progress_frame_size(scale) +
-           group_spacing(group, scale).label + (font_size * 2.0F);
 }
 
 CollectionGrid collection_grid(const float header_width, const std::span<const float> member_widths,

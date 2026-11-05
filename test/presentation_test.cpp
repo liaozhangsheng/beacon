@@ -781,15 +781,14 @@ TEST_CASE("overlay group heights count frames labels and statistic lines") {
     CHECK(beacon::overlay_group_min_height(nodes, true, true, 12) == Catch::Approx(6 + frame + 2 + 12 + 13));
     CHECK(beacon::overlay_group_min_height(nodes, true, true, 24, 2) ==
           Catch::Approx(2 * beacon::overlay_group_min_height(nodes, true, true, 12)));
-
-    // Main groups need a frame, the label gap and two text lines; the body grows until a group's share fits.
-    const beacon::LayoutGroup main{.height = 0.25F,
-                                   .margin = 2,
-                                   .padding = 3,
-                                   .spacing = beacon::default_spacing(false, beacon::LayoutSource::Nodes)};
-    const auto main_height = beacon::main_group_min_height(main, 12);
-    CHECK(main_height == Catch::Approx(6 + frame + main.spacing.label + 24));
-    CHECK(beacon::body_height_for_content(main, main_height) == Catch::Approx((main_height + 4) * 4));
+    auto quarter = nodes;
+    quarter.height = 0.25F;
+    quarter.margin = 2;
+    const auto height = beacon::overlay_group_min_height(quarter, true, true, 12);
+    CHECK(beacon::body_height_for_content(quarter, height) == Catch::Approx((height + 4) * 4));
+    CHECK(beacon::body_height_for_content(quarter, height * 2, 2) == Catch::Approx((height + 4) * 8));
+    quarter.height = 0;
+    CHECK(beacon::body_height_for_content(quarter, height) == 0);
 }
 
 TEST_CASE("layout spacing overrides window defaults and is validated per group kind") {
