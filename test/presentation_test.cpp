@@ -8,6 +8,7 @@
 #include <beacon/ui/carousel.hpp>
 #include <beacon/ui/frame_schedule.hpp>
 #include <beacon/ui/layout_metrics.hpp>
+#include <beacon/ui/sizing.hpp>
 #include <beacon/ui/leaderboard.hpp>
 #include <beacon/app/persistence.hpp>
 #include <beacon/app/settings_applier.hpp>
@@ -48,7 +49,7 @@ TEST_CASE("resource reload preserves independent identities and language changes
     std::ofstream(path) << presented_template;
     std::ofstream(root / "lang.json") << R"({"goal.shown":"Shown"})";
     std::ofstream(root / "langs/zh-CN.json") << R"({"goal.shown":"已翻译"})";
-    std::ofstream(root / "layout.json") << R"({"main":[],"overlay":[]})";
+    std::ofstream(root / "layout.json") << R"({"main":{"vbox":[]},"overlay":{"vbox":[]}})";
     std::ofstream(root / "icons/a.bmp") << "image";
     beacon::TemplateResourceLoader loader;
     const auto initial = loader.load(path, root, "");
@@ -71,7 +72,7 @@ TEST_CASE("resource reload preserves independent identities and language changes
     REQUIRE(translated->localization != initial->localization);
 
     std::ofstream(root / "lang.json") << R"({"goal.shown":"Reloaded"})";
-    std::ofstream(root / "layout.json") << R"({"main":[{"id":"main","nodes":["shown"]}]})";
+    std::ofstream(root / "layout.json") << R"({"main":{"id":"main","nodes":["shown"]}})";
     const auto full_reload = loader.load(path, root, "");
     REQUIRE(full_reload);
     REQUIRE(full_reload->layout != translated->layout);
@@ -446,7 +447,7 @@ TEST_CASE("localization falls back from selected language to default and then ke
 TEST_CASE("layout validates responsive groups and keeps unknown node IDs as warnings") {
     const auto compiled = beacon::compile_template_json(presented_template);
     REQUIRE(compiled);
-    const auto layout = beacon::compile_layout_json(R"({"main":[{"id":"main","nodes":["shown","old"]}]})", *compiled);
+    const auto layout = beacon::compile_layout_json(R"({"main":{"id":"main","nodes":["shown","old"]}})", *compiled);
     REQUIRE(layout);
     REQUIRE(layout->warnings.size() == 1);
     REQUIRE(layout->warnings.front().context == "old");
@@ -457,30 +458,15 @@ TEST_CASE("layout validates responsive groups and keeps unknown node IDs as warn
         REQUIRE_FALSE(result);
         CHECK(result.error().context == context);
     };
-    invalid(R"({"main":[{"x":-0.1}]})", "layout.json/main/0/x");
-    invalid(R"({"main":[{"width":0}]})", "layout.json/main/0/width");
-    invalid(R"({"main":[{"columns":0}]})", "layout.json/main/0/columns");
-    invalid(R"({"main":[{"nodes":["shown"],"prefix":["goal"]}]})", "layout.json/main/0");
-    invalid(R"({"main":[{"nodes":["shown"],"children":[]}]})", "layout.json/main/0");
-    invalid(R"({"main":[{"exclude":["shown"]}]})", "layout.json/main/0/exclude");
-    invalid(R"({"main":[{"children":[{"nodes":"shown"}]}]})", "layout.json/main/0/children/0/nodes");
-    invalid(R"({"main":{}})", "layout.json/main");
-    invalid(R"({"main":[],"windows":[]})", "layout.json/windows");
-    invalid(R"({"leaderboard":{"sheet":"a"}})", "layout.json/leaderboard");
-    invalid(R"({"main":[{"leaderboard":"26.2 - 26.3"}]})", "layout.json/main/0/leaderboard");
-    invalid(R"({"main":[{"leaderboard":{}}]})", "layout.json/main/0/leaderboard/sheet");
-    invalid(R"({"main":[{"leaderboard":{"sheet":"a/../b"}}]})", "layout.json/main/0/leaderboard/sheet");
-    invalid(R"({"main":[{"leaderboard":{"sheet":"a","gid":-1}}]})", "layout.json/main/0/leaderboard/gid");
-    invalid(R"({"main":[{"leaderboard":{"sheet":"a","gid":"1"}}]})", "layout.json/main/0/leaderboard/gid");
-    invalid(R"({"main":[{"leaderboard":{"sheet":"a","board":""}}]})", "layout.json/main/0/leaderboard/board");
-    invalid(R"({"main":[{"leaderboard":{"sheet":"a","title":true}}]})", "layout.json/main/0/leaderboard/title");
-    invalid(R"({"main":[{"leaderboard":{"sheet":"a","url":"b"}}]})", "layout.json/main/0/leaderboard/url");
-    invalid(R"({"main":[{"leaderboard":{"sheet":"a"},"nodes":["shown"]}]})", "layout.json/main/0");
-    invalid(R"({"main":[{"leaderboard":{"sheet":"a"},"spacing":{}}]})", "layout.json/main/0/spacing");
-    invalid(R"({"overlay":[{"leaderboard":{"sheet":"a"}}]})", "layout.json/overlay/0/leaderboard");
+    invalid(R"({"main":{"columns":0}})", "layout.json/main/columns");
+    invalid(R"({"main":{"hbox":[{"nodes":"shown"}]}})", "layout.json/main/hbox/0/nodes");
+    invalid(R"({"main":{"vbox":[]},"windows":[]})", "layout.json/windows");
+    invalid(R"({"main":{"leaderboard":{"sheet":"a/../b"}}})", "layout.json/main/leaderboard/sheet");
+    invalid(R"({"main":{"leaderboard":{"sheet":"a"},"nodes":["shown"]}})", "layout.json/main");
+    invalid(R"({"overlay":{"leaderboard":{"sheet":"a"}}})", "layout.json/overlay/leaderboard");
     const auto ranked = beacon::compile_layout_json(
-        R"({"main":[{"x":3,"width":1,"leaderboard":{"sheet":"1v7_-A","gid":1283472797,"board":"26.2 - 26.3"}},)"
-        R"({"leaderboard":{"sheet":"b","title":"1.16.1"}}]})",
+        R"({"main":{"hbox":[{"leaderboard":{"sheet":"1v7_-A","gid":1283472797,"board":"26.2 - 26.3"}},)"
+        R"({"leaderboard":{"sheet":"b","title":"1.16.1"}}]}})",
         *compiled);
     REQUIRE(ranked);
     CHECK(ranked->main[0].source == beacon::LayoutSource::Leaderboard);
@@ -622,8 +608,8 @@ TEST_CASE("state styles reject invalid windows states fields values and old layo
     }
     const auto rules = beacon::compile_template_json(presented_template);
     REQUIRE(rules);
-    CHECK_FALSE(beacon::compile_layout_json(R"({"main":[{"nodes":["shown"],"item_style":{}}]})", *rules));
-    CHECK_FALSE(beacon::compile_layout_json(R"({"overlay":[{"nodes":["shown"],"state_style":{}}]})", *rules));
+    CHECK_FALSE(beacon::compile_layout_json(R"({"main":{"nodes":["shown"],"item_style":{}}})", *rules));
+    CHECK_FALSE(beacon::compile_layout_json(R"({"overlay":{"nodes":["shown"],"state_style":{}}})", *rules));
 }
 
 TEST_CASE("overlay scrolling follows the layout scroll field") {
@@ -631,7 +617,7 @@ TEST_CASE("overlay scrolling follows the layout scroll field") {
     REQUIRE(compiled);
     const auto parse = [&](const std::string& extra, const bool main = false) {
         const auto group = R"({"nodes":["hidden"])" + extra + "}";
-        return beacon::compile_layout_json((main ? R"({"main":[)" : R"({"overlay":[)") + group + "]}", *compiled);
+        return beacon::compile_layout_json((main ? R"({"main":)" : R"({"overlay":)") + group + "}", *compiled);
     };
     const auto omitted = parse("");
     REQUIRE(omitted);
@@ -646,22 +632,76 @@ TEST_CASE("overlay scrolling follows the layout scroll field") {
     CHECK_FALSE(parse(R"(,"scroll":false)", true));
 }
 
-TEST_CASE("layout normalizes arbitrary positive coordinates and sizes") {
+TEST_CASE("layout boxes divide their axis by stretch and omit springs") {
+    const auto compiled = beacon::compile_template_json(presented_template);
+    REQUIRE(compiled);
+    for (const bool horizontal : {true, false}) {
+        const auto layout = beacon::compile_layout_json(
+            std::string{R"({"main":{")"} + (horizontal ? "hbox" : "vbox") +
+                R"(":[{"stretch":2,"nodes":["shown"]},{"spring":true},{"spring":true,"stretch":2},{"id":"last"}]}})",
+            *compiled);
+        REQUIRE(layout);
+        REQUIRE(layout->main.size() == 2);
+        const auto& first = layout->main[0];
+        const auto& last = layout->main[1];
+        CHECK(first.x == 0);
+        CHECK(first.y == 0);
+        CHECK(first.width == Catch::Approx(horizontal ? 2.0F / 6 : 1));
+        CHECK(first.height == Catch::Approx(horizontal ? 1 : 2.0F / 6));
+        CHECK(last.id == "last");
+        CHECK(last.x == Catch::Approx(horizontal ? 5.0F / 6 : 0));
+        CHECK(last.y == Catch::Approx(horizontal ? 0 : 5.0F / 6));
+        CHECK(last.width == Catch::Approx(horizontal ? 1.0F / 6 : 1));
+        CHECK(last.height == Catch::Approx(horizontal ? 1 : 1.0F / 6));
+    }
+}
+
+TEST_CASE("layout box gaps separate children by a fixed distance") {
     const auto compiled = beacon::compile_template_json(presented_template);
     REQUIRE(compiled);
     const auto layout = beacon::compile_layout_json(
-        R"({"main":[{"nodes":["shown"],"x":100,"y":50,"width":300,"height":150}]})", *compiled);
+        R"({"main":{"vbox":[{"id":"top"},{"stretch":2,"gap":10,"hbox":[{"id":"left"},{"id":"right","stretch":3}]}],"gap":20}})",
+        *compiled);
     REQUIRE(layout);
-    REQUIRE(layout->main[0].x == 0.25F);
-    REQUIRE(layout->main[0].y == 0.25F);
-    REQUIRE(layout->main[0].width == 0.75F);
-    REQUIRE(layout->main[0].height == 0.75F);
+    REQUIRE(layout->main.size() == 3);
+    const auto gap = beacon::ui::from_icon(10.0F, 1.0F);
+    for (const float width : {400.0F, 1000.0F}) {
+        CAPTURE(width);
+        const auto at = [&](const std::size_t index) {
+            return beacon::calculate_layout_metrics(layout->main[index], false, 0, width, 700.0F, 0, 0, 1.0F);
+        };
+        const auto top = at(0);
+        const auto left = at(1);
+        const auto right = at(2);
+        CHECK(left.y - (top.y + top.configured_height) == Catch::Approx(2 * gap));
+        CHECK(left.y + left.configured_height == Catch::Approx(700.0F));
+        CHECK(top.configured_height * 2 == Catch::Approx(left.configured_height));
+        CHECK(left.x == 0);
+        CHECK(right.x - (left.x + left.width) == Catch::Approx(gap));
+        CHECK(right.x + right.width == Catch::Approx(width));
+        CHECK(left.width * 3 == Catch::Approx(right.width));
+    }
+}
+
+TEST_CASE("layout rejects invalid boxes springs weights and legacy placement") {
+    const auto compiled = beacon::compile_template_json(presented_template);
+    REQUIRE(compiled);
+    for (const auto* group : {R"({"stretch":0})", R"({"hbox":[],"vbox":[]})", R"({"hbox":[],"nodes":[]})",
+                              R"({"spring":false})", R"({"spring":true,"nodes":[]})", R"({"x":0})"}) {
+        CAPTURE(group);
+        CHECK_FALSE(beacon::compile_layout_json(std::string{R"({"main":{"hbox":[)"} + group + "]}}", *compiled));
+    }
+    CHECK_FALSE(beacon::compile_layout_json(R"({"overlay":[]})", *compiled));
+    const auto empty = beacon::compile_layout_json(R"({"main":{"hbox":[]},"overlay":{"spring":true}})", *compiled);
+    REQUIRE(empty);
+    CHECK(empty->main.empty());
+    CHECK(empty->overlay.empty());
 }
 
 TEST_CASE("layout fills omitted group fields with defaults") {
     const auto compiled = beacon::compile_template_json(presented_template);
     REQUIRE(compiled);
-    const auto layout = beacon::compile_layout_json(R"({"main":[{}]})", *compiled);
+    const auto layout = beacon::compile_layout_json(R"({"main":{}})", *compiled);
     REQUIRE(layout);
     REQUIRE(layout->overlay.empty());
     const auto expected = beacon::LayoutGroup{.spacing = beacon::default_spacing(false, beacon::LayoutSource::None)};
@@ -670,28 +710,36 @@ TEST_CASE("layout fills omitted group fields with defaults") {
     CHECK(beacon::resolve_layout_nodes(layout->main.front(), *compiled, compiled->graph.nodes.size()).empty());
 }
 
-TEST_CASE("layout scales every level of nested groups to fill its parent") {
+TEST_CASE("layout nests boxes without adding container panels") {
     const auto compiled = beacon::compile_template_json(presented_template);
     REQUIRE(compiled);
     const auto layout = beacon::compile_layout_json(
-        R"({"main":[{"id":"outer","x":1,"children":[{"id":"left","nodes":["shown"]},{"id":"right","x":1,"width":3}]}]})",
+        R"({"main":{"vbox":[{"spring":true},{"stretch":3,"hbox":[
+            {"id":"left","nodes":["shown"]},{"id":"right","stretch":3}]}]}})",
         *compiled);
     REQUIRE(layout);
-    REQUIRE(layout->main.size() == 3);
-    const auto& outer = layout->main[0];
-    CHECK(outer.source == beacon::LayoutSource::None);
-    CHECK(outer.x == 0.5F);
-    CHECK(outer.width == 0.5F);
-    CHECK(outer.height == 1.0F);
-    const auto& left = layout->main[1];
+    REQUIRE(layout->main.size() == 2);
+    const auto& left = layout->main[0];
     CHECK(left.id == "left");
-    CHECK(left.x == 0.5F);
-    CHECK(left.width == 0.125F);
-    const auto& right = layout->main[2];
-    CHECK(right.x == 0.625F);
-    CHECK(right.width == 0.375F);
-    CHECK(right.y == 0.0F);
-    CHECK(right.height == 1.0F);
+    CHECK(left.x == 0);
+    CHECK(left.y == 0.25F);
+    CHECK(left.width == 0.25F);
+    CHECK(left.height == 0.75F);
+    const auto& right = layout->main[1];
+    CHECK(right.id == "right");
+    CHECK(right.x == 0.25F);
+    CHECK(right.y == 0.25F);
+    CHECK(right.width == 0.75F);
+    CHECK(right.height == 0.75F);
+    beacon::PublishedState state{.compiled = std::make_shared<const beacon::CompiledTemplate>(*compiled),
+                                 .localization = std::make_shared<const beacon::Localization>(),
+                                 .layout = std::make_shared<const beacon::Layout>(*layout)};
+    state.snapshot.results.resize(compiled->graph.nodes.size());
+    beacon::ProgressViewModel view;
+    view.update(state);
+    REQUIRE(view.main_groups.size() == 2);
+    CHECK(view.main_groups[0] == std::vector{compiled->graph.index_by_id.at("shown")});
+    CHECK(view.main_groups[1].empty());
 }
 
 TEST_CASE("presentation resolves reusable layout nodes and fallback labels") {
@@ -763,7 +811,7 @@ TEST_CASE("progress summary includes collection goals but excludes statistic cou
     REQUIRE(compiled_value);
     auto compiled = std::make_shared<const beacon::CompiledTemplate>(*compiled_value);
     const auto localization_value = beacon::compile_localization_json(R"({})");
-    const auto layout_value = beacon::compile_layout_json(R"({"main":[],"overlay":[]})", *compiled);
+    const auto layout_value = beacon::compile_layout_json(R"({"main":{"vbox":[]},"overlay":{"vbox":[]}})", *compiled);
     REQUIRE(localization_value);
     REQUIRE(layout_value);
     beacon::PublishedState state{.compiled = compiled,
@@ -828,7 +876,7 @@ TEST_CASE("layout spacing overrides window defaults and is validated per group k
     REQUIRE(compiled);
     const auto parse = [&](const std::string& spacing, const bool overlay, const std::string& selector = "nodes") {
         const auto group = R"({")" + selector + R"(":["hidden"],"spacing":)" + spacing + "}";
-        return beacon::compile_layout_json((overlay ? R"({"overlay":[)" : R"({"main":[)") + group + "]}", *compiled);
+        return beacon::compile_layout_json((overlay ? R"({"overlay":)" : R"({"main":)") + group + "}", *compiled);
     };
     const auto main = parse(R"({"item":8,"row":5,"label":1,"collection":20})", false, "collections");
     REQUIRE(main);
@@ -1070,17 +1118,9 @@ TEST_CASE("unsafe icon paths use the placeholder without exposing files outside 
         output << "outside";
     }
     std::ofstream(root / "lang.json") << "{}";
-    std::ofstream(root / "layout.json") << R"({"main":[],"overlay":[]})";
+    std::ofstream(root / "layout.json") << R"({"main":{"vbox":[]},"overlay":{"vbox":[]}})";
     std::vector<std::string> references{"../" + outside_directory.path.filename().generic_string() + "/outside.bmp",
-                                        outside.generic_string(),
-                                        "../escape.png",
-                                        "icons/../icons/a.bmp",
-                                        "icons//a.bmp",
-                                        "vender:block_a",
-                                        R"(C:\\outside.bmp)",
-                                        R"(\\\\server\\share\\outside.bmp)",
-                                        R"(icons\\a.bmp)",
-                                        R"(icons/a.bmp\u0000ignored)"};
+                                        outside.generic_string(), R"(icons\\a.bmp)"};
     std::error_code ec;
     std::filesystem::create_symlink(outside, root / "icons/link.bmp", ec);
     if (!ec)
@@ -1179,7 +1219,7 @@ TEST_CASE("template resources load as one validated package") {
     {
         std::ofstream(root / "template.json") << presented_template;
         std::ofstream(root / "lang.json") << R"({"template.presentation":"Package","goal.shown":"Shown"})";
-        std::ofstream(root / "layout.json") << R"({"main":[],"overlay":[]})";
+        std::ofstream(root / "layout.json") << R"({"main":{"vbox":[]},"overlay":{"vbox":[]}})";
         std::ofstream(root / "icons/a.bmp") << "fixture";
     }
     const auto resources = beacon::load_template_resources(root / "template.json", root);

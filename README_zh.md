@@ -239,7 +239,29 @@ templates/<name>/
 只有布局实际显示且启用动画的条目会播放并等待动画；撤销完成会中止动画。主窗口立即应用状态样式，留空或隐藏的项目无法点击撤销完成。
 `decoration` 在 `main` 中支持 `none`（默认）和 `strikethrough`（删除线），仅主窗口文字在图标右侧的收集组子项生效；`overlay` 不接受该属性。
 未知窗口、状态、属性、枚举值和非字符串属性值均会被拒绝。
-`layout.json` 负责分组、位置、间距和悬浮窗 `scroll`。
+`layout.json` 的 `main`、`overlay` 各放一个布局对象，两者都可省略。`hbox` 从左到右排列，`vbox` 从上到下排列，
+可以互相嵌套。子块按正数 `stretch`（默认 1）分配父布局主方向的空间，另一方向铺满。
+`spring: true` 是透明弹簧，按同样的权重占空间但不绘制。容器的 `gap`（源图标像素，默认 0）在相邻子块之间留出固定间隔，子块分剩下的空间。容器只接受 `id`、`stretch`、`gap` 和 `hbox` 或 `vbox`；
+弹簧只接受 `spring: true`、`stretch`。内容块继续使用原有的 `margin`、`padding`、项目 `spacing` 和悬浮窗 `scroll`，
+块内图标和收集组仍然自动排列。
+
+```json
+{
+  "main": {
+    "vbox": [
+      {"stretch": 5, "hbox": [
+        {"stretch": 2, "prefix": ["goal/story_"]},
+        {"spring": true},
+        {"prefix": ["goal/nether_"]}
+      ]},
+      {"stretch": 4, "collections": ["goal/adventure_kill_all_mobs"]}
+    ]
+  }
+}
+```
+
+上面两行高度为 5:4，第一行宽度为 2:1:1（中间弹簧留空）。空容器不绘制，空对象是空面板。
+不支持旧窗口数组和 `x`、`y`、`width`、`height`、`children` 字段，已有模板需要改写。
 
 `main` 中用 `"leaderboard"` 代替 `nodes` 的分组会显示公开 Google 表格中的一个榜单，例如
 [26.x](https://docs.google.com/spreadsheets/d/1v7tpe9jJp1cENpwtwJp4Hrn6c1RVniQI4vyyllQwU-A) 或
@@ -247,7 +269,7 @@ templates/<name>/
 位置和大小与其他分组一样设置：
 
 ```json
-{"id": "Leaderboard", "x": 1, "width": 0.17, "padding": 6,
+{"id": "Leaderboard", "stretch": 6, "padding": 6,
  "leaderboard": {"sheet": "1v7tpe9jJp1cENpwtwJp4Hrn6c1RVniQI4vyyllQwU-A", "gid": 1283472797, "board": "26.2 - 26.3"}}
 ```
 

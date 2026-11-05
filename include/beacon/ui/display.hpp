@@ -22,7 +22,7 @@ struct Localization {
 
 // What a layout group shows.
 enum class LayoutSource : std::uint8_t {
-    // No items: a bare panel, or a container whose children follow it as groups of their own.
+    // No items: a bare panel.
     None,
     // The listed rules.
     Nodes,
@@ -83,6 +83,11 @@ struct LayoutGroup {
     float y = 0.0F;
     float width = 1.0F;
     float height = 1.0F;
+    // Fixed corrections to the placement above that make room for box gaps, in source icon pixels.
+    float x_offset = 0.0F;
+    float y_offset = 0.0F;
+    float width_offset = 0.0F;
+    float height_offset = 0.0F;
     // Space outside and inside the group's panel, in source icon pixels.
     float margin = 0.0F;
     float padding = 0.0F;
@@ -99,7 +104,7 @@ struct LayoutGroup {
     bool operator==(const LayoutGroup&) const = default;
 };
 
-// Groups are flattened in drawing order: a container comes before its children.
+// Content panels in drawing order; boxes and springs are resolved during compilation.
 struct Layout {
     std::vector<LayoutGroup> main;
     std::vector<LayoutGroup> overlay;

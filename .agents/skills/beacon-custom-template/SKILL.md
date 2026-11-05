@@ -102,9 +102,7 @@ templates/
 
 ```json
 {
-  "main": [
-    {"id": "Progress", "nodes": ["goal/kill_dragon"]}
-  ]
+  "main": {"id": "Progress", "nodes": ["goal/kill_dragon"]}
 }
 ```
 
@@ -394,21 +392,20 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
 
 ## 布局 `layout.json`
 
-`main` 是主窗口，`overlay` 是悬浮窗（悬浮窗还需用户在设置中开启），两者都可省略。每个窗口是一个分组数组。
+`main` 是主窗口，`overlay` 是悬浮窗（悬浮窗还需用户在设置中开启），两者都可省略。每个窗口是一个布局对象，可以是横排、竖排、弹簧或内容块。
 分组的字段都有默认值，**只写与默认值不同的部分**：
 
 | 字段 | 含义 | 默认 |
 | --- | --- | --- |
 | `id` | 分组名，只为方便阅读，不显示 | 空 |
-| `x`, `y` | 左上角位置（相对比例，见下文） | `0` |
-| `width`, `height` | 尺寸（相对比例，必须大于 0） | `1` |
+| `stretch` | 在父布局主方向分配空间的正数权重 | `1` |
 | `margin`, `padding` | 外边距、内边距，像素，随窗口缩放 | `0` |
-| `nodes` / `prefix` / `collections` / `children` / `leaderboard` | 分组内容，五选一（`leaderboard` 见“排行榜”） | 空面板 |
+| `nodes` / `prefix` / `collections` / `leaderboard` | 内容块的内容，四选一（`leaderboard` 见“排行榜”） | 空面板 |
 | `exclude` | 从选中的项里排除的规则 ID | `[]` |
 | `spacing` | 组内间距 | 见“间距” |
 | `scroll` | 仅悬浮窗：是否滚动轮播 | `true` |
 
-数值都不能是负数。写错字段或把字段写在不支持的地方时，模板加载失败，错误信息会给出 `layout.json/main/0/children/1/x` 这样的位置。
+`stretch` 必须大于 0，数值必须有限且不超过 1,000,000，其余数值不能是负数。写错字段或把字段写在不支持的地方时，模板加载失败，错误信息会给出 `layout.json/main/hbox/1/stretch` 这样的位置。
 
 ### 分组内容
 
@@ -417,7 +414,6 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
 | `nodes` | 规则 ID 列表 | 这些规则，按列表顺序 |
 | `prefix` | ID 开头的字符串列表 | 所有以它开头的规则，按 `template.json` 中的顺序 |
 | `collections` | 规则 ID 列表 | 每条规则的直接子项，组成带标题的收集组 |
-| `children` | 子分组数组 | 不显示项目，子分组在本组范围内排列 |
 
 - 这里只能填规则的 `id`，不能填 Fact 或文字 key。
 - `prefix` 是普通的开头匹配：写 `goal/nether_`，不要写 `goal/nether_*`。
@@ -430,29 +426,33 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
 {"id": "Nether", "prefix": ["goal/nether_"], "exclude": ["goal/nether_hidden"]}
 ```
 
-### 位置与嵌套
+### 横排、竖排与弹簧
 
-同一层的分组按 `x`、`y`、`width`、`height` 的比例铺满它所在的区域（顶层就是整个窗口）。
-例如并排的两个分组，一个 `"width": 1`，另一个 `"x": 1, "width": 2`，就分别占窗口宽度的三分之一和三分之二。
-想在某处留空，就放一个不写内容的分组占位。
-
-用 `children` 嵌套时，子分组的位置相对父分组计算，父分组只当作背景面板：
+- `hbox: [...]` 从左到右排列，`vbox: [...]` 从上到下排列，可互相嵌套。
+- 每个子块按 `stretch` 分配主方向的空间，另一方向铺满；省略时权重为 1。
+- `spring: true` 是透明空白，和普通块一起按 `stretch` 分空间，不绘制背景。
+- 容器的 `gap` 在相邻子块之间留出固定间隔（像素，随窗口缩放，默认 `0`），首尾不留；子块按 `stretch` 分剩下的空间。窗口拉大时间隔不变，这点和弹簧不同。
+- 容器只接受 `id`、`stretch`、`gap` 和 `hbox` 或 `vbox`；弹簧只接受 `spring: true`、`stretch`，不能混入内容块字段。
+- 容器和弹簧都不显示项目；空容器不绘制，空对象 `{}` 是空面板。
+- 不支持旧窗口数组及 `x`、`y`、`width`、`height`、`children`。旧模板必须改写。
 
 ```json
 {
-  "main": [
-    {
-      "id": "Container",
-      "children": [
-        {"id": "Left", "padding": 8, "nodes": ["goal/kill_dragon"]},
-        {"id": "Right", "x": 1, "padding": 8, "nodes": ["counter/stone"]}
-      ]
-    }
-  ]
+  "main": {
+    "vbox": [
+      {"stretch": 5, "hbox": [
+        {"id": "Left", "stretch": 2, "padding": 8, "nodes": ["goal/kill_dragon"]},
+        {"spring": true},
+        {"id": "Right", "padding": 8, "nodes": ["counter/stone"]}
+      ]},
+      {"stretch": 4, "collections": ["goal/route"]}
+    ]
+  }
 }
 ```
 
-布局的 `children` 是分组数组，规则里的 `all`、`any`、`prefix`、`count.of` 是规则数组，两者不能混用。主窗口和悬浮窗的布局各写各的，不会自动复制。
+两行高度为 5:4，第一行三块宽度为 2:1:1，中间留空。弹簧按比例占位，不做内容尺寸协商。
+主窗口和悬浮窗各写各的布局，不会自动复制。块内图标、收集组及轮播仍按原有方式自动排列。
 
 ### 悬浮窗滚动
 
@@ -461,7 +461,7 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
 悬浮窗默认在完成动画播完后移除完成的项，可用 `view.state_style.overlay.done.animation` 选择动画。需要常驻的统计在自己的 `view` 中写 `"state_style": {"overlay": {"done": {"visibility": "visible"}}}`，布局只负责固定排列：
 
 ```json
-{"id": "Stats", "y": 1, "padding": 4, "nodes": ["counter/ancient_debris"], "scroll": false}
+{"id": "Stats", "padding": 4, "nodes": ["counter/ancient_debris"], "scroll": false}
 ```
 
 ### 间距
@@ -481,10 +481,10 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
 
 ### 排行榜
 
-主窗口分组可以用 `leaderboard` 代替 `nodes` 等内容，显示公开 Google 表格中的一个榜单；位置、大小、边距和普通分组一样写：
+主窗口内容块可以用 `leaderboard` 代替 `nodes` 等内容，显示公开 Google 表格中的一个榜单；权重和边距与普通内容块一样写：
 
 ```json
-{"id": "Leaderboard", "x": 1, "width": 0.17, "padding": 6,
+{"id": "Leaderboard", "stretch": 6, "padding": 6,
  "leaderboard": {"sheet": "1v7tpe9jJp1cENpwtwJp4Hrn6c1RVniQI4vyyllQwU-A", "gid": 1283472797, "board": "26.2 - 26.3"}}
 ```
 
@@ -577,21 +577,21 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
 
 ```json
 {
-  "main": [
-    {
-      "id": "Route",
-      "width": 2,
-      "height": 2,
-      "padding": 8,
-      "collections": ["goal/route"]
-    },
-    {"id": "Supplies", "x": 2, "padding": 8, "nodes": ["goal/supplies"]},
-    {"id": "Manual", "x": 2, "y": 1, "padding": 8, "nodes": ["goal/manual_check"]}
-  ],
-  "overlay": [
-    {"id": "RemainingGoals", "width": 2, "padding": 4, "nodes": ["goal/route", "goal/manual_check"]},
-    {"id": "SupplyCounter", "x": 2, "padding": 4, "nodes": ["goal/supplies"], "scroll": false}
-  ]
+  "main": {
+    "hbox": [
+      {"id": "Route", "stretch": 2, "padding": 8, "collections": ["goal/route"]},
+      {"vbox": [
+        {"id": "Supplies", "padding": 8, "nodes": ["goal/supplies"]},
+        {"id": "Manual", "padding": 8, "nodes": ["goal/manual_check"]}
+      ]}
+    ]
+  },
+  "overlay": {
+    "hbox": [
+      {"id": "RemainingGoals", "stretch": 2, "padding": 4, "nodes": ["goal/route", "goal/manual_check"]},
+      {"id": "SupplyCounter", "padding": 4, "nodes": ["goal/supplies"], "scroll": false}
+    ]
+  }
 }
 ```
 
@@ -663,20 +663,29 @@ for icon in icons:
     if not (root / icon).is_file():
         problems.append(f"图标文件不存在：{icon}")
 
-def walk_layout(groups, where):
-    for index, group in enumerate(groups):
-        place = f"{where}/{index}"
-        for field in ("nodes", "collections", "exclude"):
-            for rule_id in group.get(field, []):
-                if rule_id not in ids:
-                    problems.append(f"layout.json {place}: {field} 中的 ID 不存在：{rule_id}")
-        for start in group.get("prefix", []):
-            if not any(i.startswith(start) for i in ids):
-                problems.append(f"layout.json {place}: prefix 没有匹配任何 ID：{start}")
-        walk_layout(group.get("children", []), place + "/children")
+def walk_layout(group, place):
+    if not isinstance(group, dict):
+        problems.append(f"layout.json {place}: 必须是布局对象")
+        return
+    for field in ("nodes", "collections", "exclude"):
+        for rule_id in group.get(field, []):
+            if rule_id not in ids:
+                problems.append(f"layout.json {place}: {field} 中的 ID 不存在：{rule_id}")
+    for start in group.get("prefix", []):
+        if not any(i.startswith(start) for i in ids):
+            problems.append(f"layout.json {place}: prefix 没有匹配任何 ID：{start}")
+    for box in ("hbox", "vbox"):
+        if box not in group:
+            continue
+        if not isinstance(group[box], list):
+            problems.append(f"layout.json {place}/{box}: 必须是子块数组")
+            continue
+        for index, child in enumerate(group[box]):
+            walk_layout(child, f"{place}/{box}/{index}")
 
 for window in ("main", "overlay"):
-    walk_layout(layout.get(window, []), window)
+    if window in layout:
+        walk_layout(layout[window], window)
 
 print("\n".join(problems) if problems else "未发现问题")
 ```
@@ -699,7 +708,7 @@ print("\n".join(problems) if problems else "未发现问题")
 | `duplicate rule ID` / `missing Ref target` | ID 是否唯一，引用拼写是否一致 |
 | `dependency cycle` | `ref` 是否直接或间接引用了自己 |
 | `completion_rule does not name an explicit rule ID` | `completion_rule` 是否填了 Fact、文字 key 或没有 `id` 的规则 |
-| `a layout group takes only one of ...` | 同一分组是否同时写了 `nodes`、`prefix`、`collections`、`children` 中的两个以上 |
+| `a layout group takes only one of ...` | 同一分组是否同时写了 `nodes`、`prefix`、`collections`、`leaderboard` 中的两个以上 |
 | 窗口空白或少了某项 | 布局里的 ID 是否拼对，`prefix` 是否匹配，`collections` 是否只展开了一层，是否被 `exclude` 排除，或被 `view.state_style` 的 `blank`、`hidden` 隐藏 |
 | 数字在变但一直不完成 | 统计是否没写 `target`，组合规则里是否包含没有目标的统计 |
 | 顶部总数不对 | 所有 `goal/` 开头的规则都会计数，包括没显示的和组合规则的子项 |
@@ -713,7 +722,7 @@ print("\n".join(problems) if problems else "未发现问题")
 
 ### 规模限制
 
-单个 JSON 文件不超过 16 MiB、嵌套不超过 128 层；规则总数（含所有子项）、布局分组总数、单个列表的 ID 数和每份语言文件的条目数都不超过 10,000；单个字符串不超过 4,096 字节。
+单个 JSON 文件不超过 16 MiB、嵌套不超过 128 层；规则总数（含所有子项）、布局节点总数（含容器和弹簧）、单个列表的 ID 数和每份语言文件的条目数都不超过 10,000；单个字符串不超过 4,096 字节。
 重复出现的目标用 `ref` 复用，不要堆出巨大的嵌套结构。
 
 ## 完成后告诉用户

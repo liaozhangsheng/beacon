@@ -251,7 +251,33 @@ be clicked to undo completion.
 `decoration` accepts `none` (default) or `strikethrough` under `main`, and takes effect only for collection entries
 with text beside their icons. It is rejected under `overlay`.
 Unknown windows, states, properties, enum values, and non-string property values are rejected.
-`layout.json` handles grouping, placement, spacing, and overlay `scroll`.
+`layout.json` uses one object per window (`main` and `overlay`, both optional). Use `hbox` to arrange
+panels left to right and `vbox` to arrange them top to bottom; boxes can be nested. Each child gets a share of the
+parent's main axis according to its positive `stretch` (default 1), and fills the other axis. A `spring: true`
+child reserves an empty share without drawing a panel. A box's `gap` (source icon pixels, default 0) leaves that
+fixed distance between neighbouring children; the children share what remains. Boxes accept only `id`, `stretch`,
+`gap`, and `hbox` or `vbox`;
+springs accept only `spring: true` and `stretch`. Content panels keep their `margin`, `padding`, item `spacing`,
+and overlay `scroll` settings. Containers and springs do not change how icons or collections are arranged inside panels.
+
+```json
+{
+  "main": {
+    "vbox": [
+      {"stretch": 5, "hbox": [
+        {"stretch": 2, "prefix": ["goal/story_"]},
+        {"spring": true},
+        {"prefix": ["goal/nether_"]}
+      ]},
+      {"stretch": 4, "collections": ["goal/adventure_kill_all_mobs"]}
+    ]
+  }
+}
+```
+
+The rows above have height shares of 5:4; the first row has width shares of 2:1:1, including its empty spring.
+Empty boxes draw nothing; an empty object is a bare panel. The old window arrays and `x`, `y`, `width`, `height`,
+and `children` fields are rejected. Existing templates must be rewritten to this format.
 
 A `main` group with `"leaderboard"` in place of `nodes` shows a board from a public Google Sheet, such as the
 [26.x](https://docs.google.com/spreadsheets/d/1v7tpe9jJp1cENpwtwJp4Hrn6c1RVniQI4vyyllQwU-A) or
@@ -259,7 +285,7 @@ A `main` group with `"leaderboard"` in place of `nodes` shows a board from a pub
 leaderboards, and is placed like any other group:
 
 ```json
-{"id": "Leaderboard", "x": 1, "width": 0.17, "padding": 6,
+{"id": "Leaderboard", "stretch": 6, "padding": 6,
  "leaderboard": {"sheet": "1v7tpe9jJp1cENpwtwJp4Hrn6c1RVniQI4vyyllQwU-A", "gid": 1283472797, "board": "26.2 - 26.3"}}
 ```
 

@@ -253,9 +253,7 @@ TEST_CASE("overlay minimum height follows content and scale without shrinking ma
             "goals":[{"id":"goal","fact":"a","view":{"name_key":"goal"}}],"completion_rule":"goal"})");
     REQUIRE(compiled);
     const auto layout = beacon::compile_layout_json(
-        R"({"main":[{"nodes":["goal"],"height":20}],
-            "overlay":[{"nodes":["goal"],"height":20,"margin":2,"padding":3}]})",
-        *compiled);
+        R"({"main":{"nodes":["goal"]},"overlay":{"nodes":["goal"],"margin":2,"padding":3}})", *compiled);
     REQUIRE(layout);
     auto state = std::make_shared<beacon::PublishedState>();
     state->compiled = std::make_shared<const beacon::CompiledTemplate>(*compiled);
@@ -299,9 +297,10 @@ TEST_CASE("overlay minimum height follows content and scale without shrinking ma
     render();
     CHECK(minimum_height() < baseline);
     CHECK(window_size(window) == taller);
-    auto expanded = std::make_shared<beacon::Layout>(*layout);
-    expanded->overlay.front().height = 0.5F;
-    state->layout = expanded;
+    const auto expanded = beacon::compile_layout_json(
+        R"({"overlay":{"vbox":[{"nodes":["goal"],"margin":2,"padding":3},{"spring":true}]}})", *compiled);
+    REQUIRE(expanded);
+    state->layout = std::make_shared<const beacon::Layout>(*expanded);
     view.update(*state);
     render();
     CHECK(window_size(window) == taller);

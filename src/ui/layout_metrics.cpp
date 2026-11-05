@@ -29,10 +29,11 @@ LayoutMetrics calculate_layout_metrics(const LayoutGroup& group, const bool over
     const auto margin = from_icon(group.margin);
     const auto padding = from_icon(group.padding);
     const auto spacing = group_spacing(group, scale);
-    result.x = origin_x + (group.x * available_width) + margin;
-    result.y = origin_y + (group.y * body_height) + margin;
-    result.width = std::max(1.0F, (group.width * available_width) - (margin * 2.0F));
-    result.configured_height = std::max(1.0F, (group.height * body_height) - (margin * 2.0F));
+    result.x = origin_x + (group.x * available_width) + from_icon(group.x_offset) + margin;
+    result.y = origin_y + (group.y * body_height) + from_icon(group.y_offset) + margin;
+    result.width = std::max(1.0F, (group.width * available_width) + from_icon(group.width_offset) - (margin * 2.0F));
+    result.configured_height =
+        std::max(1.0F, (group.height * body_height) + from_icon(group.height_offset) - (margin * 2.0F));
     result.content_x = result.x + padding;
     result.content_width = std::max(1.0F, result.width - (padding * 2.0F));
     result.gap = spacing.item;
@@ -73,7 +74,8 @@ std::size_t collection_rows(const float content_height, const float item_height,
 float body_height_for_content(const LayoutGroup& group, const float content_height, const float scale) {
     if (group.height <= 0.0F)
         return 0.0F;
-    return (content_height + (ui::from_icon(group.margin, scale) * 2.0F)) / group.height;
+    return (content_height + (ui::from_icon(group.margin, scale) * 2.0F) - ui::from_icon(group.height_offset, scale)) /
+           group.height;
 }
 
 float overlay_group_min_height(const LayoutGroup& group, const bool labelled, const bool stats, const float font_size,

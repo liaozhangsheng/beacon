@@ -37,7 +37,7 @@ beacon::RunSelection selection(const std::filesystem::path& world,
                                std::string world_key = "world-a") {
     beacon::VersionProfile profile{.data_version = std::nullopt};
     const auto localization = beacon::compile_localization_json(R"({"template.modern_test":"Modern test"})");
-    const auto layout = beacon::compile_layout_json(R"({"main":[],"overlay":[]})", *compiled);
+    const auto layout = beacon::compile_layout_json(R"({"main":{"vbox":[]},"overlay":{"vbox":[]}})", *compiled);
     REQUIRE(localization);
     REQUIRE(layout);
     return {.world = {{"Fixture world", std::move(world_key)}, world},
@@ -531,7 +531,7 @@ TEST_CASE("configured Minecraft directory falls back to an empty template and re
     REQUIRE(compiled_value);
     auto compiled = std::make_shared<const beacon::CompiledTemplate>(*compiled_value);
     const auto localization = beacon::compile_localization_json(R"({"template.modern_test":"Modern test"})");
-    const auto layout = beacon::compile_layout_json(R"({"main":[],"overlay":[]})", *compiled);
+    const auto layout = beacon::compile_layout_json(R"({"main":{"vbox":[]},"overlay":{"vbox":[]}})", *compiled);
     REQUIRE(localization);
     REQUIRE(layout);
 
@@ -712,21 +712,11 @@ TEST_CASE("game directory follows the newest save and switches when another save
     REQUIRE(compiled_value);
     auto compiled = std::make_shared<const beacon::CompiledTemplate>(*compiled_value);
     const auto localization = beacon::compile_localization_json(R"({"template.modern_test":"Modern test"})");
-    const auto layout = beacon::compile_layout_json(R"({"main":[],"overlay":[]})", *compiled);
+    const auto layout = beacon::compile_layout_json(R"({"main":{"vbox":[]},"overlay":{"vbox":[]}})", *compiled);
     REQUIRE(localization);
     REQUIRE(layout);
-    beacon::Settings settings;
-    settings.game_root = game_root;
-    settings.template_path = fixture("template.json");
-    beacon::Persistence persistence(root / "settings");
-    REQUIRE(persistence.save_settings(settings));
-    const auto loaded = persistence.load_settings();
-    REQUIRE(loaded);
-    REQUIRE(*loaded);
-    REQUIRE((**loaded).game_root == game_root);
     beacon::Runtime runtime;
-    REQUIRE(runtime.configure((**loaded).game_root, compiled,
-                              std::make_shared<const beacon::Localization>(*localization),
+    REQUIRE(runtime.configure(game_root, compiled, std::make_shared<const beacon::Localization>(*localization),
                               std::make_shared<const beacon::Layout>(*layout)));
     process_until_published(runtime);
     REQUIRE(runtime.state()->snapshot.run_epoch == 1);
@@ -774,7 +764,7 @@ TEST_CASE("runtime rebuilds atomically and skips unchanged files") {
 
     beacon::Runtime runtime;
     const auto localization = beacon::compile_localization_json(R"({"template.modern_test":"Modern test"})");
-    const auto layout = beacon::compile_layout_json(R"({"main":[],"overlay":[]})", *compiled);
+    const auto layout = beacon::compile_layout_json(R"({"main":{"vbox":[]},"overlay":{"vbox":[]}})", *compiled);
     REQUIRE(localization);
     REQUIRE(layout);
     REQUIRE(runtime.configure((**loaded_settings).game_root, compiled,

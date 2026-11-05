@@ -13,7 +13,6 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <tuple>
 #include <utility>
 
 namespace beacon {
@@ -29,7 +28,7 @@ std::optional<Error> read_amount(const Json::Value& object, const std::string_vi
         return std::nullopt;
     const auto& value = object[key];
     if (!value.isNumeric() || !std::isfinite(value.asDouble()) || value.asDouble() < 0.0 ||
-        (positive && value.asDouble() == 0.0) || value.asDouble() > max_layout_coordinate)
+        value.asDouble() > max_layout_coordinate || (positive && static_cast<float>(value.asDouble()) == 0.0F))
         return Error{ErrorCode::Validation, "layout value is outside its limit", child_path(path, name)};
     output = static_cast<float>(value.asDouble());
     return std::nullopt;
@@ -133,183 +132,187 @@ ylt::expected<Layout, Error> compile_layout_json(std::string_view json, const Co
         return ylt::unexpected<Error>{std::move(*failure)};
 
     Layout result;
-    std::size_t group_count = 0;
     const auto read_ids = [&](const Json::Value& ids, const std::string& path, std::vector<std::string>& output,
                               const bool require_rule) -> std::optional<Error> {
         if (!ids.isArray())
             return Error{ErrorCode::Validation, "expected an array of rule IDs", path};
-        if (ids.size() > max_rule_nodes)
-            return Error{ErrorCode::SecurityLimit, "layout group exceeds the node limit", path};
         for (Json::ArrayIndex index = 0; index < ids.size(); ++index) {
-            const auto id_path = child_path(path, std::to_string(index));
-            if (!ids[index].isString())
-                return Error{ErrorCode::Validation, "layout group node must be a string", id_path};
-            auto id = ids[index].asString();
-            if (id.empty() || id.size() > max_string_bytes || !valid_utf8(id))
-                return Error{ErrorCode::Validation, "invalid layout group node", id_path};
-            if (require_rule && !compiled.graph.index_by_id.contains(id)) {
-                if (result.warnings.size() < max_diagnostics) {
-                    result.warnings.push_back(Error{ErrorCode::Validation, "layout references an unknown rule ID", id});
-                }
+            const auto& id = ids[index];
+            if (!id.isString() || id.asString().empty())
+                return Error{ErrorCode::Validation, "invalid layout group node",
+                             child_path(path, std::to_string(index))};
+            if (require_rule && !compiled.graph.index_by_id.contains(id.asString())) {
+                result.warnings.push_back(
+                    Error{ErrorCode::Validation, "layout references an unknown rule ID", id.asString()});
                 continue;
             }
-            output.push_back(std::move(id));
+            output.push_back(id.asString());
         }
         return std::nullopt;
     };
-    const auto read_group = [&](const Json::Value& value, const std::string& path,
-                                const bool overlay) -> ylt::expected<LayoutGroup, Error> {
-        const auto fail = [](Error error) {
-            return ylt::unexpected<Error>{std::move(error)};
-        };
-        if (!value.isObject())
-            return fail(Error{ErrorCode::Validation, "layout group must be an object", path});
-        if (auto failure =
-                reject_unknown_fields(value, path,
-                                      {"id", "x", "y", "width", "height", "margin", "padding", "nodes", "prefix",
-                                       "collections", "children", "leaderboard", "exclude", "spacing", "scroll"}))
-            return fail(std::move(*failure));
-
-        LayoutGroup group;
+    const auto read_leaderboard = [](const Json::Value& board, const std::string& path,
+                                     LeaderboardSource& output) -> std::optional<Error> {
+        if (!board.isObject())
+            return Error{ErrorCode::Validation, "invalid leaderboard", path};
+        if (auto failure = reject_unknown_fields(board, path, {"sheet", "gid", "board", "title"}))
+            return failure;
+        // The ID goes into the download URL and the cache's file name, so it keeps to the characters Google uses.
+        const auto& sheet = board["sheet"];
+        if (!sheet.isString() || sheet.asString().empty() || sheet.asString().size() > 128 ||
+            !std::ranges::all_of(sheet.asString(), [](const char c) {
+                return std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_';
+            }))
+            return Error{ErrorCode::Validation, "invalid leaderboard sheet", child_path(path, "sheet")};
+        output.sheet = sheet.asString();
+        if (board.isMember("gid")) {
+            if (!board["gid"].isUInt64())
+                return Error{ErrorCode::Validation, "invalid leaderboard gid", child_path(path, "gid")};
+            output.gid = board["gid"].asUInt64();
+        }
+        for (const auto& [name, field] : {std::pair{"board", &output.board}, std::pair{"title", &output.title}}) {
+            if (!board.isMember(name))
+                continue;
+            const auto& text = board[name];
+            if (!text.isString() || text.asString().empty())
+                return Error{ErrorCode::Validation, std::string("invalid leaderboard ") + name, child_path(path, name)};
+            *field = text.asString();
+        }
+        return std::nullopt;
+    };
+    // A content panel; its rectangle comes from the boxes around it.
+    const auto read_panel = [&](const Json::Value& value, const std::string& path, const bool overlay,
+                                LayoutGroup& group) -> std::optional<Error> {
+        if (auto failure = reject_unknown_fields(value, path,
+                                                 {"id", "stretch", "margin", "padding", "nodes", "prefix",
+                                                  "collections", "leaderboard", "exclude", "spacing", "scroll"}))
+            return failure;
         if (value.isMember("id")) {
-            const auto& id = value["id"];
-            if (!id.isString() || id.asString().size() > max_string_bytes || !valid_utf8(id.asString()))
-                return fail(Error{ErrorCode::Validation, "invalid layout group id", child_path(path, "id")});
-            group.id = id.asString();
+            if (!value["id"].isString())
+                return Error{ErrorCode::Validation, "invalid layout group id", child_path(path, "id")};
+            group.id = value["id"].asString();
         }
-        for (const auto& [name, field, positive] :
-             {std::tuple{"x", &group.x, false}, std::tuple{"y", &group.y, false},
-              std::tuple{"width", &group.width, true}, std::tuple{"height", &group.height, true},
-              std::tuple{"margin", &group.margin, false}, std::tuple{"padding", &group.padding, false}}) {
-            if (auto failure = read_amount(value, name, path, *field, positive))
-                return fail(std::move(*failure));
+        for (const auto& [name, field] : {std::pair{"margin", &group.margin}, std::pair{"padding", &group.padding}}) {
+            if (auto failure = read_amount(value, name, path, *field))
+                return failure;
         }
 
-        constexpr std::array selectors{std::pair{"nodes", LayoutSource::Nodes},
-                                       std::pair{"prefix", LayoutSource::Prefix},
-                                       std::pair{"collections", LayoutSource::Collections}};
-        const auto contents = std::ranges::count_if(selectors,
-                                                    [&](const auto& selector) {
-                                                        return value.isMember(selector.first);
-                                                    }) +
-                              (value.isMember("children") ? 1 : 0) + (value.isMember("leaderboard") ? 1 : 0);
-        if (contents > 1)
-            return fail(Error{ErrorCode::Validation,
-                              "a layout group takes only one of nodes, prefix, collections, children and leaderboard",
-                              path});
-        if (value.isMember("leaderboard")) {
-            const auto& board = value["leaderboard"];
-            const auto board_path = child_path(path, "leaderboard");
-            if (overlay)
-                return fail(Error{ErrorCode::Validation, "leaderboard is main window only", board_path});
-            if (!board.isObject())
-                return fail(Error{ErrorCode::Validation, "invalid leaderboard", board_path});
-            if (auto failure = reject_unknown_fields(board, board_path, {"sheet", "gid", "board", "title"}))
-                return fail(std::move(*failure));
-            // The ID goes into the download URL and the cache's file name, so it keeps to the characters Google
-            // uses.
-            const auto& sheet = board["sheet"];
-            if (!sheet.isString() || sheet.asString().empty() || sheet.asString().size() > 128 ||
-                !std::ranges::all_of(sheet.asString(), [](const char c) {
-                    return std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_';
-                }))
-                return fail(Error{ErrorCode::Validation, "invalid leaderboard sheet", child_path(board_path, "sheet")});
-            group.leaderboard.sheet = sheet.asString();
-            if (board.isMember("gid")) {
-                if (!board["gid"].isUInt64())
-                    return fail(Error{ErrorCode::Validation, "invalid leaderboard gid", child_path(board_path, "gid")});
-                group.leaderboard.gid = board["gid"].asUInt64();
-            }
-            for (const auto& [name, field] :
-                 {std::pair{"board", &group.leaderboard.board}, std::pair{"title", &group.leaderboard.title}}) {
-                if (!board.isMember(name))
-                    continue;
-                const auto& text = board[name];
-                if (!text.isString() || text.asString().empty() || text.asString().size() > max_string_bytes ||
-                    !valid_utf8(text.asString()))
-                    return fail(Error{ErrorCode::Validation, std::string("invalid leaderboard ") + name,
-                                      child_path(board_path, name)});
-                *field = text.asString();
-            }
-            for (const auto* field : {"exclude", "spacing"}) {
-                if (value.isMember(field))
-                    return fail(
-                        Error{ErrorCode::Validation, "a leaderboard group has no items", child_path(path, field)});
-            }
-            group.source = LayoutSource::Leaderboard;
-        }
+        constexpr std::array selectors{
+            std::pair{"nodes", LayoutSource::Nodes}, std::pair{"prefix", LayoutSource::Prefix},
+            std::pair{"collections", LayoutSource::Collections}, std::pair{"leaderboard", LayoutSource::Leaderboard}};
         for (const auto& [name, source] : selectors) {
             if (!value.isMember(name))
                 continue;
+            if (group.source != LayoutSource::None)
+                return Error{ErrorCode::Validation,
+                             "a layout group takes only one of nodes, prefix, collections and leaderboard", path};
             group.source = source;
-            if (auto failure =
-                    read_ids(value[name], child_path(path, name), group.nodes, source != LayoutSource::Prefix))
-                return fail(std::move(*failure));
+            const auto field_path = child_path(path, name);
+            if (source != LayoutSource::Leaderboard) {
+                if (auto failure = read_ids(value[name], field_path, group.nodes, source != LayoutSource::Prefix))
+                    return failure;
+                continue;
+            }
+            if (overlay)
+                return Error{ErrorCode::Validation, "leaderboard is main window only", field_path};
+            if (auto failure = read_leaderboard(value[name], field_path, group.leaderboard))
+                return failure;
+        }
+        const bool items = group.source != LayoutSource::None && group.source != LayoutSource::Leaderboard;
+        for (const auto* field : {"exclude", "spacing"}) {
+            if (value.isMember(field) && !items)
+                return Error{ErrorCode::Validation, std::string(field) + " requires nodes, prefix or collections",
+                             child_path(path, field)};
         }
         if (value.isMember("exclude")) {
-            if (group.source == LayoutSource::None)
-                return fail(Error{ErrorCode::Validation, "exclude requires nodes, prefix or collections",
-                                  child_path(path, "exclude")});
             if (auto failure = read_ids(value["exclude"], child_path(path, "exclude"), group.exclude, true))
-                return fail(std::move(*failure));
+                return failure;
         }
-
         group.spacing = default_spacing(overlay, group.source);
         if (value.isMember("spacing")) {
             if (auto failure =
                     read_spacing(value["spacing"], group.spacing, overlay, group.source, child_path(path, "spacing")))
-                return fail(std::move(*failure));
+                return failure;
         }
         if (value.isMember("scroll")) {
             if (!overlay || !value["scroll"].isBool())
-                return fail(
-                    Error{ErrorCode::Validation, "scroll requires an overlay boolean", child_path(path, "scroll")});
+                return Error{ErrorCode::Validation, "scroll requires an overlay boolean", child_path(path, "scroll")};
             group.scroll = value["scroll"].asBool();
         }
-        return group;
+        return std::nullopt;
     };
-    // Every level is a grid: siblings are scaled together so their extent fills the parent's box.
-    const auto compile_groups = [&](const auto& self, const Json::Value& values, const std::string& path,
-                                    const bool overlay, const float parent_x, const float parent_y,
-                                    const float parent_width, const float parent_height) -> std::optional<Error> {
-        if (!values.isArray())
-            return Error{ErrorCode::Validation, "expected an array of layout groups", path};
-        std::vector<LayoutGroup> siblings;
-        siblings.reserve(values.size());
-        float extent_x = 0.0F;
-        float extent_y = 0.0F;
-        for (Json::ArrayIndex index = 0; index < values.size(); ++index) {
-            if (++group_count > max_rule_nodes)
-                return Error{ErrorCode::SecurityLimit, "layout exceeds the group limit", path};
-            auto group = read_group(values[index], child_path(path, std::to_string(index)), overlay);
-            if (!group)
-                return std::move(group.error());
-            extent_x = std::max(extent_x, group->x + group->width);
-            extent_y = std::max(extent_y, group->y + group->height);
-            siblings.push_back(std::move(*group));
+    // Boxes divide their rectangle among their children by stretch; springs keep their share empty. Only panels
+    // reach the renderer.
+    const auto compile_node = [&](const auto& self, const Json::Value& value, const std::string& path,
+                                  const bool overlay, LayoutGroup rect) -> std::optional<Error> {
+        if (!value.isObject())
+            return Error{ErrorCode::Validation, "layout group must be an object", path};
+        float stretch = 1.0F;
+        if (auto failure = read_amount(value, "stretch", path, stretch, true))
+            return failure;
+        const char* box = value.isMember("hbox") ? "hbox" : value.isMember("vbox") ? "vbox" : nullptr;
+        if (box == nullptr && value.isMember("spring")) {
+            if (auto failure = reject_unknown_fields(value, path, {"spring", "stretch"}))
+                return failure;
+            if (!value["spring"].isBool() || !value["spring"].asBool())
+                return Error{ErrorCode::Validation, "spring must be true", child_path(path, "spring")};
+            return std::nullopt;
         }
-        auto& groups = overlay ? result.overlay : result.main;
-        for (Json::ArrayIndex index = 0; index < values.size(); ++index) {
-            auto& group = siblings[index];
-            group.x = parent_x + (group.x / extent_x * parent_width);
-            group.y = parent_y + (group.y / extent_y * parent_height);
-            group.width = group.width / extent_x * parent_width;
-            group.height = group.height / extent_y * parent_height;
-            groups.push_back(group);
-            if (values[index].isMember("children")) {
-                if (auto failure = self(self, values[index]["children"],
-                                        child_path(child_path(path, std::to_string(index)), "children"), overlay,
-                                        group.x, group.y, group.width, group.height))
-                    return failure;
+        if (box == nullptr) {
+            if (auto failure = read_panel(value, path, overlay, rect))
+                return failure;
+            (overlay ? result.overlay : result.main).push_back(std::move(rect));
+            return std::nullopt;
+        }
+
+        if (auto failure = reject_unknown_fields(value, path, {"id", "stretch", "gap", box}))
+            return failure;
+        float gap = 0.0F;
+        if (auto failure = read_amount(value, "gap", path, gap))
+            return failure;
+        const auto box_path = child_path(path, box);
+        const auto& children = value[box];
+        if (!children.isArray())
+            return Error{ErrorCode::Validation, "layout box must be an array", box_path};
+        std::vector<float> weights(children.size(), 1.0F);
+        double total = 0.0;
+        for (Json::ArrayIndex index = 0; index < children.size(); ++index) {
+            // Malformed children are reported when they are compiled.
+            if (children[index].isObject())
+                read_amount(children[index], "stretch", path, weights[index], true);
+            total += weights[index];
+        }
+        // Children share what the gaps leave of the main axis. Positions stay linear in the window size, so a
+        // fraction plus a fixed offset still describes each one exactly.
+        const bool horizontal = box == std::string_view("hbox");
+        const auto gaps = gap * static_cast<float>(children.empty() ? 0 : children.size() - 1);
+        double offset = 0.0;
+        for (Json::ArrayIndex index = 0; index < children.size(); ++index) {
+            const auto start = static_cast<float>(offset / total);
+            const auto share = static_cast<float>(weights[index] / total);
+            const auto before = (gap * static_cast<float>(index)) - (start * gaps);
+            LayoutGroup child = rect;
+            if (horizontal) {
+                child.x += start * rect.width;
+                child.x_offset += (start * rect.width_offset) + before;
+                child.width = rect.width * share;
+                child.width_offset = (rect.width_offset - gaps) * share;
+            } else {
+                child.y += start * rect.height;
+                child.y_offset += (start * rect.height_offset) + before;
+                child.height = rect.height * share;
+                child.height_offset = (rect.height_offset - gaps) * share;
             }
+            if (auto failure = self(self, children[index], child_path(box_path, std::to_string(index)), overlay, child))
+                return failure;
+            offset += weights[index];
         }
         return std::nullopt;
     };
     for (const auto* window : {"main", "overlay"}) {
         if (!root->isMember(window))
             continue;
-        if (auto failure = compile_groups(compile_groups, (*root)[window], child_path(root_path, window),
-                                          std::string_view(window) == "overlay", 0.0F, 0.0F, 1.0F, 1.0F))
+        if (auto failure = compile_node(compile_node, (*root)[window], child_path(root_path, window),
+                                        std::string_view(window) == "overlay", LayoutGroup{}))
             return ylt::unexpected<Error>{std::move(*failure)};
     }
     return result;

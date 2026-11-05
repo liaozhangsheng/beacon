@@ -717,14 +717,16 @@ int desktop_smoke_test(const std::filesystem::path& asset_root) {
                                                                                        {"done.smoke", "Done"},
                                                                                        {"pending.smoke", "Pending"}}});
     auto layout_value = compile_layout_json(R"({
-          "main": [
-            {"id": "Progress", "height": 70, "nodes": ["done", "pending"]},
-            {"id": "Stats", "y": 72, "height": 28, "nodes": ["counter"]}
-          ],
-          "overlay": [
-            {"id": "Collections", "height": 70, "collections": ["goal"]},
-            {"id": "Stats", "y": 72, "height": 28, "nodes": ["counter"]}
-          ]
+          "main": {"vbox": [
+            {"id": "Progress", "stretch": 70, "nodes": ["done", "pending"]},
+            {"spring": true, "stretch": 2},
+            {"id": "Stats", "stretch": 28, "nodes": ["counter"]}
+          ]},
+          "overlay": {"vbox": [
+            {"id": "Collections", "stretch": 70, "collections": ["goal"]},
+            {"spring": true, "stretch": 2},
+            {"id": "Stats", "stretch": 28, "nodes": ["counter"]}
+          ]}
         })",
                                             *compiled);
     if (!layout_value)
