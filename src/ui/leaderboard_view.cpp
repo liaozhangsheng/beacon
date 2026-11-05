@@ -172,6 +172,8 @@ void draw_run(const LeaderboardRun& run, SDL_Texture* head, SDL_Texture* glow, U
     }
     if (head == nullptr)
         head = assets.image("default-avatar.png");
+    draw->AddRectFilled({head_min.x - (m.pixel * 2.0F), head_min.y - (m.pixel * 2.0F)},
+                        {head_max.x + (m.pixel * 2.0F), head_max.y + (m.pixel * 2.0F)}, IM_COL32(200, 200, 200, 128));
     if (head != nullptr)
         draw->AddImage(head, head_min, head_max);
     draw_badge(draw, badge_min, badge_size, m.pixel, style, podium ? assets.image(style.block) : nullptr, label);
@@ -184,7 +186,7 @@ void draw_run(const LeaderboardRun& run, SDL_Texture* head, SDL_Texture* glow, U
 
     const float line = ImGui::GetTextLineHeight();
     const float center_y = std::round(head_center.y);
-    const float igt_x = row_max.x - m.pad - ImGui::CalcTextSize(run.igt.c_str()).x;
+    const float igt_x = row_max.x - (m.pad * 2.0F) - ImGui::CalcTextSize(run.igt.c_str()).x;
     draw_shadowed_text(draw, {igt_x, std::round(center_y - (line * 0.5F))}, igt_color, run.igt.c_str());
     const float text_x = row_min.x + m.text_x;
     const float lines_gap = std::max(1.0F, std::round(m.pixel * 2.0F));
