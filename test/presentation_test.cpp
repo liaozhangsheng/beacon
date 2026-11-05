@@ -1274,6 +1274,73 @@ TEST_CASE("interface language supports Chinese and English and defaults to Chine
     }
 }
 
+TEST_CASE("window dimensions round trip and reject invalid saves without changing the file") {
+    const beacon::test::TemporaryDirectory temporary;
+    beacon::Persistence persistence(temporary.path);
+    beacon::Settings settings{.game_root = temporary.path, .template_path = temporary.path / "template.json"};
+    settings.main_window_width = 1111;
+    settings.main_window_height = 777;
+    settings.overlay_window_width = 1234;
+    settings.overlay_window_height = 222;
+    REQUIRE(persistence.save_settings(settings));
+    const auto loaded = persistence.load_settings();
+    REQUIRE(loaded);
+    REQUIRE(*loaded);
+    CHECK((*loaded)->main_window_width == 1111);
+    CHECK((*loaded)->main_window_height == 777);
+    CHECK((*loaded)->overlay_window_width == 1234);
+    CHECK((*loaded)->overlay_window_height == 222);
+    const auto path = temporary.path / "config/settings.json";
+    const auto before = beacon::read_bounded_file(path, "settings");
+    REQUIRE(before);
+    for (auto member : {&beacon::Settings::main_window_width, &beacon::Settings::main_window_height,
+                        &beacon::Settings::overlay_window_width, &beacon::Settings::overlay_window_height}) {
+        for (const int invalid : {0, -1, beacon::max_window_dimension + 1}) {
+            auto bad = settings;
+            bad.*member = invalid;
+            CHECK_FALSE(persistence.save_settings(bad));
+            const auto after = beacon::read_bounded_file(path, "settings");
+            REQUIRE(after);
+            CHECK(*after == *before);
+        }
+        for (const int boundary : {1, beacon::max_window_dimension}) {
+            auto valid = settings;
+            valid.*member = boundary;
+            REQUIRE(persistence.save_settings(valid));
+            const auto round_trip = persistence.load_settings();
+            REQUIRE(round_trip);
+            REQUIRE(*round_trip);
+            CHECK((**round_trip).*member == boundary);
+        }
+        REQUIRE(persistence.save_settings(settings));
+    }
+}
+
+TEST_CASE("old settings use default window sizes and dimension JSON requires bounded integers") {
+    const beacon::test::TemporaryDirectory temporary;
+    const auto path = temporary.path / "config/settings.json";
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream(path) << R"({"game_root":"game","template_path":"template.json"})";
+    beacon::Persistence persistence(temporary.path);
+    const auto defaults = persistence.load_settings();
+    REQUIRE(defaults);
+    REQUIRE(*defaults);
+    CHECK((*defaults)->main_window_width == 960);
+    CHECK((*defaults)->main_window_height == 640);
+    CHECK((*defaults)->overlay_window_width == 1280);
+    CHECK((*defaults)->overlay_window_height == 180);
+    for (const auto* field :
+         {"main_window_width", "main_window_height", "overlay_window_width", "overlay_window_height"}) {
+        for (const auto* invalid :
+             {"null", "true", "\"960\"", "1.0", "1.5", "[]", "{}", "0", "-1", "16385", "4294967296"}) {
+            CAPTURE(field, invalid);
+            std::ofstream(path) << R"({"game_root":"game","template_path":"template.json",")" << field
+                                << "\":" << invalid << "}";
+            CHECK_FALSE(persistence.load_settings());
+        }
+    }
+}
+
 TEST_CASE("frame schedule keeps the earliest request of each pace") {
     beacon::FrameSchedule schedule;
     schedule.begin(1010);
@@ -1307,11 +1374,19 @@ TEST_CASE("settings applier saves only after a changed template loads") {
 
     auto faster = applied;
     faster.overlay_scroll_speed = 90.0F;
+    faster.main_window_width = 1100;
+    faster.main_window_height = 800;
+    faster.overlay_window_width = 1000;
+    faster.overlay_window_height = 200;
     REQUIRE(applier.apply(applied, faster));
     const auto saved = persistence.load_settings();
     REQUIRE(saved);
     REQUIRE(saved->has_value());
     CHECK((*saved)->overlay_scroll_speed == 90.0F);
+    CHECK((*saved)->main_window_width == 1100);
+    CHECK((*saved)->main_window_height == 800);
+    CHECK((*saved)->overlay_window_width == 1000);
+    CHECK((*saved)->overlay_window_height == 200);
     CHECK((*saved)->template_path == applied.template_path);
 }
 
