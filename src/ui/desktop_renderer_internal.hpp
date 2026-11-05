@@ -169,8 +169,7 @@ private:
                         ImDrawListSplitter* splitter = nullptr) const;
     // An overlay item keeps its look and slot while its completion animation plays.
     [[nodiscard]] bool finishing(std::uint32_t node) const;
-    [[nodiscard]] const ItemStyle& item_style(const PublishedState& state, const LayoutGroup& group,
-                                              std::uint32_t node) const;
+    [[nodiscard]] ItemStyle item_style(const PublishedState& state, const LayoutGroup& group, std::uint32_t node) const;
     [[nodiscard]] bool item_placed(const PublishedState& state, const LayoutGroup& group, std::uint32_t node) const;
     void draw_item(const PublishedState& state, const LayoutGroup& group, ImDrawList* draw, std::uint32_t index,
                    const ItemLayout& item, ImDrawListSplitter& splitter);

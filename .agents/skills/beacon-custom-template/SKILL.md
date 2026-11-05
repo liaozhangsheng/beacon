@@ -265,6 +265,7 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
 | `icon` | 模板目录内图片的相对路径，例如 `assets/items/apple.png` | 显示紫黑棋盘格占位图 |
 | `type` | `task`、`goal` 或 `challenge`，对应游戏里三种进度边框 | 无边框 |
 | `enchanted` | `true` 时在图标上叠加附魔紫光 | 无光效 |
+| `state_style` | 分别设置主窗口与悬浮窗的状态样式，见下文 | 使用对应窗口和分组的默认样式 |
 | `show` | `self`、`stages` 或 `cycle`，见“分阶段显示与轮换显示” | `prefix` 为 `stages`，其余为 `self` |
 
 组合规则的子项也可以有自己的 `view`（不需要 `id`），用作收集组里每个成员的名称和图标：
@@ -275,6 +276,43 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
   "view": {"name_key": "criterion.badlands", "icon": "assets/icons/badlands.png"}
 }
 ```
+
+### 状态样式：`view.state_style`
+
+状态样式写在 `template.json` 中每条规则自己的 `view.state_style` 下，分别配置 `main`（主窗口）和 `overlay`（悬浮窗），每个窗口可写 `pending`（未完成）和 `done`（完成）：
+
+```json
+"view": {
+  "name_key": "counter.gold_blocks",
+  "state_style": {
+    "main": {
+      "pending": {"emphasis": "highlight"},
+      "done": {"emphasis": "muted"}
+    },
+    "overlay": {
+      "done": {"visibility": "visible"}
+    }
+  }
+}
+```
+
+| 属性 | 可选值 | 默认 | 适用 |
+| --- | --- | --- | --- |
+| `visibility` | `visible` 显示、`blank` 留出空位、`hidden` 移除并让后面的项补上 | 悬浮窗完成 `hidden`，其余 `visible` | 两个窗口 |
+| `emphasis` | `highlight` 高亮、`muted` 变暗 | 主窗口 `collections` 未完成 `muted`，其余 `highlight` | 两个窗口 |
+| `decoration` | `none`、`strikethrough` 删除线 | `none` | 只能写在 `main` 下，仅文字在图标右侧的收集组子项生效 |
+| `animation` | `cover` 自下而上遮盖、`none` 不播放 | 最终为 `blank` 或 `hidden` 时 `cover`，最终为 `visible` 时 `none` | 仅 `overlay.done` |
+
+窗口、状态和每个属性都可省略，只覆盖明确填写的属性。两个窗口独立，不互相继承；父规则、`ref` 引用对象、当前阶段或轮换子项的样式也不继承。收集组要改变成员样式，就写在每个成员自己的 `view` 中；阶段或轮换条目则按布局引用的外层条目自身状态应用样式。
+未知窗口、状态、属性、枚举值或非字符串属性值会导致模板加载失败。
+
+主窗口里 `blank` 和 `hidden` 的项都不再显示，也**无法再点击撤销**；用户希望能撤销时，建议用变暗或删除线。`blank` 让其余项保持原位，`hidden` 会让后面的项向前补齐。
+悬浮窗的 `done.animation` 决定退场动画，`done.visibility` 和 `done.emphasis` 决定最终效果。
+最终为 `visible` 的条目始终跳过退场动画，即使配置 `"animation": "cover"`，也立即应用完成样式。
+例如 `"done": {"animation": "cover", "visibility": "hidden"}` 会先遮盖，再移除；
+改为 `"visibility": "blank"` 会留空位，`"animation": "none"` 则直接应用最终效果。
+动画沿用 0.6 秒等待、1 秒遮盖，只为布局实际显示且启用动画的条目播放并等待；撤销完成会中止动画。
+省略动画字段时，完成后留空或移除的条目默认播放遮盖，完成后仍显示的条目始终直接应用完成样式。主窗口没有完成动画，立即按状态样式处理。
 
 ### 图标
 
@@ -368,7 +406,6 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
 | `nodes` / `prefix` / `collections` / `children` / `leaderboard` | 分组内容，五选一（`leaderboard` 见“排行榜”） | 空面板 |
 | `exclude` | 从选中的项里排除的规则 ID | `[]` |
 | `spacing` | 组内间距 | 见“间距” |
-| `item_style` | 项目完成/未完成时的样式，见“完成样式” | 见“完成样式” |
 | `scroll` | 仅悬浮窗：是否滚动轮播 | `true` |
 
 数值都不能是负数。写错字段或把字段写在不支持的地方时，模板加载失败，错误信息会给出 `layout.json/main/0/children/1/x` 这样的位置。
@@ -420,11 +457,11 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
 ### 悬浮窗滚动
 
 悬浮窗只有一行。分组默认按设置中的方向和速度滚动轮播；写 `"scroll": false` 时项目从左到右固定排成一行，适合统计等不想跟着滚走的内容。
-`scroll` 只决定动不动，完成的项是否显示由 `item_style` 决定：悬浮窗默认在完成动画播完后移除完成的项，后面的项向前补齐。达到目标后仍要一直显示的统计写 `"done": {"visibility": "visible"}`：
+`scroll` 只决定动不动；完成后是否显示由规则的 `view.state_style.overlay.done.visibility` 决定。
+悬浮窗默认在完成动画播完后移除完成的项，可用 `view.state_style.overlay.done.animation` 选择动画。需要常驻的统计在自己的 `view` 中写 `"state_style": {"overlay": {"done": {"visibility": "visible"}}}`，布局只负责固定排列：
 
 ```json
-{"id": "Stats", "y": 1, "padding": 4, "nodes": ["counter/ancient_debris"], "scroll": false,
- "item_style": {"done": {"visibility": "visible"}}}
+{"id": "Stats", "y": 1, "padding": 4, "nodes": ["counter/ancient_debris"], "scroll": false}
 ```
 
 ### 间距
@@ -441,31 +478,6 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
 ```json
 {"id": "Route", "margin": 4, "padding": 8, "collections": ["goal/route"], "spacing": {"item": 24, "row": 10}}
 ```
-
-### 完成样式
-
-写了 `nodes`、`prefix` 或 `collections` 的分组都可以用 `item_style` 设置项目在未完成（`pending`）和完成（`done`）时的样子：
-
-| 属性 | 可选值 | 默认 | 适用 |
-| --- | --- | --- | --- |
-| `visibility` | `visible` 显示、`blank` 留出空位、`hidden` 移除并让后面的项补上 | 悬浮窗完成 `hidden`，其余 `visible` | 两个窗口 |
-| `emphasis` | `highlight` 高亮、`muted` 变暗 | 主窗口 `collections` 未完成 `muted`，其余 `highlight` | 两个窗口 |
-| `decoration` | `none`、`strikethrough` 删除线 | `none` | 仅主窗口 `collections`（文字在图标右侧） |
-
-```json
-{
-  "id": "Collections",
-  "padding": 8,
-  "collections": ["goal/route"],
-  "item_style": {
-    "pending": {"emphasis": "highlight"},
-    "done": {"emphasis": "muted", "decoration": "strikethrough"}
-  }
-}
-```
-
-主窗口里 `blank` 和 `hidden` 的项都不再显示，也**无法再点击撤销**；用户希望能撤销时，建议用变暗或删除线。`blank` 让其余项保持原位，`hidden` 会让后面的项向前补齐。
-悬浮窗里完成的项不论是否滚动，都会先播完完成动画（逐渐被遮住），再按 `visibility` 留空或移除；完成后仍 `visible` 的项不播遮盖动画。主窗口没有完成动画，完成后立即按 `visibility` 处理。
 
 ### 排行榜
 
@@ -491,7 +503,7 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
 | 1.16.1 | `107ijqjELTQQ29KW4phUmtvYFTX9-pfHsjb18TKoWACk` | `1706556435` | 省略（标题是 `Leaderboard`，用 `"title": "1.16.1"`） |
 | 1.21.11–1.6 | `107ijqjELTQQ29KW4phUmtvYFTX9-pfHsjb18TKoWACk` | `1283472797` | `1.21.11 RSG`、`1.17 RSG` 等 |
 
-只在模板对应的游戏版本有排行榜时才加。排行榜分组不能写 `exclude`、`spacing`、`item_style`，也不能放进 `overlay`。标题拼错时模板照常加载，分组里提示找不到该榜单。
+只在模板对应的游戏版本有排行榜时才加。排行榜分组不能写 `exclude`、`spacing`，也不能放进 `overlay`。标题拼错时模板照常加载，分组里提示找不到该榜单。
 
 ## 文字与翻译
 
@@ -515,8 +527,12 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
     {
       "id": "goal/route",
       "all": [
-        {"fact": "adv/minecraft:story/enter_the_nether", "view": {"name_key": "step.nether"}},
-        {"fact": "adv/minecraft:end/kill_dragon", "view": {"name_key": "step.dragon"}}
+        {"fact": "adv/minecraft:story/enter_the_nether", "view": {"name_key": "step.nether",
+          "state_style": {"main": {"pending": {"emphasis": "highlight"},
+                                   "done": {"emphasis": "muted", "decoration": "strikethrough"}}}}},
+        {"fact": "adv/minecraft:end/kill_dragon", "view": {"name_key": "step.dragon",
+          "state_style": {"main": {"pending": {"emphasis": "highlight"},
+                                   "done": {"emphasis": "muted", "decoration": "strikethrough"}}}}}
       ],
       "view": {"name_key": "goal.route", "type": "challenge"}
     },
@@ -524,7 +540,8 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
       "id": "goal/supplies",
       "fact": "stat/minecraft:mined/minecraft:stone",
       "target": 32,
-      "view": {"name_key": "goal.supplies"}
+      "view": {"name_key": "goal.supplies",
+               "state_style": {"overlay": {"done": {"visibility": "visible"}}}}
     },
     {
       "id": "goal/manual_check",
@@ -566,19 +583,14 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
       "width": 2,
       "height": 2,
       "padding": 8,
-      "collections": ["goal/route"],
-      "item_style": {
-        "pending": {"emphasis": "highlight"},
-        "done": {"emphasis": "muted", "decoration": "strikethrough"}
-      }
+      "collections": ["goal/route"]
     },
     {"id": "Supplies", "x": 2, "padding": 8, "nodes": ["goal/supplies"]},
     {"id": "Manual", "x": 2, "y": 1, "padding": 8, "nodes": ["goal/manual_check"]}
   ],
   "overlay": [
     {"id": "RemainingGoals", "width": 2, "padding": 4, "nodes": ["goal/route", "goal/manual_check"]},
-    {"id": "SupplyCounter", "x": 2, "padding": 4, "nodes": ["goal/supplies"], "scroll": false,
-     "item_style": {"done": {"visibility": "visible"}}}
+    {"id": "SupplyCounter", "x": 2, "padding": 4, "nodes": ["goal/supplies"], "scroll": false}
   ]
 }
 ```
@@ -683,17 +695,17 @@ print("\n".join(problems) if problems else "未发现问题")
 | --- | --- |
 | 设置里找不到模板 / `no templates found` | 是否放在安装目录的 `templates/<名称>/template.json`，有没有误放进 `versions/` 或多套了一层目录；新模板是否重启了 Beacon |
 | `invalid template JSON` / `invalid resource JSON` | JSON 语法、重复字段 |
-| `unknown field` | 是否写了不支持的字段，或把 `target`、`item_style`、`scroll`、`spacing` 写错了位置 |
+| `unknown field` | 是否写了不支持的字段，或把 `target`、`state_style`、`scroll`、`spacing` 写错了位置 |
 | `duplicate rule ID` / `missing Ref target` | ID 是否唯一，引用拼写是否一致 |
 | `dependency cycle` | `ref` 是否直接或间接引用了自己 |
 | `completion_rule does not name an explicit rule ID` | `completion_rule` 是否填了 Fact、文字 key 或没有 `id` 的规则 |
 | `a layout group takes only one of ...` | 同一分组是否同时写了 `nodes`、`prefix`、`collections`、`children` 中的两个以上 |
-| 窗口空白或少了某项 | 布局里的 ID 是否拼对，`prefix` 是否匹配，`collections` 是否只展开了一层，是否被 `exclude` 排除，或被 `item_style` 的 `blank`、`hidden` 隐藏 |
+| 窗口空白或少了某项 | 布局里的 ID 是否拼对，`prefix` 是否匹配，`collections` 是否只展开了一层，是否被 `exclude` 排除，或被 `view.state_style` 的 `blank`、`hidden` 隐藏 |
 | 数字在变但一直不完成 | 统计是否没写 `target`，组合规则里是否包含没有目标的统计 |
 | 顶部总数不对 | 所有 `goal/` 开头的规则都会计数，包括没显示的和组合规则的子项 |
 | 不切换阶段或不轮换 | `view.show` 是否写成了 `self`，轮换是否写了 `"show": "cycle"` |
 | 统计在悬浮窗里跟着滚走 | 统计所在分组是否写了 `"scroll": false` |
-| 悬浮窗里的统计达到目标后消失 | 悬浮窗默认移除完成的项；给分组写 `"item_style": {"done": {"visibility": "visible"}}` |
+| 悬浮窗里的统计达到目标后消失 | 悬浮窗默认移除完成的项；给该规则的 `view` 写 `"state_style": {"overlay": {"done": {"visibility": "visible"}}}` |
 | 紫黑棋盘格图标 | 文件是否存在，扩展名和大小写是否完全一致，图片能否打开 |
 | 没有附魔光效 | 实际显示的那一项是否写了 `"enchanted": true`，图标是否能正常显示 |
 | 改了文件但界面没变 | 是否重启或切到其他模板再切回，改的是否是 Beacon 实际使用的那个 `templates/` |

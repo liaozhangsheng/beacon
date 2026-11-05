@@ -187,10 +187,7 @@
         "counter/trident",
         "counter/enchanted_golden_apples"
       ],
-      "scroll": false,
-      "item_style": {
-        "done": {"visibility": "visible"}
-      }
+      "scroll": false
     }
   ]
 }

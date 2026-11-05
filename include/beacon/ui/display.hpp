@@ -34,26 +34,13 @@ enum class LayoutSource : std::uint8_t {
     Leaderboard,
 };
 
-enum class ItemEmphasis : std::uint8_t { Highlight, Muted };
-// Blank keeps an item's slot empty; hidden gives the slot up so later items move up.
-enum class ItemVisibility : std::uint8_t { Visible, Blank, Hidden };
-
 struct ItemStyle {
     ItemEmphasis emphasis = ItemEmphasis::Highlight;
     ItemVisibility visibility = ItemVisibility::Visible;
     bool strikethrough = false;
+    ItemAnimation animation = ItemAnimation::None;
 
     bool operator==(const ItemStyle&) const = default;
-};
-
-struct ItemStyles {
-    ItemStyle pending;
-    ItemStyle done;
-
-    [[nodiscard]] const ItemStyle& at(const bool finished) const {
-        return finished ? done : pending;
-    }
-    bool operator==(const ItemStyles&) const = default;
 };
 
 // Gaps around a group's items, in source icon pixels.
@@ -71,8 +58,9 @@ struct LayoutSpacing {
 };
 // The spacing a group gets for each field its layout leaves out.
 LayoutSpacing default_spacing(bool overlay, LayoutSource source);
-// The item styles a group gets for each field its layout leaves out.
-ItemStyles default_item_styles(bool overlay, LayoutSource source);
+// Resolves a node's overrides against the defaults for this window and layout source.
+ItemStyle resolve_item_style(const CompiledTemplate& compiled, std::uint32_t node, bool overlay, LayoutSource source,
+                             bool done);
 
 // A board of the community leaderboard: one tab of a public Google Sheet.
 struct LeaderboardSource {
@@ -105,7 +93,6 @@ struct LayoutGroup {
     // LayoutSource::Leaderboard only.
     LeaderboardSource leaderboard;
     LayoutSpacing spacing{};
-    ItemStyles item_style{};
     // Overlay only: items roll through a carousel instead of sitting in a fixed strip.
     bool scroll = true;
 

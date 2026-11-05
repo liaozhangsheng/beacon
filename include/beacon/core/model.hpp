@@ -2,6 +2,7 @@
 
 #include <ylt/util/expected.hpp>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -70,6 +71,30 @@ enum class RuleOp : std::uint8_t {
     Prefix,
 };
 
+enum class ItemEmphasis : std::uint8_t { Highlight, Muted };
+// Blank keeps the slot; hidden lets later items move up.
+enum class ItemVisibility : std::uint8_t { Visible, Blank, Hidden };
+enum class ItemAnimation : std::uint8_t { None, Cover };
+
+struct StateStyle {
+    std::optional<ItemEmphasis> emphasis;
+    std::optional<ItemVisibility> visibility;
+    std::optional<ItemAnimation> animation;
+    bool strikethrough = false;
+
+    bool operator==(const StateStyle&) const = default;
+};
+
+struct StateStyles {
+    StateStyle pending;
+    StateStyle done;
+
+    [[nodiscard]] const StateStyle& at(const bool finished) const {
+        return finished ? done : pending;
+    }
+    bool operator==(const StateStyles&) const = default;
+};
+
 struct Presentation {
     enum class FrameType : std::uint8_t { None, Task, Goal, Challenge };
     // What an item shows: itself, its current stage, or its children in turn.
@@ -81,6 +106,8 @@ struct Presentation {
     bool enchanted = false;
     FrameType frame_type = FrameType::None;
     Show show = Show::Self;
+    // Main window (0) and overlay (1), with independent property overrides.
+    std::array<StateStyles, 2> state_style;
     std::string frame_obtained_path;
     std::string frame_unobtained_path;
 

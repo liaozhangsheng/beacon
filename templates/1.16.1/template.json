@@ -1780,6 +1780,7 @@
       "target": 164,
       "view": {
         "name_key": "counter.gold_blocks",
+        "state_style": {"overlay": {"done": {"visibility": "visible"}}},
         "type": "challenge",
         "icon": "assets/item/gold_block.png"
       }
@@ -1789,6 +1790,7 @@
       "fact": "stat/minecraft:estimated/minecraft:ancient_debris",
       "view": {
         "name_key": "counter.ancient_debris",
+        "state_style": {"overlay": {"done": {"visibility": "visible"}}},
         "type": "challenge",
         "icon": "assets/item/ancient_debris.png"
       }
@@ -1798,6 +1800,7 @@
       "fact": "stat/minecraft:estimated/minecraft:beehive",
       "view": {
         "name_key": "counter.beehives",
+        "state_style": {"overlay": {"done": {"visibility": "visible"}}},
         "type": "challenge",
         "icon": "assets/item/beehive.png"
       }
@@ -1837,6 +1840,7 @@
       ],
       "view": {
         "name_key": "counter.wither",
+        "state_style": {"overlay": {"done": {"visibility": "visible"}}},
         "type": "challenge",
         "icon": "assets/item/wither_skeleton_skull.png"
       }
@@ -1863,6 +1867,7 @@
       ],
       "view": {
         "name_key": "counter.conduit",
+        "state_style": {"overlay": {"done": {"visibility": "visible"}}},
         "type": "challenge",
         "icon": "assets/item/nautilus_shell.png"
       }
@@ -1889,6 +1894,7 @@
       ],
       "view": {
         "name_key": "counter.trident",
+        "state_style": {"overlay": {"done": {"visibility": "visible"}}},
         "type": "challenge",
         "icon": "assets/item/trident.png"
       }
@@ -1898,6 +1904,7 @@
       "fact": "stat/minecraft:estimated/minecraft:enchanted_golden_apple",
       "view": {
         "name_key": "counter.enchanted_golden_apples",
+        "state_style": {"overlay": {"done": {"visibility": "visible"}}},
         "type": "challenge",
         "icon": "assets/item/enchanted_golden_apple.png"
       }

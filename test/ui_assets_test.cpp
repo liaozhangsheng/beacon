@@ -1,7 +1,9 @@
 #include "temporary_directory.hpp"
+#include "../src/ui/completion_animation.hpp"
 
 #include <beacon/io/file.hpp>
 #include <beacon/ui/widgets.hpp>
+#include <beacon/ui/display.hpp>
 #include <SDL3_image/SDL_image.h>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
@@ -269,4 +271,79 @@ TEST_CASE("reloading a replaced GIF invalidates shared decoding while another wi
     REQUIRE(reloaded_window.animated_frame(path, 0));
     REQUIRE(reloaded_window.next_frame_ms() == 1230);
     REQUIRE(old_window.next_frame_ms() == (original_delay > 0 ? original_delay : 100));
+}
+TEST_CASE("overlay exit animations skip retained items and finish before hiding departing items") {
+    const std::unique_ptr<ImGuiContext, decltype(&ImGui::DestroyContext)> context(ImGui::CreateContext(),
+                                                                                  ImGui::DestroyContext);
+    auto& io = ImGui::GetIO();
+    io.IniFilename = nullptr;
+    io.DisplaySize = {800, 600};
+    io.Fonts->AddFontDefault();
+    REQUIRE(io.Fonts->Build());
+    const auto compiled = beacon::compile_template_json(R"({
+      "name_key":"t","minecraft":{"min_version":0,"max_version":1},"goals":[
+        {"id":"cover","view":{"name_key":"cover"}},
+        {"id":"none","view":{"name_key":"none","state_style":{"overlay":{"done":{"animation":"none"}}}}},
+        {"id":"unshown"},
+        {"id":"keep","view":{"name_key":"keep","state_style":{"overlay":{"done":{"visibility":"visible"}}}}},
+        {"id":"keep_cover","view":{"name_key":"keep_cover","state_style":{"overlay":{"done":{
+          "animation":"cover","visibility":"visible","emphasis":"muted"}}}}},
+        {"id":"blank","view":{"name_key":"blank","state_style":{"overlay":{"done":{"visibility":"blank"}}}}}
+      ],"completion_rule":"cover"
+    })");
+    REQUIRE(compiled);
+    beacon::PublishedState state{.compiled = std::make_shared<const beacon::CompiledTemplate>(*compiled)};
+    state.snapshot.results.resize(compiled->graph.nodes.size());
+    const auto id = [&](const char* name) {
+        return compiled->graph.index_by_id.at(name);
+    };
+    const std::vector<std::vector<std::uint32_t>> groups{
+        {id("cover"), id("none"), id("keep"), id("keep_cover"), id("blank")}};
+    beacon::CompletionAnimator animator;
+    const auto frame = [&](float delta) {
+        io.DeltaTime = delta;
+        ImGui::NewFrame();
+        animator.update(state, groups);
+    };
+    frame(0.1F);
+    CHECK_FALSE(animator.any_active());
+    ImGui::EndFrame();
+    for (auto& result : state.snapshot.results)
+        result.done = true;
+    frame(0.1F);
+    for (const auto* name : {"cover", "blank"})
+        CHECK(animator.active(id(name)));
+    for (const auto* name : {"none", "unshown", "keep", "keep_cover"})
+        CHECK_FALSE(animator.active(id(name)));
+    auto* draw = ImGui::GetForegroundDrawList();
+    const auto start = draw->VtxBuffer.Size;
+    animator.draw_cover(draw, id("cover"), {0, 0}, {100, 100});
+    CHECK(draw->VtxBuffer.Size == start);
+    ImGui::EndFrame();
+    frame(0.8F);
+    draw = ImGui::GetForegroundDrawList();
+    const auto before_cover = draw->VtxBuffer.Size;
+    animator.draw_cover(draw, id("keep_cover"), {0, 0}, {100, 100});
+    CHECK(draw->VtxBuffer.Size == before_cover);
+    animator.draw_cover(draw, id("cover"), {0, 0}, {100, 100});
+    CHECK(draw->VtxBuffer.Size > before_cover);
+    ImGui::EndFrame();
+    frame(0.9F);
+    CHECK_FALSE(animator.any_active());
+    const auto final = beacon::resolve_item_style(*compiled, id("keep_cover"), true, beacon::LayoutSource::Nodes, true);
+    CHECK(final.visibility == beacon::ItemVisibility::Visible);
+    CHECK(final.emphasis == beacon::ItemEmphasis::Muted);
+    ImGui::EndFrame();
+    // Undoing completion cancels an in-flight animation; a new completion can animate again.
+    state.snapshot.results[id("cover")].done = false;
+    frame(0.1F);
+    ImGui::EndFrame();
+    state.snapshot.results[id("cover")].done = true;
+    frame(0.1F);
+    REQUIRE(animator.active(id("cover")));
+    ImGui::EndFrame();
+    state.snapshot.results[id("cover")].done = false;
+    frame(0.1F);
+    CHECK_FALSE(animator.any_active());
+    ImGui::EndFrame();
 }

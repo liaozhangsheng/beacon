@@ -205,23 +205,41 @@ templates/<name>/
 各阶段使用存档中的累计统计，消耗物品不会减少计数，也无需单独持久化阶段状态。
 重复捡起同一物品也会增加拾取统计，因此这些计数不代表当前持有量。各阶段必须依次完成。
 
-`layout.json` 的 `main` 中，`collections` 分组可以配置子项状态样式：
+每条规则在 `template.json` 的 `view.state_style` 中分别配置主窗口与悬浮窗的状态样式：
 
 ```json
-"item_style": {
-  "pending": { "emphasis": "highlight" },
-  "done": { "emphasis": "muted", "decoration": "strikethrough" }
+"state_style": {
+  "main": {
+    "pending": {"emphasis": "highlight"},
+    "done": {"emphasis": "muted", "decoration": "strikethrough"}
+  },
+  "overlay": {
+    "done": {"visibility": "visible"}
+  }
 }
 ```
 
-`emphasis` 支持 `highlight`、`muted`，同时影响图标和文字；默认未完成（`pending`）为 `muted` 暗色，完成（`done`）为 `highlight` 高亮。显式配置可覆盖默认值。
-`decoration` 支持 `none`（默认）和 `strikethrough`；删除线贯穿图标和文字。
-`visibility` 支持 `visible`（默认）和 `blank`。例如 `"done": { "visibility": "blank" }` 会在完成后保留空位，
-跳过图标、文字、光晕、装饰和点击处理。`overlay` 不支持此配置，悬浮窗通过自己的完成动画和轮播逻辑处理收集项。
-这些样式不作用于收集组的标题和总进度；嵌套布局组需要各自配置，不继承父组样式。
-`pending` 和 `done` 及其属性均可省略，省略时使用上述默认值；`blank` 优先于明暗和删除线。
-留空的子项无法直接点击撤销完成。不要把 `item_style` 放在 `template.json`、`overlay` 或 `nodes`、`prefix` 分组中，
-否则加载会报错；未知状态、属性、枚举值以及非字符串属性值同样会被拒绝。
+窗口、状态（`pending` 未完成、`done` 完成）和每个属性都可省略。`main` 与 `overlay` 独立，
+条目不继承父规则、`ref` 引用对象或当前阶段、轮换子项的样式。
+`emphasis` 支持 `highlight`（高亮）和 `muted`（变暗），影响图标与文字。主窗口收集组子项未完成时默认变暗，其余默认高亮。
+`visibility` 支持 `visible`（显示）、`blank`（留空位）、`hidden`（移除并让后面的项目补位）。
+悬浮窗完成时默认 `hidden`，其余默认 `visible`。`done` 中的可见性和明暗决定动画结束后的最终效果。
+`overlay.done.animation` 支持 `cover`（自下而上遮盖）和 `none`（直接应用最终样式），仅允许写在 `overlay.done`。
+最终为 `visible` 的条目始终不播放退场动画，即使写了 `"animation": "cover"`，也立即应用完成样式。
+最终为 `blank` 或 `hidden` 的条目省略动画字段时默认播放遮盖动画。
+动画沿用现有的 0.6 秒等待、1 秒遮盖；例如完成后播放遮盖，再移除：
+
+```json
+"overlay": {
+  "done": {"animation": "cover", "visibility": "hidden"}
+}
+```
+
+改为 `"visibility": "blank"` 会在动画结束后留空位；设为 `"animation": "none"` 则立即应用最终效果。
+只有布局实际显示且启用动画的条目会播放并等待动画；撤销完成会中止动画。主窗口立即应用状态样式，留空或隐藏的项目无法点击撤销完成。
+`decoration` 在 `main` 中支持 `none`（默认）和 `strikethrough`（删除线），仅主窗口文字在图标右侧的收集组子项生效；`overlay` 不接受该属性。
+未知窗口、状态、属性、枚举值和非字符串属性值均会被拒绝。
+`layout.json` 负责分组、位置、间距和悬浮窗 `scroll`。
 
 `main` 中用 `"leaderboard"` 代替 `nodes` 的分组会显示公开 Google 表格中的一个榜单，例如
 [26.x](https://docs.google.com/spreadsheets/d/1v7tpe9jJp1cENpwtwJp4Hrn6c1RVniQI4vyyllQwU-A) 或
@@ -238,7 +256,7 @@ templates/<name>/
 省略时取工作表中的第一个榜单；`title` 替换顶部显示的文字，默认为榜单标题。
 
 点击记录会打开对应的视频或 speedrun.com 页面。前 50 名会联网加载头像，其余只显示已缓存的头像。表格和玩家头像会被缓存，离线时仍显示上次下载的榜单。
-排行榜分组不支持 `exclude`、`spacing`、`item_style`，也不能放在 `overlay` 中。
+排行榜分组不支持 `exclude`、`spacing`，也不能放在 `overlay` 中。
 
 ## Minecraft 商标声明
 

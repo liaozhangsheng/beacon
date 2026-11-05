@@ -1,5 +1,7 @@
 #include "completion_animation.hpp"
 
+#include <beacon/ui/display.hpp>
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -47,8 +49,8 @@ void CompletionAnimator::reset(const std::size_t result_count) {
     run_epoch_.reset();
 }
 
-void CompletionAnimator::update(const PublishedState& state) {
-    if (state.data_status != DataStatus::Ready) {
+void CompletionAnimator::update(const PublishedState& state, const std::span<const std::vector<std::uint32_t>> groups) {
+    if (state.data_status != DataStatus::Ready || !state.compiled) {
         started_.clear();
         return;
     }
@@ -61,13 +63,23 @@ void CompletionAnimator::update(const PublishedState& state) {
         started_.clear();
     }
     const float now = static_cast<float>(ImGui::GetTime());
+    std::vector<bool> shown(previous_done_.size());
+    for (const auto& group : groups) {
+        for (const auto node : group) {
+            if (node < shown.size())
+                shown[node] = true;
+        }
+    }
     for (std::size_t index = 0; index < previous_done_.size(); ++index) {
         const bool done = state.snapshot.results[index].done;
         const auto node = static_cast<std::uint32_t>(index);
-        if (!previous_done_[index] && done) {
-            started_[node] = now;
-        } else if (!done) {
+        const bool animated =
+            shown[index] && resolve_item_style(*state.compiled, node, true, LayoutSource::Nodes, true).animation ==
+                                ItemAnimation::Cover;
+        if (!done || !animated) {
             started_.erase(node);
+        } else if (!previous_done_[index]) {
+            started_[node] = now;
         } else if (const auto found = started_.find(node);
                    found != started_.end() &&
                    now - found->second >= animation_delay + animation_duration + animation_end_hold) {

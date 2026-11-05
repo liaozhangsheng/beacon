@@ -21,53 +21,6 @@ namespace {
 
 constexpr double max_layout_coordinate = 1'000'000.0;
 
-// Decoration needs a label beside the icon, which only main-window collection entries have.
-std::optional<Error> read_item_styles(const Json::Value& value, ItemStyles& styles, const bool overlay,
-                                      const LayoutSource source, const std::string& path) {
-    const auto invalid = [&] {
-        return Error{ErrorCode::Validation, "invalid item_style", path};
-    };
-    if (!value.isObject())
-        return invalid();
-    for (const auto& state : value.getMemberNames()) {
-        if (state != "pending" && state != "done")
-            return invalid();
-        const auto& fields = value[state];
-        if (!fields.isObject())
-            return invalid();
-        auto& style = state == "done" ? styles.done : styles.pending;
-        for (const auto& name : fields.getMemberNames()) {
-            if (!fields[name].isString())
-                return invalid();
-            const auto setting = fields[name].asString();
-            if (name == "emphasis") {
-                if (setting == "highlight")
-                    style.emphasis = ItemEmphasis::Highlight;
-                else if (setting == "muted")
-                    style.emphasis = ItemEmphasis::Muted;
-                else
-                    return invalid();
-            } else if (name == "visibility") {
-                if (setting == "visible")
-                    style.visibility = ItemVisibility::Visible;
-                else if (setting == "blank")
-                    style.visibility = ItemVisibility::Blank;
-                else if (setting == "hidden")
-                    style.visibility = ItemVisibility::Hidden;
-                else
-                    return invalid();
-            } else if (name == "decoration") {
-                if (overlay || source != LayoutSource::Collections || (setting != "none" && setting != "strikethrough"))
-                    return invalid();
-                style.strikethrough = setting == "strikethrough";
-            } else {
-                return invalid();
-            }
-        }
-    }
-    return std::nullopt;
-}
-
 // Reads a number in [0, max_layout_coordinate] into output; an absent field keeps output's default.
 std::optional<Error> read_amount(const Json::Value& object, const std::string_view name, const std::string& path,
                                  float& output, const bool positive = false) {
@@ -168,15 +121,6 @@ LayoutSpacing default_spacing(const bool overlay, const LayoutSource source) {
     return collections ? LayoutSpacing{.item = 16.0F, .row = 6.0F, .label = 3.0F} : LayoutSpacing{.label = 4.0F};
 }
 
-ItemStyles default_item_styles(const bool overlay, const LayoutSource source) {
-    // Overlay items leave once done; main collection entries recede until done.
-    if (overlay)
-        return {.pending = {}, .done = {.visibility = ItemVisibility::Hidden}};
-    if (source == LayoutSource::Collections)
-        return {.pending = {.emphasis = ItemEmphasis::Muted}, .done = {}};
-    return {};
-}
-
 ylt::expected<Layout, Error> compile_layout_json(std::string_view json, const CompiledTemplate& compiled) {
     auto root = beacon::parse_json(json, "layout.json", "invalid resource JSON");
     if (!root) {
@@ -220,10 +164,10 @@ ylt::expected<Layout, Error> compile_layout_json(std::string_view json, const Co
         };
         if (!value.isObject())
             return fail(Error{ErrorCode::Validation, "layout group must be an object", path});
-        if (auto failure = reject_unknown_fields(value, path,
-                                                 {"id", "x", "y", "width", "height", "margin", "padding", "nodes",
-                                                  "prefix", "collections", "children", "leaderboard", "exclude",
-                                                  "spacing", "item_style", "scroll"}))
+        if (auto failure =
+                reject_unknown_fields(value, path,
+                                      {"id", "x", "y", "width", "height", "margin", "padding", "nodes", "prefix",
+                                       "collections", "children", "leaderboard", "exclude", "spacing", "scroll"}))
             return fail(std::move(*failure));
 
         LayoutGroup group;
@@ -287,7 +231,7 @@ ylt::expected<Layout, Error> compile_layout_json(std::string_view json, const Co
                                       child_path(board_path, name)});
                 *field = text.asString();
             }
-            for (const auto* field : {"exclude", "spacing", "item_style"}) {
+            for (const auto* field : {"exclude", "spacing"}) {
                 if (value.isMember(field))
                     return fail(
                         Error{ErrorCode::Validation, "a leaderboard group has no items", child_path(path, field)});
@@ -314,15 +258,6 @@ ylt::expected<Layout, Error> compile_layout_json(std::string_view json, const Co
         if (value.isMember("spacing")) {
             if (auto failure =
                     read_spacing(value["spacing"], group.spacing, overlay, group.source, child_path(path, "spacing")))
-                return fail(std::move(*failure));
-        }
-        group.item_style = default_item_styles(overlay, group.source);
-        if (value.isMember("item_style")) {
-            if (group.source == LayoutSource::None)
-                return fail(Error{ErrorCode::Validation, "item_style requires nodes, prefix or collections",
-                                  child_path(path, "item_style")});
-            if (auto failure = read_item_styles(value["item_style"], group.item_style, overlay, group.source,
-                                                child_path(path, "item_style")))
                 return fail(std::move(*failure));
         }
         if (value.isMember("scroll")) {

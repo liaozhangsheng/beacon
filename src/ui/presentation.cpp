@@ -5,6 +5,28 @@
 
 namespace beacon {
 
+ItemStyle resolve_item_style(const CompiledTemplate& compiled, const std::uint32_t node, const bool overlay,
+                             const LayoutSource source, const bool done) {
+    ItemStyle style;
+    if (overlay && done) {
+        style.visibility = ItemVisibility::Hidden;
+        style.animation = ItemAnimation::Cover;
+    }
+    if (!overlay && source == LayoutSource::Collections && !done)
+        style.emphasis = ItemEmphasis::Muted;
+    if (node < compiled.presentation_by_node.size() && compiled.presentation_by_node[node]) {
+        const auto& overrides = compiled.presentation_by_node[node]->state_style[overlay].at(done);
+        style.emphasis = overrides.emphasis.value_or(style.emphasis);
+        style.visibility = overrides.visibility.value_or(style.visibility);
+        style.strikethrough = !overlay && source == LayoutSource::Collections && overrides.strikethrough;
+        if (overlay && done)
+            style.animation = style.visibility == ItemVisibility::Visible
+                                  ? ItemAnimation::None
+                                  : overrides.animation.value_or(ItemAnimation::Cover);
+    }
+    return style;
+}
+
 std::vector<std::uint32_t> resolve_layout_nodes(const LayoutGroup& group, const CompiledTemplate& compiled,
                                                 const std::size_t result_count) {
     std::vector<std::uint32_t> nodes;

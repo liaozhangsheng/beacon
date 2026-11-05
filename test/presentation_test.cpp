@@ -198,6 +198,15 @@ TEST_CASE("bundled 1.16.1 routes walk their stages in one slot") {
     const auto resources = beacon::load_template_resources(root / "templates/1.16.1/template.json", root);
     REQUIRE(resources);
     const auto& compiled = *resources->compiled;
+    const auto& stats = resources->layout->overlay.back();
+    for (const auto& id : stats.nodes) {
+        const auto node = compiled.graph.index_by_id.at(id);
+        CHECK(beacon::resolve_item_style(compiled, node, true, stats.source, true).visibility ==
+              beacon::ItemVisibility::Visible);
+        for (const auto child : compiled.graph.nodes[node].children)
+            CHECK(beacon::resolve_item_style(compiled, child, true, stats.source, true).visibility ==
+                  beacon::ItemVisibility::Hidden);
+    }
     beacon::Facts facts;
     const auto shown = [&](const std::string& route) {
         const auto results = beacon::evaluate(compiled, facts);
@@ -492,69 +501,141 @@ TEST_CASE("layout validates responsive groups and keeps unknown node IDs as warn
     REQUIRE(capped->warnings.size() == beacon::max_diagnostics);
 }
 
-TEST_CASE("item styles validate states fields and supported effects") {
-    const auto compiled = beacon::compile_template_json(presented_template);
-    REQUIRE(compiled);
-    const auto parse = [&](const std::string& style, const std::string& selector = "collections",
-                           const std::string& window = "main") {
-        return beacon::compile_layout_json(
-            R"({")" + window + R"(":[{")" + selector + R"(":["hidden"],"item_style":)" + style + "}]}", *compiled);
+TEST_CASE("state styles override individual properties independently for each window and state") {
+    using beacon::ItemEmphasis;
+    using beacon::ItemStyle;
+    using beacon::ItemVisibility;
+    using beacon::LayoutSource;
+    const auto parse = [](const std::string& style) {
+        return beacon::compile_template_json(replace_once(std::string(presented_template), R"("name_key":"goal.shown")",
+                                                          R"("name_key":"goal.shown","state_style":)" + style));
     };
-    const auto layout = parse(
-        R"({"pending":{"emphasis":"highlight"},"done":{"visibility":"blank","emphasis":"muted","decoration":"strikethrough"}})");
-    REQUIRE(layout);
-    const auto& styles = layout->main.front().item_style;
-    CHECK(styles.pending.emphasis == beacon::ItemEmphasis::Highlight);
-    CHECK(styles.pending.visibility == beacon::ItemVisibility::Visible);
-    CHECK_FALSE(styles.pending.strikethrough);
-    CHECK(styles.done.visibility == beacon::ItemVisibility::Blank);
-    CHECK(styles.done.emphasis == beacon::ItemEmphasis::Muted);
-    CHECK(styles.done.strikethrough);
-    const auto defaults = parse("{}");
-    REQUIRE(defaults);
-    CHECK(defaults->main.front().item_style == beacon::default_item_styles(false, beacon::LayoutSource::Collections));
-    CHECK(defaults->main.front().item_style.pending.emphasis == beacon::ItemEmphasis::Muted);
-    CHECK(defaults->main.front().item_style.done.emphasis == beacon::ItemEmphasis::Highlight);
-    const auto partial = parse(R"({"done":{"decoration":"strikethrough"}})");
-    REQUIRE(partial);
-    CHECK(partial->main.front().item_style.pending.emphasis == beacon::ItemEmphasis::Muted);
-    CHECK(partial->main.front().item_style.done.emphasis == beacon::ItemEmphasis::Highlight);
-    const auto highlighted = parse(R"({"done":{"visibility":"visible","emphasis":"highlight","decoration":"none"}})");
-    REQUIRE(highlighted);
-    CHECK(highlighted->main.front().item_style.done == beacon::ItemStyle{});
-    const auto omitted = beacon::compile_layout_json(R"({"main":[{"collections":["hidden"]}]})", *compiled);
-    REQUIRE(omitted);
-    CHECK(omitted->main.front().item_style == defaults->main.front().item_style);
-    for (const auto* invalid :
-         {"null", "[]", R"({"unknown":{}})", R"({"done":null})", R"({"done":{"visibility":"gone"}})",
-          R"({"done":{"decoration":"cross"}})", R"({"pending":{"emphasis":"normal"}})",
-          R"({"done":{"emphasis":"normal"}})", R"({"done":{"emphasis":"bright"}})", R"({"done":{"emphasis":true}})",
-          R"({"done":{"color":"red"}})"}) {
-        CAPTURE(invalid);
-        CHECK_FALSE(parse(invalid));
+    const auto compiled = parse(R"({
+        "main":{"pending":{"emphasis":"highlight"},
+                "done":{"visibility":"blank","emphasis":"muted","decoration":"strikethrough"}},
+        "overlay":{"pending":{"emphasis":"muted"},"done":{"visibility":"visible"}}
+    })");
+    REQUIRE(compiled);
+    const auto node = compiled->graph.index_by_id.at("shown");
+    const auto resolve = [&](const auto& rules, bool overlay, LayoutSource source, bool done) {
+        return beacon::resolve_item_style(rules, node, overlay, source, done);
+    };
+    CHECK(resolve(*compiled, false, LayoutSource::Collections, false) == ItemStyle{});
+    CHECK(resolve(*compiled, false, LayoutSource::Collections, true) ==
+          ItemStyle{ItemEmphasis::Muted, ItemVisibility::Blank, true});
+    CHECK(resolve(*compiled, false, LayoutSource::Nodes, true) ==
+          ItemStyle{ItemEmphasis::Muted, ItemVisibility::Blank, false});
+    CHECK(resolve(*compiled, true, LayoutSource::Nodes, false) == ItemStyle{.emphasis = ItemEmphasis::Muted});
+    CHECK(resolve(*compiled, true, LayoutSource::Nodes, true) == ItemStyle{});
+
+    // A neighbour in the same group keeps its defaults, without inheriting the styled node's settings.
+    const auto neighbour = compiled->graph.index_by_id.at("hidden");
+    CHECK(beacon::resolve_item_style(*compiled, neighbour, true, LayoutSource::Nodes, true).visibility ==
+          ItemVisibility::Hidden);
+    // Unnamed children without a view still get the defaults for their window and source.
+    const auto child = compiled->graph.nodes[neighbour].children.front();
+    CHECK(beacon::resolve_item_style(*compiled, child, false, LayoutSource::Collections, false).emphasis ==
+          ItemEmphasis::Muted);
+
+    for (const auto* style :
+         {"{}", R"({"main":{},"overlay":{}})", R"({"main":{"pending":{},"done":{}},"overlay":{"done":{}}})"}) {
+        const auto defaults = parse(style);
+        REQUIRE(defaults);
+        CHECK(resolve(*defaults, false, LayoutSource::Nodes, false) == ItemStyle{});
+        CHECK(resolve(*defaults, false, LayoutSource::Collections, false).emphasis == ItemEmphasis::Muted);
+        CHECK(resolve(*defaults, false, LayoutSource::Collections, true) == ItemStyle{});
+        CHECK(resolve(*defaults, true, LayoutSource::Collections, false) == ItemStyle{});
+        CHECK(resolve(*defaults, true, LayoutSource::Nodes, true).visibility == ItemVisibility::Hidden);
     }
+    const auto partial = parse(R"({"main":{"done":{"decoration":"strikethrough"}}})");
+    REQUIRE(partial);
+    CHECK(resolve(*partial, false, LayoutSource::Collections, false).emphasis == ItemEmphasis::Muted);
+    CHECK(resolve(*partial, false, LayoutSource::Collections, true) == ItemStyle{.strikethrough = true});
+    CHECK(resolve(*partial, true, LayoutSource::Collections, true).visibility == ItemVisibility::Hidden);
+    const auto explicit_defaults = parse(
+        R"({"main":{"pending":{"emphasis":"highlight"},"done":{"decoration":"none"}},
+            "overlay":{"done":{"visibility":"visible","emphasis":"highlight"}}})");
+    REQUIRE(explicit_defaults);
+    CHECK(resolve(*explicit_defaults, false, LayoutSource::Collections, false) == ItemStyle{});
+    CHECK(resolve(*explicit_defaults, false, LayoutSource::Collections, true) == ItemStyle{});
+    CHECK(resolve(*explicit_defaults, true, LayoutSource::Collections, true) == ItemStyle{});
+    const auto omitted = beacon::compile_template_json(presented_template);
+    REQUIRE(omitted);
+    CHECK(omitted->same_rules(*compiled));
+    CHECK(resolve(*omitted, true, LayoutSource::Nodes, true).visibility == ItemVisibility::Hidden);
 
-    // Plain groups take visibility and emphasis; strikethrough needs a collection entry's label.
-    const auto plain = parse(R"({"done":{"visibility":"hidden","emphasis":"muted"}})", "nodes");
-    REQUIRE(plain);
-    CHECK(plain->main.front().item_style.done.visibility == beacon::ItemVisibility::Hidden);
-    CHECK(beacon::compile_layout_json(R"({"main":[{"prefix":["hidden"]}]})", *compiled)->main.front().item_style ==
-          beacon::ItemStyles{});
-    CHECK_FALSE(parse(R"({"done":{"decoration":"strikethrough"}})", "prefix"));
+    for (const auto* visibility : {"visible", "blank", "hidden"}) {
+        const auto rules = parse(std::string{R"({"overlay":{"pending":{"visibility":")"} + visibility + R"("}}})");
+        REQUIRE(rules);
+        CHECK(resolve(*rules, true, LayoutSource::Nodes, false).visibility ==
+              (std::string_view(visibility) == "visible" ? ItemVisibility::Visible
+               : std::string_view(visibility) == "blank" ? ItemVisibility::Blank
+                                                         : ItemVisibility::Hidden));
+    }
+}
 
-    // Overlay items leave once done unless the layout keeps them; decoration needs a label beside the icon.
-    const auto overlay = beacon::compile_layout_json(R"({"overlay":[{"nodes":["hidden"]}]})", *compiled);
-    REQUIRE(overlay);
-    CHECK(overlay->overlay.front().item_style.done.visibility == beacon::ItemVisibility::Hidden);
-    CHECK(overlay->overlay.front().item_style.pending == beacon::ItemStyle{});
-    const auto kept = parse(R"({"done":{"visibility":"visible"}})", "nodes", "overlay");
-    REQUIRE(kept);
-    CHECK(kept->overlay.front().item_style.done == beacon::ItemStyle{});
-    const auto muted = parse(R"({"pending":{"emphasis":"muted"}})", "collections", "overlay");
-    REQUIRE(muted);
-    CHECK(muted->overlay.front().item_style.pending.emphasis == beacon::ItemEmphasis::Muted);
-    CHECK_FALSE(parse(R"({"done":{"decoration":"strikethrough"}})", "collections", "overlay"));
-    CHECK_FALSE(beacon::compile_layout_json(R"({"main":[{"children":[],"item_style":{}}]})", *compiled));
+TEST_CASE("overlay exit animations only play for departing items") {
+    using beacon::ItemAnimation;
+    for (const auto* visibility : {"visible", "blank", "hidden"}) {
+        for (const auto* animation : {"none", "cover"}) {
+            const auto compiled = beacon::compile_template_json(replace_once(
+                std::string(presented_template), R"("name_key":"goal.shown")",
+                std::string{R"("name_key":"goal.shown","state_style":{"overlay":{"done":{"visibility":")"} +
+                    visibility + R"(","animation":")" + animation + R"(","emphasis":"muted"}}})"));
+            REQUIRE(compiled);
+            const auto node = compiled->graph.index_by_id.at("shown");
+            const auto style = beacon::resolve_item_style(*compiled, node, true, beacon::LayoutSource::Nodes, true);
+            CHECK(style.animation ==
+                  (std::string_view(animation) == "cover" && std::string_view(visibility) != "visible"
+                       ? ItemAnimation::Cover
+                       : ItemAnimation::None));
+            CHECK(style.visibility == (std::string_view(visibility) == "visible" ? beacon::ItemVisibility::Visible
+                                       : std::string_view(visibility) == "blank" ? beacon::ItemVisibility::Blank
+                                                                                 : beacon::ItemVisibility::Hidden));
+            CHECK(style.emphasis == beacon::ItemEmphasis::Muted);
+            CHECK(beacon::resolve_item_style(*compiled, node, true, beacon::LayoutSource::Nodes, false) ==
+                  beacon::ItemStyle{});
+            CHECK(beacon::resolve_item_style(*compiled, node, false, beacon::LayoutSource::Nodes, true) ==
+                  beacon::ItemStyle{});
+        }
+    }
+}
+
+TEST_CASE("state styles reject invalid windows states fields values and old layout syntax") {
+    const auto parse = [](const std::string& style) {
+        return beacon::compile_template_json(replace_once(std::string(presented_template), R"("name_key":"goal.shown")",
+                                                          R"("name_key":"goal.shown","state_style":)" + style));
+    };
+    for (const auto* invalid : {"null",
+                                "[]",
+                                "true",
+                                R"({"other":{}})",
+                                R"({"main":null})",
+                                R"({"overlay":[]})",
+                                R"({"main":{"unknown":{}}})",
+                                R"({"main":{"done":null}})",
+                                R"({"overlay":{"pending":[]}})",
+                                R"({"main":{"done":{"visibility":"gone"}}})",
+                                R"({"main":{"done":{"emphasis":"normal"}}})",
+                                R"({"main":{"done":{"decoration":"cross"}}})",
+                                R"({"overlay":{"done":{"decoration":"none"}}})",
+                                R"({"main":{"done":{"emphasis":true}}})",
+                                R"({"main":{"done":{"visibility":null}}})",
+                                R"({"main":{"done":{"color":"red"}}})",
+                                R"({"pending":{"emphasis":"muted"}})",
+                                R"({"main":{"done":{"animation":"cover"}}})",
+                                R"({"overlay":{"pending":{"animation":"none"}}})",
+                                R"({"overlay":{"done":{"animation":"fade"}}})",
+                                R"({"overlay":{"done":{"animation":true}}})"}) {
+        CAPTURE(invalid);
+        const auto rules = parse(invalid);
+        REQUIRE_FALSE(rules);
+        CHECK(rules.error().front().context.starts_with("/goals/0/view/state_style"));
+    }
+    const auto rules = beacon::compile_template_json(presented_template);
+    REQUIRE(rules);
+    CHECK_FALSE(beacon::compile_layout_json(R"({"main":[{"nodes":["shown"],"item_style":{}}]})", *rules));
+    CHECK_FALSE(beacon::compile_layout_json(R"({"overlay":[{"nodes":["shown"],"state_style":{}}]})", *rules));
 }
 
 TEST_CASE("overlay scrolling follows the layout scroll field") {

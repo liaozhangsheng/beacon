@@ -95,7 +95,7 @@ void WindowRenderer::Impl::render(const std::shared_ptr<const PublishedState>& s
     }
 
     if (overlay_ && state) {
-        completion_.update(*state);
+        completion_.update(*state, view_.overlay_groups);
         const bool complete = is_complete(*state);
         if (!complete || completion_.any_active()) {
             completion_started_.reset();

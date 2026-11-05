@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <optional>
 #include <random>
+#include <span>
 #include <unordered_map>
 #include <vector>
 
@@ -17,7 +18,7 @@ namespace beacon {
 class CompletionAnimator {
 public:
     void reset(std::size_t result_count);
-    void update(const PublishedState& state);
+    void update(const PublishedState& state, std::span<const std::vector<std::uint32_t>> groups);
     [[nodiscard]] bool active(std::uint32_t node) const;
     [[nodiscard]] bool any_active() const {
         return !started_.empty();

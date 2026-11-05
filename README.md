@@ -212,24 +212,46 @@ Plain counters and staged counters can share a group.
 These counters use cumulative save statistics, so consuming items does not reduce their counts; stages need no separate persistent state.
 Picking up the same item again increases pickup statistics again, so these counts do not show how many items the player currently holds. Stages must be completed in order.
 
-In `layout.json`, `collections` groups under `main` can configure child item styles:
+Each rule's `view.state_style` in `template.json` configures its appearance separately for the main window and overlay:
 
 ```json
-"item_style": {
-  "pending": { "emphasis": "highlight" },
-  "done": { "emphasis": "muted", "decoration": "strikethrough" }
+"state_style": {
+  "main": {
+    "pending": {"emphasis": "highlight"},
+    "done": {"emphasis": "muted", "decoration": "strikethrough"}
+  },
+  "overlay": {
+    "done": {"visibility": "visible"}
+  }
 }
 ```
 
-`emphasis` accepts `highlight` or `muted`, and affects both icons and text. By default, `pending` items are `muted`
-and `done` items are `highlight`. Explicit settings override these defaults.
-`decoration` accepts `none` (default) or `strikethrough`; the line crosses the icon and text, including multiline labels.
-`visibility` accepts `visible` (default) or `blank`. For example, `"done": { "visibility": "blank" }` keeps an empty slot
-after completion and skips the icon, text, glow, decoration, and click handling. Blank items cannot be clicked to undo completion.
-`blank` takes priority over emphasis and decoration. Both states and all their properties are optional and use these defaults when omitted.
-Styles affect child items only, leaving collection headings and totals unchanged. Nested groups need their own styles; styles are not inherited.
-The overlay uses its own completion animation and carousel behavior for collection items. Placing `item_style` in `overlay`, in a `nodes` or `prefix`
-group, or in `template.json` is invalid. Unknown states, properties, enum values, and non-string property values are also rejected.
+Both windows, states (`pending`, `done`), and individual properties are optional. `main` and `overlay` are independent;
+styles do not inherit from parents, referenced rules, or the stage/cycle child currently displayed.
+`emphasis` accepts `highlight` or `muted` and affects icons and text. Main-window collection entries default to
+`muted` while pending; all other entries default to `highlight`.
+`visibility` accepts `visible`, `blank` (keep an empty slot), or `hidden` (remove the slot so later items move up).
+Completed overlay items default to `hidden`; all other states default to `visible`. The visibility and emphasis in `done`
+determine the final appearance after the animation.
+`overlay.done.animation` accepts `cover` (a bottom-to-top cover) or `none` (apply the final style immediately), and is
+rejected in other windows or states. Visible items always skip exit animations and apply their done style immediately, even with `"animation": "cover"`.
+When the animation is omitted, blank or hidden items use `cover`.
+The existing timing is a 0.6-second delay and a 1-second cover. For example, play the cover, then remove the item:
+
+```json
+"overlay": {
+  "done": {"animation": "cover", "visibility": "hidden"}
+}
+```
+
+Use `"visibility": "blank"` to keep an empty slot afterward; `"animation": "none"`
+applies that final effect immediately. Only displayed overlay nodes with an enabled animation play and wait for it;
+undoing completion cancels the animation. Main-window changes take effect immediately; blank or hidden items cannot
+be clicked to undo completion.
+`decoration` accepts `none` (default) or `strikethrough` under `main`, and takes effect only for collection entries
+with text beside their icons. It is rejected under `overlay`.
+Unknown windows, states, properties, enum values, and non-string property values are rejected.
+`layout.json` handles grouping, placement, spacing, and overlay `scroll`.
 
 A `main` group with `"leaderboard"` in place of `nodes` shows a board from a public Google Sheet, such as the
 [26.x](https://docs.google.com/spreadsheets/d/1v7tpe9jJp1cENpwtwJp4Hrn6c1RVniQI4vyyllQwU-A) or
@@ -247,7 +269,7 @@ side, each with its title above a header row that starts at `#` and has `Runner`
 omitted, and `title` replaces the header's text, which is otherwise the board's title.
 
 Clicking a run opens its video or speedrun.com page. Heads load for the top 50 runs, plus any already cached. The sheet
-and players' heads are cached, so the last downloaded board still shows offline. Leaderboard groups take no `exclude`, `spacing` or `item_style`, and cannot be used in `overlay`.
+and players' heads are cached, so the last downloaded board still shows offline. Leaderboard groups take no `exclude` or `spacing`, and cannot be used in `overlay`.
 
 ## Minecraft trademark
 

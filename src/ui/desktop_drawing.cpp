@@ -218,12 +218,11 @@ bool WindowRenderer::Impl::finishing(const std::uint32_t node) const {
     return overlay_ && completion_.active(node);
 }
 
-const ItemStyle& WindowRenderer::Impl::item_style(const PublishedState& state, const LayoutGroup& group,
-                                                  const std::uint32_t node) const {
-    static constexpr ItemStyle plain{};
-    if (finishing(node))
-        return plain;
-    return group.item_style.at(node < state.snapshot.results.size() && state.snapshot.results[node].done);
+ItemStyle WindowRenderer::Impl::item_style(const PublishedState& state, const LayoutGroup& group,
+                                           const std::uint32_t node) const {
+    const auto style = resolve_item_style(*state.compiled, node, overlay_, group.source,
+                                          node < state.snapshot.results.size() && state.snapshot.results[node].done);
+    return finishing(node) ? ItemStyle{} : style;
 }
 
 bool WindowRenderer::Impl::item_placed(const PublishedState& state, const LayoutGroup& group,
@@ -243,7 +242,7 @@ void WindowRenderer::Impl::draw_item(const PublishedState& state, const LayoutGr
     const bool progress = shows_progress(shown.value, *state.compiled);
     // Overlay statistics glow once reached; an overlay item about to leave its slot gets the completion cover.
     const bool glow = item.draw_glow || (overlay_ && progress);
-    const bool leaving = finishing(index) && group.item_style.done.visibility != ItemVisibility::Visible;
+    const bool leaving = finishing(index);
     const auto& style = item_style(state, group, index);
     if (style.visibility != ItemVisibility::Visible)
         return;

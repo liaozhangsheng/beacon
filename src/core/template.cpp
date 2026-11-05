@@ -97,6 +97,62 @@ bool valid_icon_reference(std::string_view value) {
 
 namespace {
 
+std::optional<Error> read_state_styles(const Json::Value& value, std::array<StateStyles, 2>& styles,
+                                       const std::string& path) {
+    const auto invalid = [](const std::string& where) {
+        return Error{ErrorCode::Validation, "invalid state_style", where};
+    };
+    if (!value.isObject())
+        return invalid(path);
+    for (const auto& window : value.getMemberNames()) {
+        const auto window_path = child_path(path, window);
+        if ((window != "main" && window != "overlay") || !value[window].isObject())
+            return invalid(window_path);
+        const bool overlay = window == "overlay";
+        for (const auto& state : value[window].getMemberNames()) {
+            const auto state_path = child_path(window_path, state);
+            const auto& fields = value[window][state];
+            if ((state != "pending" && state != "done") || !fields.isObject())
+                return invalid(state_path);
+            auto& style = state == "done" ? styles[overlay].done : styles[overlay].pending;
+            for (const auto& name : fields.getMemberNames()) {
+                const auto field_path = child_path(state_path, name);
+                if (!fields[name].isString())
+                    return invalid(field_path);
+                const auto setting = fields[name].asString();
+                if (name == "emphasis") {
+                    if (setting == "highlight")
+                        style.emphasis = ItemEmphasis::Highlight;
+                    else if (setting == "muted")
+                        style.emphasis = ItemEmphasis::Muted;
+                    else
+                        return invalid(field_path);
+                } else if (name == "visibility") {
+                    if (setting == "visible")
+                        style.visibility = ItemVisibility::Visible;
+                    else if (setting == "blank")
+                        style.visibility = ItemVisibility::Blank;
+                    else if (setting == "hidden")
+                        style.visibility = ItemVisibility::Hidden;
+                    else
+                        return invalid(field_path);
+                } else if (name == "animation") {
+                    if (!overlay || state != "done" || (setting != "none" && setting != "cover"))
+                        return invalid(field_path);
+                    style.animation = setting == "cover" ? ItemAnimation::Cover : ItemAnimation::None;
+                } else if (name == "decoration") {
+                    if (overlay || (setting != "none" && setting != "strikethrough"))
+                        return invalid(field_path);
+                    style.strikethrough = setting == "strikethrough";
+                } else {
+                    return invalid(field_path);
+                }
+            }
+        }
+    }
+    return std::nullopt;
+}
+
 // jsoncpp stores integers above INT32_MAX as unsigned, so check the range rather than the type.
 bool integer(const Json::Value& value) {
     return (value.type() == Json::intValue || value.type() == Json::uintValue) && value.isInt64();
@@ -148,7 +204,8 @@ std::optional<Error> validate_rule_shape(const Json::Value& value, const std::st
         if (!view.isObject()) {
             return Error{ErrorCode::Validation, "expected an object", view_path};
         }
-        if (auto failure = reject_unknown_fields(view, view_path, {"name_key", "icon", "enchanted", "type", "show"})) {
+        if (auto failure = reject_unknown_fields(view, view_path,
+                                                 {"name_key", "icon", "enchanted", "type", "show", "state_style"})) {
             return failure;
         }
         if (!view.isMember("name_key")) {
@@ -342,6 +399,11 @@ struct Compiler {
             presentation.localization_key = view["name_key"].asString();
             presentation.icon_path = view.isMember("icon") ? view["icon"].asString() : std::string{};
             presentation.enchanted = view.get("enchanted", false).asBool();
+            if (view.isMember("state_style")) {
+                if (auto failure = read_state_styles(view["state_style"], presentation.state_style,
+                                                     child_path(view_path, "state_style")))
+                    diagnostics.add(failure->message, failure->context);
+            }
             if (view.isMember("type")) {
                 const auto type = view["type"].asString();
                 presentation.frame_type = type == "goal"        ? Presentation::FrameType::Goal
