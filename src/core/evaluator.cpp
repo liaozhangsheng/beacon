@@ -14,52 +14,7 @@ ylt::unexpected<Error> internal(std::string message) {
         {.code = ErrorCode::Internal, .message = std::move(message), .context = "rule graph"}};
 }
 
-// The compiler only builds valid graphs, but a CompiledTemplate can be changed afterwards. Everything evaluation relies
-// on is checked here, once, before any result is computed.
-ylt::expected<void, Error> check_graph(const RuleGraph& graph, const RuleResults& results) {
-    const auto size = graph.nodes.size();
-    if (results.size() != size)
-        return internal("result count does not match rule graph");
-    if (graph.evaluation_order.size() != size)
-        return internal("evaluation order does not contain every rule node");
-    std::vector<std::uint8_t> evaluated(size);
-    const auto ready = [&](const std::uint32_t index) {
-        return index < size && evaluated[index] != 0;
-    };
-    for (const auto index : graph.evaluation_order) {
-        if (index >= size || evaluated[index] != 0)
-            return internal("evaluation order contains an invalid or duplicate node index");
-        const auto& node = graph.nodes[index];
-        switch (node.op) {
-            case RuleOp::Fact:
-                if (node.target < 1 && !(node.target == 0 && node.fact_key.starts_with("stat/")))
-                    return internal("Fact node has an invalid target");
-                break;
-            case RuleOp::Ref:
-                if (!ready(node.reference_node))
-                    return internal("Ref node has an invalid target index");
-                break;
-            case RuleOp::All:
-            case RuleOp::Any:
-            case RuleOp::Count:
-            case RuleOp::Prefix:
-                if (node.children.empty())
-                    return internal("aggregate node has no children");
-                if (!std::ranges::all_of(node.children, ready))
-                    return internal("aggregate node has an invalid child index");
-                if (node.op == RuleOp::Count &&
-                    (node.target < 1 || node.target > static_cast<std::int64_t>(node.children.size())))
-                    return internal("aggregate node has an invalid target");
-                break;
-            default:
-                return internal("rule node has an unknown operation");
-        }
-        evaluated[index] = 1;
-    }
-    return {};
-}
-
-// The graph has passed check_graph, so every dependency comes earlier in the evaluation order.
+// The compiler orders every dependency before the nodes that use it.
 void recompute_derived(const RuleGraph& graph, RuleResults& results) {
     for (const auto index : graph.evaluation_order) {
         const auto& node = graph.nodes[index];
@@ -100,11 +55,9 @@ void recompute_derived(const RuleGraph& graph, RuleResults& results) {
 
 }  // namespace
 
-ylt::expected<RuleResults, Error> evaluate(const CompiledTemplate& compiled, const Facts& facts) {
+RuleResults evaluate(const CompiledTemplate& compiled, const Facts& facts) {
     const auto& graph = compiled.graph;
     RuleResults results(graph.nodes.size());
-    if (auto checked = check_graph(graph, results); !checked)
-        return ylt::unexpected<Error>{std::move(checked.error())};
     for (std::size_t index = 0; index < graph.nodes.size(); ++index) {
         const auto& node = graph.nodes[index];
         if (node.op != RuleOp::Fact) {
@@ -120,32 +73,18 @@ ylt::expected<RuleResults, Error> evaluate(const CompiledTemplate& compiled, con
     return results;
 }
 
-ylt::expected<void, Error> apply_manual_progress(const CompiledTemplate& compiled, RuleResults& results,
-                                                 const ManualProgress& manual) {
-    if (auto checked = check_graph(compiled.graph, results); !checked)
-        return checked;
+void apply_manual_progress(const CompiledTemplate& compiled, RuleResults& results, const ManualProgress& manual) {
     for (const auto node_index : manual.completed) {
-        if (node_index >= compiled.graph.nodes.size() || compiled.graph.nodes[node_index].op != RuleOp::Fact)
-            return internal("manual completion targets a non-Fact node");
         auto& result = results[node_index];
         result.value = std::max(result.value, result.target);
         result.done = true;
     }
     for (const auto& [node_index, delta] : manual.stat_deltas) {
-        if (node_index >= compiled.graph.nodes.size() || compiled.graph.nodes[node_index].op != RuleOp::Fact ||
-            !compiled.graph.nodes[node_index].fact_key.starts_with("stat/"))
-            return internal("manual statistic targets an invalid node");
         auto& result = results[node_index];
-        if (delta > 0 && result.value > std::numeric_limits<std::int64_t>::max() - delta)
-            result.value = std::numeric_limits<std::int64_t>::max();
-        else if (delta < 0 && (delta == std::numeric_limits<std::int64_t>::min() || result.value < -delta))
-            result.value = 0;
-        else
-            result.value = std::max<std::int64_t>(0, result.value + delta);
+        result.value = std::max<std::int64_t>(0, result.value + delta);
         result.done = result.target != 0 && result.value >= result.target;
     }
     recompute_derived(compiled.graph, results);
-    return {};
 }
 
 ylt::expected<void, Error> apply_manual_operation(const CompiledTemplate& compiled, RuleResults& results,
@@ -155,9 +94,6 @@ ylt::expected<void, Error> apply_manual_operation(const CompiledTemplate& compil
         return internal("manual operation targets a non-Fact node");
     if (compiled.graph.nodes[node].fact_key.starts_with("stat/")) {
         auto& delta = manual.stat_deltas[node];
-        if ((increment && delta == std::numeric_limits<std::int64_t>::max()) ||
-            (!increment && delta == std::numeric_limits<std::int64_t>::min()))
-            return internal("manual statistic delta overflow");
         delta += increment ? 1 : -1;
         if (delta == 0)
             manual.stat_deltas.erase(node);
@@ -166,25 +102,12 @@ ylt::expected<void, Error> apply_manual_operation(const CompiledTemplate& compil
     } else {
         manual.completed.erase(node);
     }
-    return apply_manual_progress(compiled, results, manual);
+    apply_manual_progress(compiled, results, manual);
+    return {};
 }
 
-ylt::expected<Snapshot, Error> publish(const CompiledTemplate& compiled, RuleResults results,
-                                       const PublishContext& context, const Snapshot* previous) {
-    if (results.size() != compiled.graph.nodes.size()) {
-        return internal("result count does not match rule graph");
-    }
-    if (compiled.completion_node >= results.size()) {
-        return internal("completion rule index is invalid");
-    }
-    if (context.play_ticks < 0) {
-        return ylt::unexpected<Error>{
-            {.code = ErrorCode::Internal, .message = "play ticks must be non-negative", .context = "publish context"}};
-    }
-    if (previous != nullptr && previous->revision == std::numeric_limits<std::uint64_t>::max()) {
-        return internal("snapshot revision overflow");
-    }
-
+Snapshot publish(const CompiledTemplate& compiled, RuleResults results, const PublishContext& context,
+                 const Snapshot* previous) {
     Snapshot snapshot;
     snapshot.revision = previous == nullptr ? 1 : previous->revision + 1;
     snapshot.updated_at =

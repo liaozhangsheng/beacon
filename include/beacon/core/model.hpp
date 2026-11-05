@@ -183,12 +183,12 @@ struct PublishContext {
 };
 
 ylt::expected<CompiledTemplate, TemplateErrors> compile_template_json(std::string_view json);
-ylt::expected<RuleResults, Error> evaluate(const CompiledTemplate& compiled, const Facts& facts);
-ylt::expected<void, Error> apply_manual_progress(const CompiledTemplate& compiled, RuleResults& results,
-                                                 const ManualProgress& manual);
+RuleResults evaluate(const CompiledTemplate& compiled, const Facts& facts);
+void apply_manual_progress(const CompiledTemplate& compiled, RuleResults& results, const ManualProgress& manual);
+// Fails when the node is not a Fact rule of this template.
 ylt::expected<void, Error> apply_manual_operation(const CompiledTemplate& compiled, RuleResults& results,
                                                   ManualProgress& manual, std::uint32_t node, bool increment);
-ylt::expected<Snapshot, Error> publish(const CompiledTemplate& compiled, RuleResults results,
-                                       const PublishContext& context, const Snapshot* previous);
+Snapshot publish(const CompiledTemplate& compiled, RuleResults results, const PublishContext& context,
+                 const Snapshot* previous);
 
 }  // namespace beacon

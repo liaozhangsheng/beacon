@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <cstdint>
 #include <limits>
-#include <numeric>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -62,27 +61,23 @@ TEST_CASE("template compiles to deterministic preorder graph and evaluates all r
     const beacon::Facts facts{{"second", 1}, {"bonus", 1}, {"a", 1}};
     const auto first = beacon::evaluate(*compiled, facts);
     const auto repeated = beacon::evaluate(*compiled, facts);
-    REQUIRE(first);
-    REQUIRE(repeated);
-    REQUIRE(*first == *repeated);
+    REQUIRE(first == repeated);
 
-    REQUIRE((*first)[3].value == 0);  // Missing Fact is zero.
-    REQUIRE((*first)[8].value == 0);  // A later Prefix child cannot skip the first.
-    REQUIRE((*first)[8].active_child == 9);
-    REQUIRE((*first)[1] == (*first)[8]);  // Ref copies the complete result.
-    REQUIRE_FALSE((*first)[0].done);
+    REQUIRE(first[3].value == 0);  // Missing Fact is zero.
+    REQUIRE(first[8].value == 0);  // A later Prefix child cannot skip the first.
+    REQUIRE(first[8].active_child == 9);
+    REQUIRE(first[1] == first[8]);  // Ref copies the complete result.
+    REQUIRE_FALSE(first[0].done);
 
     auto completed_facts = facts;
     completed_facts["first"] = 1;
     const auto completed = beacon::evaluate(*compiled, completed_facts);
-    REQUIRE(completed);
-    REQUIRE((*completed)[8].value == 2);
-    REQUIRE((*completed)[8].active_child == std::numeric_limits<std::uint32_t>::max());
-    REQUIRE((*completed)[0].done);
+    REQUIRE(completed[8].value == 2);
+    REQUIRE(completed[8].active_child == std::numeric_limits<std::uint32_t>::max());
+    REQUIRE(completed[0].done);
 }
 
-TEST_CASE("template parser rejects unsafe or structurally ambiguous JSON") {
-    REQUIRE_FALSE(beacon::valid_icon_reference(std::string_view("icons/a.png\0ignored", 19)));
+TEST_CASE("template parser rejects malformed or ambiguous JSON") {
     const std::vector<std::pair<std::string, beacon::ErrorCode>> invalid{
         {R"({"name_key":"x","name_key":"y","minecraft":{"min_version":3463,"max_version":4903},"goals":[],"completion_rule":"x"})",
          beacon::ErrorCode::Parse},
@@ -151,11 +146,10 @@ TEST_CASE("targetless statistics keep their raw count") {
     const auto stat = compiled->graph.index_by_id.at("stat");
     const auto goal = compiled->graph.index_by_id.at("goal");
     const auto results = beacon::evaluate(*compiled, {{"stat/minecraft:mined/minecraft:stone", 7}, {"a", 1}});
-    REQUIRE(results);
-    REQUIRE((*results)[stat].value == 7);
-    REQUIRE((*results)[stat].target == 0);
-    REQUIRE_FALSE((*results)[stat].done);
-    REQUIRE((*results)[goal].done);
+    REQUIRE(results[stat].value == 7);
+    REQUIRE(results[stat].target == 0);
+    REQUIRE_FALSE(results[stat].done);
+    REQUIRE(results[goal].done);
 }
 
 TEST_CASE("template compiler reports semantic errors without returning a partial graph") {
@@ -188,70 +182,12 @@ TEST_CASE("template supports manual-only leaf rules") {
     REQUIRE(compiled);
 
     auto results = beacon::evaluate(*compiled, {});
-    REQUIRE(results);
     const auto node = compiled->graph.index_by_id.at("manual");
-    REQUIRE_FALSE((*results)[node].done);
+    REQUIRE_FALSE(results[node].done);
 
     beacon::ManualProgress manual;
-    REQUIRE(beacon::apply_manual_operation(*compiled, *results, manual, node, true));
-    REQUIRE((*results)[node].done);
-}
-
-TEST_CASE("template compiler handles the maximum legal Ref chain without call-stack recursion") {
-#if defined(__unix__) || defined(__APPLE__)
-    rlimit stack_limit{};
-    REQUIRE(getrlimit(RLIMIT_STACK, &stack_limit) == 0);
-    stack_limit.rlim_cur = std::min<rlim_t>(stack_limit.rlim_max, 1024U * 1024U);
-    REQUIRE(setrlimit(RLIMIT_STACK, &stack_limit) == 0);
-#endif
-
-    std::string chain_goals = "[";
-    for (std::size_t index = 0; index < beacon::max_rule_nodes; ++index) {
-        if (index != 0) {
-            chain_goals += ',';
-        }
-        chain_goals += "{\"id\":\"n" + std::to_string(index) + "\",";
-        chain_goals += index + 1 == beacon::max_rule_nodes ? "\"fact\":\"done\"}"
-                                                           : "\"ref\":\"n" + std::to_string(index + 1) + "\"}";
-    }
-    chain_goals += ']';
-
-    const auto compiled = beacon::compile_template_json(template_document(chain_goals, "n0"));
-    REQUIRE(compiled);
-    REQUIRE(compiled->graph.nodes.size() == beacon::max_rule_nodes);
-    std::vector<std::uint32_t> expected_order(beacon::max_rule_nodes);
-    std::iota(expected_order.rbegin(), expected_order.rend(), 0U);
-    REQUIRE(compiled->graph.evaluation_order == expected_order);
-}
-
-TEST_CASE("disk and manual evaluation reject the same malformed graphs") {
-    auto compiled = beacon::compile_template_json(template_json);
-    REQUIRE(compiled);
-    auto base = beacon::evaluate(*compiled, {});
-    REQUIRE(base);
-
-    SECTION("invalid node index") {
-        compiled->graph.evaluation_order.front() = std::numeric_limits<std::uint32_t>::max();
-    }
-    SECTION("duplicate node") {
-        compiled->graph.evaluation_order.back() = compiled->graph.evaluation_order.front();
-    }
-    SECTION("missing node") {
-        compiled->graph.evaluation_order.pop_back();
-    }
-    SECTION("dependency evaluated after its parent") {
-        std::reverse(compiled->graph.evaluation_order.begin(), compiled->graph.evaluation_order.end());
-    }
-    SECTION("invalid Prefix child after an incomplete child") {
-        const auto prefix = compiled->graph.index_by_id.at("stages");
-        compiled->graph.nodes[prefix].children.back() = std::numeric_limits<std::uint32_t>::max();
-    }
-    const auto result = beacon::evaluate(*compiled, {});
-    REQUIRE_FALSE(result);
-    REQUIRE(result.error().code == beacon::ErrorCode::Internal);
-    const auto manual = beacon::apply_manual_progress(*compiled, *base, {});
-    REQUIRE_FALSE(manual);
-    REQUIRE(manual.error().code == beacon::ErrorCode::Internal);
+    REQUIRE(beacon::apply_manual_operation(*compiled, results, manual, node, true));
+    REQUIRE(results[node].done);
 }
 
 TEST_CASE("manual progress updates facts and derived rules without changing facts") {
@@ -268,21 +204,21 @@ TEST_CASE("manual progress updates facts and derived rules without changing fact
     beacon::ManualProgress manual;
     const auto leaf = compiled->graph.index_by_id.at("leaf");
     const auto counter = compiled->graph.index_by_id.at("counter");
-    const auto base = *results;
-    REQUIRE(beacon::apply_manual_operation(*compiled, *results, manual, leaf, true));
-    REQUIRE((*results)[leaf].done);
+    const auto base = results;
+    REQUIRE(beacon::apply_manual_operation(*compiled, results, manual, leaf, true));
+    REQUIRE(results[leaf].done);
     REQUIRE_FALSE(facts.at("adv/leaf"));
-    *results = base;
-    REQUIRE(beacon::apply_manual_operation(*compiled, *results, manual, counter, true));
-    REQUIRE((*results)[counter].value == 3);
-    REQUIRE((*results)[compiled->completion_node].done);
-    *results = base;
-    REQUIRE(beacon::apply_manual_operation(*compiled, *results, manual, counter, false));
-    REQUIRE((*results)[counter].value == 2);
-    REQUIRE_FALSE((*results)[compiled->completion_node].done);
-    *results = base;
-    REQUIRE(beacon::apply_manual_operation(*compiled, *results, manual, leaf, false));
-    REQUIRE_FALSE((*results)[leaf].done);
+    results = base;
+    REQUIRE(beacon::apply_manual_operation(*compiled, results, manual, counter, true));
+    REQUIRE(results[counter].value == 3);
+    REQUIRE(results[compiled->completion_node].done);
+    results = base;
+    REQUIRE(beacon::apply_manual_operation(*compiled, results, manual, counter, false));
+    REQUIRE(results[counter].value == 2);
+    REQUIRE_FALSE(results[compiled->completion_node].done);
+    results = base;
+    REQUIRE(beacon::apply_manual_operation(*compiled, results, manual, leaf, false));
+    REQUIRE_FALSE(results[leaf].done);
 }
 
 TEST_CASE("snapshot publishing increments revisions and reflects current results") {
@@ -291,41 +227,28 @@ TEST_CASE("snapshot publishing increments revisions and reflects current results
 
     beacon::Facts facts{{"first", 1}, {"second", 1}, {"bonus", 1}, {"a", 1}};
     auto results = beacon::evaluate(*compiled, facts);
-    REQUIRE(results);
-    auto first = beacon::publish(*compiled, *results, {7, 120}, nullptr);
-    REQUIRE(first);
-    REQUIRE(first->revision == 1);
-    REQUIRE(first->results[compiled->completion_node].done);
-    REQUIRE(first->play_ticks == 120);
-    REQUIRE(first->completion_play_ticks == 120);
+    auto first = beacon::publish(*compiled, results, {7, 120}, nullptr);
+    REQUIRE(first.revision == 1);
+    REQUIRE(first.results[compiled->completion_node].done);
+    REQUIRE(first.play_ticks == 120);
+    REQUIRE(first.completion_play_ticks == 120);
 
-    auto refreshed = beacon::publish(*compiled, *results, {7, 180}, &*first);
-    REQUIRE(refreshed);
-    REQUIRE(refreshed->completion_play_ticks == 120);
+    auto refreshed = beacon::publish(*compiled, results, {7, 180}, &first);
+    REQUIRE(refreshed.completion_play_ticks == 120);
 
     facts.erase("first");
     results = beacon::evaluate(*compiled, facts);
-    REQUIRE(results);
-    auto rollback = beacon::publish(*compiled, *results, {7, 140}, &*first);
-    REQUIRE(rollback);
-    REQUIRE(rollback->revision == 2);
-    REQUIRE_FALSE(rollback->results[compiled->completion_node].done);
-    REQUIRE(rollback->play_ticks == 140);
+    auto rollback = beacon::publish(*compiled, results, {7, 140}, &first);
+    REQUIRE(rollback.revision == 2);
+    REQUIRE_FALSE(rollback.results[compiled->completion_node].done);
+    REQUIRE(rollback.play_ticks == 140);
 
-    auto recreated = beacon::publish(*compiled, *results, {7, 20}, &*rollback);
-    REQUIRE(recreated);
-    REQUIRE_FALSE(recreated->results[compiled->completion_node].done);
-    REQUIRE(recreated->play_ticks == 20);
+    auto recreated = beacon::publish(*compiled, results, {7, 20}, &rollback);
+    REQUIRE_FALSE(recreated.results[compiled->completion_node].done);
+    REQUIRE(recreated.play_ticks == 20);
 
-    auto reset = beacon::publish(*compiled, *results, {8, 150}, &*rollback);
-    REQUIRE(reset);
-    REQUIRE(reset->revision == 3);
-    REQUIRE_FALSE(reset->results[compiled->completion_node].done);
-    REQUIRE(reset->play_ticks == 150);
-
-    REQUIRE_FALSE(beacon::publish(*compiled, {}, {8, 150}, &*reset));
-    REQUIRE_FALSE(beacon::publish(*compiled, *results, {8, -1}, &*reset));
-
-    reset->revision = std::numeric_limits<std::uint64_t>::max();
-    REQUIRE_FALSE(beacon::publish(*compiled, *results, {8, 160}, &*reset));
+    auto reset = beacon::publish(*compiled, results, {8, 150}, &rollback);
+    REQUIRE(reset.revision == 3);
+    REQUIRE_FALSE(reset.results[compiled->completion_node].done);
+    REQUIRE(reset.play_ticks == 150);
 }

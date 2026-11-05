@@ -1001,7 +1001,7 @@ TEST_CASE("editing a copied template starts a new run instead of reusing stale r
     REQUIRE(before->snapshot.results[1].value == 4);
 }
 
-TEST_CASE("configuration preparation and failed persistence leave the live run untouched") {
+TEST_CASE("configuration preparation leaves the live run untouched until committed") {
     const beacon::test::TemporaryDirectory temporary;
     const auto& root = temporary.path;
     const auto parsed = beacon::compile_template_json(read_text(fixture("template.json")));
@@ -1012,9 +1012,7 @@ TEST_CASE("configuration preparation and failed persistence leave the live run u
     REQUIRE(runtime.select(run));
     process_until_published(runtime);
     const auto before = runtime.state();
-    auto invalid = std::make_shared<beacon::CompiledTemplate>(*compiled);
-    invalid->completion_node = static_cast<std::uint32_t>(invalid->graph.nodes.size());
-    REQUIRE_FALSE(runtime.configure(root, invalid, run.localization, run.layout));
+    REQUIRE_FALSE(runtime.configure(root, compiled, nullptr, run.layout));
     REQUIRE(runtime.state() == before);
     auto candidate = beacon::Runtime::prepare_configuration(root, compiled, run.localization, run.layout);
     REQUIRE(candidate);

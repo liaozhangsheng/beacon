@@ -732,10 +732,8 @@ int desktop_smoke_test(const std::filesystem::path& asset_root) {
     if (!layout_value)
         return 1;
     auto layout = std::make_shared<const Layout>(std::move(*layout_value));
-    auto results = evaluate(*compiled, {{"a", 1}, {"stat/first", 1}});
-    if (!results)
-        return 1;
-    Snapshot snapshot{.revision = 1, .run_epoch = 1, .results = std::move(*results), .play_ticks = 20};
+    Snapshot snapshot{
+        .revision = 1, .run_epoch = 1, .results = evaluate(*compiled, {{"a", 1}, {"stat/first", 1}}), .play_ticks = 20};
     auto state = std::make_shared<const PublishedState>(PublishedState{
         .compiled = compiled, .localization = localization, .layout = layout, .snapshot = std::move(snapshot)});
     SdlSession session;

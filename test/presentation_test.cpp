@@ -126,9 +126,7 @@ TEST_CASE("statistic stages advance in one fixed slot and keep the final stage")
     beacon::Facts facts;
     beacon::ProgressViewModel view;
     const auto check_stage = [&](const std::size_t stage, const std::string& progress, const bool done) {
-        const auto results = beacon::evaluate(compiled, facts);
-        REQUIRE(results);
-        state.snapshot.results = *results;
+        state.snapshot.results = beacon::evaluate(compiled, facts);
         view.update(state);
         const auto displayed = beacon::item_display(slot, compiled, state.snapshot.results).value;
         REQUIRE(displayed == stages[stage]);
@@ -155,7 +153,7 @@ TEST_CASE("statistic stages advance in one fixed slot and keep the final stage")
     REQUIRE(beacon::apply_manual_operation(compiled, state.snapshot.results, manual, displayed, true));
     CHECK(state.snapshot.results[slot].done);
     CHECK(beacon::item_display(slot, compiled, state.snapshot.results).value == stages[2]);
-    state.snapshot.results = *beacon::evaluate(compiled, facts);
+    state.snapshot.results = beacon::evaluate(compiled, facts);
     REQUIRE(beacon::apply_manual_operation(compiled, state.snapshot.results, manual, displayed, false));
     CHECK_FALSE(state.snapshot.results[slot].done);
 
@@ -211,13 +209,12 @@ TEST_CASE("bundled 1.16.1 routes walk their stages in one slot") {
     beacon::Facts facts;
     const auto shown = [&](const std::string& route) {
         const auto results = beacon::evaluate(compiled, facts);
-        REQUIRE(results);
         const auto slot = compiled.graph.index_by_id.at(route);
-        const auto value = beacon::item_display(slot, compiled, *results).value;
+        const auto value = beacon::item_display(slot, compiled, results).value;
         const auto& stages = compiled.graph.nodes[slot].children;
         const auto stage = static_cast<std::size_t>(std::ranges::find(stages, value) - stages.begin());
         REQUIRE(stage < stages.size());
-        return std::pair{stage, (*results)[slot].done};
+        return std::pair{stage, results[slot].done};
     };
 
     CHECK(shown("counter/wither") == std::pair{std::size_t{0}, false});
@@ -278,9 +275,7 @@ TEST_CASE("any item can show stages or cycle through sibling alternatives") {
     const auto& beef_children = compiled.graph.nodes[beef].children;
     beacon::Facts facts;
     const auto results = [&] {
-        auto evaluated = beacon::evaluate(compiled, facts);
-        REQUIRE(evaluated);
-        return *evaluated;
+        return beacon::evaluate(compiled, facts);
     };
 
     // Stages name the step and borrow the item's icon until they bring their own.
@@ -383,9 +378,7 @@ TEST_CASE("overlay groups reserve a progress line when any item can show a stati
     beacon::PublishedState state{.compiled = std::make_shared<const beacon::CompiledTemplate>(*compiled),
                                  .localization = std::make_shared<const beacon::Localization>(),
                                  .layout = layout};
-    const auto results = beacon::evaluate(*compiled, {});
-    REQUIRE(results);
-    state.snapshot.results = *results;
+    state.snapshot.results = beacon::evaluate(*compiled, {});
     beacon::ProgressViewModel view;
     view.update(state);
     CHECK(view.overlay_progress == std::vector<bool>{true, false, true, false});

@@ -64,13 +64,8 @@ ylt::expected<std::optional<RebuildResult>, Error> rebuild(const RebuildRequest&
     if (!supports_template(source->profile, *request.compiled))
         return ylt::unexpected<Error>{{ErrorCode::UnsupportedVersion,
                                        "detected Minecraft version is incompatible with the template", "modern-json"}};
-    auto results = evaluate(*request.compiled, facts.facts);
-    if (!results)
-        return ylt::unexpected<Error>{std::move(results.error())};
-    const auto clock = facts.facts.find("clock/play_ticks");
-    if (clock == facts.facts.end())
-        return ylt::unexpected<Error>{{ErrorCode::Internal, "Minecraft facts have no play time", "worker"}};
-    return std::optional<RebuildResult>{{std::move(*source), std::move(*results), clock->second}};
+    const auto play_ticks = facts.facts.at("clock/play_ticks");  // The stats parser always provides it.
+    return std::optional<RebuildResult>{{std::move(*source), evaluate(*request.compiled, facts.facts), play_ticks}};
 }
 
 }  // namespace
@@ -200,18 +195,12 @@ Runtime::prepare_configuration(std::filesystem::path game_root, std::shared_ptr<
     if (!compiled || !localization || !layout)
         return ylt::unexpected<Error>{
             {ErrorCode::Validation, "template resources are not configured", "configuration"}};
-    auto results = evaluate(*compiled, {});
-    if (!results)
-        return ylt::unexpected<Error>{std::move(results.error())};
-    auto empty = publish(*compiled, std::move(*results), {}, nullptr);
-    if (!empty)
-        return ylt::unexpected<Error>{std::move(empty.error())};
     RuntimeConfiguration configuration;
+    configuration.empty_ = publish(*compiled, evaluate(*compiled, {}), {}, nullptr);
     configuration.game_root_ = std::move(game_root);
     configuration.compiled_ = std::move(compiled);
     configuration.localization_ = std::move(localization);
     configuration.layout_ = std::move(layout);
-    configuration.empty_ = std::move(*empty);
     return configuration;
 }
 
@@ -271,10 +260,8 @@ ylt::expected<void, Error> Runtime::manual_operation(const std::uint32_t node, c
     auto snapshot = publish(*state_->compiled, std::move(results),
                             {.run_epoch = state_->snapshot.run_epoch, .play_ticks = state_->snapshot.play_ticks},
                             &state_->snapshot);
-    if (!snapshot)
-        return ylt::unexpected<Error>{std::move(snapshot.error())};
     manual_ = std::move(manual);
-    replace_state(state_->run, state_->compiled, std::move(*snapshot), DataStatus::Ready,
+    replace_state(state_->run, state_->compiled, std::move(snapshot), DataStatus::Ready,
                   state_->last_successful_read_at, state_->warnings);
     return {};
 }
@@ -330,19 +317,11 @@ ylt::expected<bool, Error> Runtime::apply_worker_message(WorkerMessage message) 
     source_ = std::move(result.source);
     auto results = std::move(result.rule_results);
     base_results_ = results;
-    if (!manual_.completed.empty() || !manual_.stat_deltas.empty()) {
-        if (auto applied = apply_manual_progress(*template_, results, manual_); !applied) {
-            publish_error(applied.error(), std::move(message.warnings));
-            return ylt::unexpected<Error>{std::move(applied.error())};
-        }
-    }
+    if (!manual_.completed.empty() || !manual_.stat_deltas.empty())
+        apply_manual_progress(*template_, results, manual_);
     auto snapshot = publish(*template_, std::move(results), {run_epoch_, result.play_ticks}, previous);
-    if (!snapshot) {
-        publish_error(snapshot.error(), std::move(message.warnings));
-        return ylt::unexpected<Error>{std::move(snapshot.error())};
-    }
-    const auto last_read = snapshot->updated_at;
-    replace_state({source_->world.identity, source_->player}, template_, std::move(*snapshot), DataStatus::Ready,
+    const auto last_read = snapshot.updated_at;
+    replace_state({source_->world.identity, source_->player}, template_, std::move(snapshot), DataStatus::Ready,
                   last_read, std::move(message.warnings));
     return true;
 }
