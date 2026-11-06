@@ -61,7 +61,7 @@ jobs:
 
       - name: Cache vcpkg packages
         if: matrix.triplet
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/vcpkg-archives
           key: vcpkg-${{ matrix.triplet }}-${{ hashFiles('vcpkg.json') }}
