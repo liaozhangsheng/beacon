@@ -5,60 +5,95 @@
     "vbox": [
       {
         "id": "Progress",
-        "stretch": 5,
+        "stretch": 9,
         "gap": 8,
         "hbox": [
           {
-            "id": "Overworld",
-            "padding": 16,
-            "prefix": [
-              "goal/story_"
-            ],
-            "stretch": 6
-          },
-          {
-            "id": "Nether",
-            "padding": 16,
-            "prefix": [
-              "goal/nether_"
-            ],
-            "exclude": [
-              "goal/nether_explore_nether"
-            ],
-            "stretch": 8
-          },
-          {
-            "id": "The End",
-            "padding": 16,
-            "prefix": [
-              "goal/end_"
-            ],
-            "stretch": 5
-          },
-          {
-            "id": "Adventure",
-            "padding": 16,
-            "prefix": [
-              "goal/adventure_"
-            ],
-            "exclude": [
-              "goal/adventure_kill_all_mobs",
-              "goal/adventure_adventuring_time"
-            ],
-            "stretch": 7
-          },
-          {
-            "id": "Husbandry",
-            "padding": 16,
-            "prefix": [
-              "goal/husbandry_"
-            ],
-            "exclude": [
-              "goal/husbandry_bred_all_animals",
-              "goal/husbandry_complete_catalogue",
-              "goal/husbandry_balanced_diet"
-            ],
-            "stretch": 5
+            "stretch": 15,
+            "vbox": [
+              {
+                "stretch": 3,
+                "hbox": [
+                  {
+                    "id": "Overworld",
+                    "padding": 16,
+                    "prefix": [
+                      "goal/story_"
+                    ],
+                    "exclude": [
+                      "goal/story_root"
+                    ],
+                    "stretch": 5
+                  },
+                  {
+                    "id": "The End",
+                    "padding": 16,
+                    "prefix": [
+                      "goal/end_"
+                    ],
+                    "stretch": 3
+                  },
+                  {
+                    "id": "Adventure",
+                    "padding": 16,
+                    "prefix": [
+                      "goal/adventure_"
+                    ],
+                    "exclude": [
+                      "goal/adventure_kill_all_mobs",
+                      "goal/adventure_adventuring_time"
+                    ],
+                    "stretch": 6
+                  },
+                  {
+                    "id": "Stats",
+                    "padding": 16,
+                    "spacing": {
+                      "row": 16
+                    },
+                    "nodes": [
+                      "counter/gold_blocks",
+                      "counter/ancient_debris",
+                      "counter/beehives",
+                      "counter/wither",
+                      "counter/conduit",
+                      "counter/trident"
+                    ],
+                    "stretch": 2
+                  }
+                ]
+              },
+              {
+                "stretch": 2,
+                "hbox": [
+                  {
+                    "id": "Nether",
+                    "padding": 16,
+                    "prefix": [
+                      "goal/nether_"
+                    ],
+                    "exclude": [
+                      "goal/nether_explore_nether"
+                    ],
+                    "stretch": 11
+                  },
+                  {
+                    "id": "Husbandry",
+                    "padding": 16,
+                    "prefix": [
+                      "goal/husbandry_"
+                    ],
+                    "exclude": [
+                      "goal/husbandry_root",
+                      "goal/husbandry_bred_all_animals",
+                      "goal/husbandry_complete_catalogue",
+                      "goal/husbandry_balanced_diet"
+                    ],
+                    "stretch": 4
+                  }
+                ]
+              }
+            ]
           },
           {
             "id": "Leaderboard",
@@ -68,30 +103,22 @@
               "gid": 1706556435,
               "title": "1.16.1"
             },
-            "stretch": 6
+            "stretch": 3
           }
         ]
       },
       {
         "id": "Collections",
-        "stretch": 4,
+        "stretch": 8,
         "gap": 8,
         "hbox": [
-          {
-            "id": "Explore Nether",
-            "padding": 8,
-            "collections": [
-              "goal/nether_explore_nether"
-            ],
-            "stretch": 2
-          },
           {
             "id": "Kill All Mobs",
             "padding": 8,
             "collections": [
               "goal/adventure_kill_all_mobs"
             ],
-            "stretch": 4
+            "stretch": 9
           },
           {
             "id": "Adventuring Time",
@@ -99,7 +126,7 @@
             "collections": [
               "goal/adventure_adventuring_time"
             ],
-            "stretch": 6
+            "stretch": 10
           },
           {
             "id": "Breed All Animals",
@@ -107,7 +134,7 @@
             "collections": [
               "goal/husbandry_bred_all_animals"
             ],
-            "stretch": 3
+            "stretch": 5
           },
           {
             "id": "Complete Catalogue",
@@ -115,7 +142,7 @@
             "collections": [
               "goal/husbandry_complete_catalogue"
             ],
-            "stretch": 2
+            "stretch": 4
           },
           {
             "id": "Balanced Diet",
@@ -123,21 +150,7 @@
             "collections": [
               "goal/husbandry_balanced_diet"
             ],
-            "stretch": 5
-          },
-          {
-            "id": "Stats",
-            "padding": 16,
-            "nodes": [
-              "counter/gold_blocks",
-              "counter/ancient_debris",
-              "counter/beehives",
-              "counter/wither",
-              "counter/conduit",
-              "counter/trident",
-              "counter/enchanted_golden_apples"
-            ],
-            "stretch": 3
+            "stretch": 9
           }
         ]
       }
