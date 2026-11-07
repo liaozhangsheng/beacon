@@ -4,33 +4,15 @@
 
 namespace beacon {
 
-std::vector<PlacedItem> place_items(const std::span<const std::uint32_t> nodes,
-                                    const std::function<bool(const std::uint32_t)>& placed,
-                                    const std::span<const std::uint32_t> group_starts) {
-    std::vector<PlacedItem> items;
-    bool group_start = false;
-    for (std::size_t index = 0; index < nodes.size(); ++index) {
-        const auto node = nodes[index];
-        group_start = group_start || std::ranges::find(group_starts, node) != group_starts.end();
-        if (!placed(node))
-            continue;
-        items.push_back({.index = index, .node = node, .group_start = group_start});
-        group_start = false;
-    }
-    return items;
-}
-
-void update_carousel(CarouselState& carousel, const std::span<const std::uint32_t> nodes,
-                     const std::function<bool(const std::uint32_t)>& placed, const float content_width,
-                     const float cell_width, const float gap, const std::span<const std::uint32_t> group_starts,
-                     const float group_gap, const float speed, const float delta_seconds, const bool scroll_right) {
+void advance_carousel(CarouselState& carousel, const std::span<const std::uint32_t> nodes, const float content_width,
+                      const float cell_width, const float gap, const float group_gap, const float speed,
+                      const float delta_seconds, const bool scroll_right) {
     if (carousel.initialized && carousel.direction_right != scroll_right) {
         carousel.items.clear();
         carousel.next = 0;
         carousel.initialized = false;
     }
     carousel.direction_right = scroll_right;
-    carousel.source = place_items(nodes, placed, group_starts);
     // Refill after the node at the tail, wherever it now sits among the placed items.
     const auto tail = carousel.items.empty() ? nodes.end() : std::ranges::find(nodes, carousel.items.back().node);
     if (tail != nodes.end()) {
@@ -44,7 +26,7 @@ void update_carousel(CarouselState& carousel, const std::span<const std::uint32_
     const float movement = speed * std::clamp(delta_seconds, 0.0F, 0.25F);
     for (auto& item : carousel.items) {
         item.x += scroll_right ? movement : -movement;
-        item.visible = placed(item.node);
+        item.visible = std::ranges::find(carousel.source, item.node, &PlacedItem::node) != carousel.source.end();
     }
     std::erase_if(carousel.items, [&](const auto& item) {
         return scroll_right ? item.x > content_width : item.x + cell_width < 0.0F;

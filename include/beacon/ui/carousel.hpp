@@ -2,7 +2,8 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <functional>
+#include <algorithm>
+#include <concepts>
 #include <span>
 #include <vector>
 
@@ -20,10 +21,22 @@ struct PlacedItem {
 };
 
 // Every layout places items through this, so a collection whose leading members are not placed still starts
-// a new group.
-std::vector<PlacedItem> place_items(std::span<const std::uint32_t> nodes,
-                                    const std::function<bool(std::uint32_t)>& placed,
-                                    std::span<const std::uint32_t> group_starts);
+// a new group. The predicate is inlined rather than type-erased, since this runs per group every frame.
+template <std::predicate<std::uint32_t> Placed>
+std::vector<PlacedItem> place_items(const std::span<const std::uint32_t> nodes, Placed&& placed,
+                                    const std::span<const std::uint32_t> group_starts) {
+    std::vector<PlacedItem> items;
+    bool group_start = false;
+    for (std::size_t index = 0; index < nodes.size(); ++index) {
+        const auto node = nodes[index];
+        group_start = group_start || std::ranges::find(group_starts, node) != group_starts.end();
+        if (!placed(node))
+            continue;
+        items.push_back({.index = index, .node = node, .group_start = group_start});
+        group_start = false;
+    }
+    return items;
+}
 
 struct CarouselItem {
     std::uint32_t node = 0;
@@ -40,10 +53,19 @@ struct CarouselState {
     bool direction_right = false;
 };
 
-void update_carousel(CarouselState& carousel, std::span<const std::uint32_t> nodes,
-                     const std::function<bool(std::uint32_t)>& placed, float content_width, float cell_width, float gap,
-                     std::span<const std::uint32_t> group_starts, float group_gap, float speed, float delta_seconds,
-                     bool scroll_right = false);
+// Moves the carousel on, once carousel.source holds this frame's placed items.
+void advance_carousel(CarouselState& carousel, std::span<const std::uint32_t> nodes, float content_width,
+                      float cell_width, float gap, float group_gap, float speed, float delta_seconds,
+                      bool scroll_right);
+
+template <std::predicate<std::uint32_t> Placed>
+void update_carousel(CarouselState& carousel, const std::span<const std::uint32_t> nodes, Placed&& placed,
+                     const float content_width, const float cell_width, const float gap,
+                     const std::span<const std::uint32_t> group_starts, const float group_gap, const float speed,
+                     const float delta_seconds, const bool scroll_right = false) {
+    carousel.source = place_items(nodes, placed, group_starts);
+    advance_carousel(carousel, nodes, content_width, cell_width, gap, group_gap, speed, delta_seconds, scroll_right);
+}
 
 // A fixed row packs the placed items from the left.
 std::vector<CarouselItem> fixed_strip(std::span<const PlacedItem> items, float cell_width, float gap, float group_gap);
