@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <concepts>
+#include <cstdint>
 #include <filesystem>
 #include <array>
 #include <memory>
@@ -20,18 +22,73 @@ namespace {
 
 constexpr double max_layout_coordinate = 1'000'000.0;
 
-// Reads a number in [0, max_layout_coordinate] into output; an absent field keeps output's default.
-std::optional<Error> read_amount(const Json::Value& object, const std::string_view name, const std::string& path,
-                                 float& output, const bool positive = false) {
-    const std::string key(name);
-    if (!object.isMember(key))
-        return std::nullopt;
-    const auto& value = object[key];
+// One reader per field type: numbers stay in [0, max_layout_coordinate], text is never empty.
+std::optional<Error> read_value(const Json::Value& value, const std::string& path, float& output) {
     if (!value.isNumeric() || !std::isfinite(value.asDouble()) || value.asDouble() < 0.0 ||
-        value.asDouble() > max_layout_coordinate || (positive && static_cast<float>(value.asDouble()) == 0.0F))
-        return Error{ErrorCode::Validation, "layout value is outside its limit", child_path(path, name)};
+        value.asDouble() > max_layout_coordinate)
+        return Error{ErrorCode::Validation, "layout value is outside its limit", path};
     output = static_cast<float>(value.asDouble());
     return std::nullopt;
+}
+std::optional<Error> read_value(const Json::Value& value, const std::string& path, bool& output) {
+    if (!value.isBool())
+        return Error{ErrorCode::Validation, "layout value must be a boolean", path};
+    output = value.asBool();
+    return std::nullopt;
+}
+std::optional<Error> read_value(const Json::Value& value, const std::string& path, std::string& output) {
+    if (!value.isString() || value.asString().empty())
+        return Error{ErrorCode::Validation, "layout value must be non-empty text", path};
+    output = value.asString();
+    return std::nullopt;
+}
+std::optional<Error> read_value(const Json::Value& value, const std::string& path, std::uint64_t& output) {
+    if (!value.isUInt64())
+        return Error{ErrorCode::Validation, "layout value must be a whole number", path};
+    output = value.asUInt64();
+    return std::nullopt;
+}
+
+template <class T>
+concept JsonField = requires(const Json::Value& value, const std::string& path, T& output) {
+    { read_value(value, path, output) } -> std::same_as<std::optional<Error>>;
+};
+
+// A JSON field bound to a member of Owner, read with the reader for the member's type.
+template <class Owner, JsonField T> struct Field {
+    const char* name;
+    T Owner::* member;
+};
+
+// Reads each field the object has, in order, stopping at the first invalid one; absent fields keep their value.
+template <class Owner, class... T>
+std::optional<Error> read_fields(const Json::Value& object, const std::string& path, Owner& output,
+                                 const Field<Owner, T>&... fields) {
+    std::optional<Error> failure;
+    (void)((object.isMember(fields.name) &&
+            (failure = read_value(object[fields.name], child_path(path, fields.name), output.*fields.member))) ||
+           ...);
+    return failure;
+}
+
+// A standalone number; positive ones must also be above zero.
+std::optional<Error> read_amount(const Json::Value& object, const char* name, const std::string& path, float& output,
+                                 const bool positive = false) {
+    if (!object.isMember(name))
+        return std::nullopt;
+    if (auto failure = read_value(object[name], child_path(path, name), output))
+        return failure;
+    if (positive && output == 0.0F)
+        return Error{ErrorCode::Validation, "layout value is outside its limit", child_path(path, name)};
+    return std::nullopt;
+}
+
+// Fields that exist in general but not for this window or group kind read as unknown.
+std::optional<Error> reject_unless(const Json::Value& object, const std::string& path, const char* name,
+                                   const bool allowed) {
+    if (allowed || !object.isMember(name))
+        return std::nullopt;
+    return Error{ErrorCode::Validation, std::string("unknown field '") + name + "'", child_path(path, name)};
 }
 
 std::optional<Error> read_spacing(const Json::Value& value, LayoutSpacing& spacing, const bool overlay,
@@ -39,20 +96,15 @@ std::optional<Error> read_spacing(const Json::Value& value, LayoutSpacing& spaci
     if (!value.isObject())
         return Error{ErrorCode::Validation, "spacing must be an object", path};
     // Rows only exist in the main window, and collection gaps only between collections.
-    const bool collections = source == LayoutSource::Collections;
-    const auto failure = overlay ? collections ? reject_unknown_fields(value, path, {"item", "label", "collection"})
-                                               : reject_unknown_fields(value, path, {"item", "label"})
-                         : collections ? reject_unknown_fields(value, path, {"item", "row", "label", "collection"})
-                                       : reject_unknown_fields(value, path, {"item", "row", "label"});
-    if (failure)
+    if (auto failure = reject_unknown_fields(value, path, {"item", "row", "label", "collection"}))
         return failure;
-    for (const auto& [name, field] :
-         {std::pair{"item", &spacing.item}, std::pair{"row", &spacing.row}, std::pair{"label", &spacing.label},
-          std::pair{"collection", &spacing.collection}}) {
-        if (auto invalid = read_amount(value, name, path, *field))
-            return invalid;
-    }
-    return std::nullopt;
+    if (auto failure = reject_unless(value, path, "row", !overlay))
+        return failure;
+    if (auto failure = reject_unless(value, path, "collection", source == LayoutSource::Collections))
+        return failure;
+    using S = LayoutSpacing;
+    return read_fields(value, path, spacing, Field<S, float>{"item", &S::item}, Field<S, float>{"row", &S::row},
+                       Field<S, float>{"label", &S::label}, Field<S, float>{"collection", &S::collection});
 }
 
 ylt::expected<std::unordered_map<std::string, std::string>, Error> localization_map(std::string_view json,
@@ -160,36 +212,27 @@ ylt::expected<Layout, Error> compile_layout_json(std::string_view json, const Co
             }))
             return Error{ErrorCode::Validation, "invalid leaderboard sheet", child_path(path, "sheet")};
         output.sheet = sheet.asString();
-        if (board.isMember("gid")) {
-            if (!board["gid"].isUInt64())
-                return Error{ErrorCode::Validation, "invalid leaderboard gid", child_path(path, "gid")};
-            output.gid = board["gid"].asUInt64();
-        }
-        for (const auto& [name, field] : {std::pair{"board", &output.board}, std::pair{"title", &output.title}}) {
-            if (!board.isMember(name))
-                continue;
-            const auto& text = board[name];
-            if (!text.isString() || text.asString().empty())
-                return Error{ErrorCode::Validation, std::string("invalid leaderboard ") + name, child_path(path, name)};
-            *field = text.asString();
-        }
-        return std::nullopt;
+        using L = LeaderboardSource;
+        return read_fields(board, path, output, Field<L, std::uint64_t>{"gid", &L::gid},
+                           Field<L, std::string>{"board", &L::board}, Field<L, std::string>{"title", &L::title});
     };
+    using G = LayoutGroup;
+    constexpr Field<G, std::string> id_field{"id", &G::id};
     // A content panel; its rectangle comes from the boxes around it.
     const auto read_panel = [&](const Json::Value& value, const std::string& path, const bool overlay,
                                 LayoutGroup& group) -> std::optional<Error> {
         if (auto failure = reject_unknown_fields(value, path,
-                                                 {"id", "stretch", "margin", "padding", "nodes", "prefix",
+                                                 {"id", "stretch", "size", "margin", "padding", "nodes", "prefix",
                                                   "collections", "leaderboard", "exclude", "spacing", "scroll"}))
             return failure;
-        if (value.isMember("id")) {
-            if (!value["id"].isString())
-                return Error{ErrorCode::Validation, "invalid layout group id", child_path(path, "id")};
-            group.id = value["id"].asString();
-        }
-        for (const auto& [name, field] : {std::pair{"margin", &group.margin}, std::pair{"padding", &group.padding}}) {
-            if (auto failure = read_amount(value, name, path, *field))
-                return failure;
+        float margin = 0.0F;
+        if (auto failure = read_fields(value, path, group, id_field, Field<G, float>{"padding", &G::padding}))
+            return failure;
+        if (auto failure = read_amount(value, "margin", path, margin))
+            return failure;
+        for (std::size_t axis = 0; axis < 2; ++axis) {
+            group.position[axis].pixels += margin;
+            group.size[axis].pixels -= margin * 2.0F;
         }
 
         constexpr std::array selectors{
@@ -229,25 +272,26 @@ ylt::expected<Layout, Error> compile_layout_json(std::string_view json, const Co
                     read_spacing(value["spacing"], group.spacing, overlay, group.source, child_path(path, "spacing")))
                 return failure;
         }
-        if (value.isMember("scroll")) {
-            if (!overlay || !value["scroll"].isBool())
-                return Error{ErrorCode::Validation, "scroll requires an overlay boolean", child_path(path, "scroll")};
-            group.scroll = value["scroll"].asBool();
-        }
-        return std::nullopt;
+        if (auto failure = reject_unless(value, path, "scroll", overlay))
+            return failure;
+        return read_fields(value, path, group, Field<G, bool>{"scroll", &G::scroll});
     };
-    // Boxes divide their rectangle among their children by stretch; springs keep their share empty. Only panels
-    // reach the renderer.
+    // Boxes give fixed-size children their size and divide the rest by stretch; springs keep their share empty.
+    // Only panels, and the empty panel behind a framed box, reach the renderer.
     const auto compile_node = [&](const auto& self, const Json::Value& value, const std::string& path,
                                   const bool overlay, LayoutGroup rect) -> std::optional<Error> {
         if (!value.isObject())
             return Error{ErrorCode::Validation, "layout group must be an object", path};
-        float stretch = 1.0F;
-        if (auto failure = read_amount(value, "stretch", path, stretch, true))
-            return failure;
+        float amount = 1.0F;
+        for (const auto* name : {"stretch", "size"}) {
+            if (auto failure = read_amount(value, name, path, amount, true))
+                return failure;
+        }
+        if (value.isMember("stretch") && value.isMember("size"))
+            return Error{ErrorCode::Validation, "a layout child takes only one of stretch and size", path};
         const char* box = value.isMember("hbox") ? "hbox" : value.isMember("vbox") ? "vbox" : nullptr;
         if (box == nullptr && value.isMember("spring")) {
-            if (auto failure = reject_unknown_fields(value, path, {"spring", "stretch"}))
+            if (auto failure = reject_unknown_fields(value, path, {"spring", "stretch", "size"}))
                 return failure;
             if (!value["spring"].isBool() || !value["spring"].asBool())
                 return Error{ErrorCode::Validation, "spring must be true", child_path(path, "spring")};
@@ -260,8 +304,26 @@ ylt::expected<Layout, Error> compile_layout_json(std::string_view json, const Co
             return std::nullopt;
         }
 
-        if (auto failure = reject_unknown_fields(value, path, {"id", "stretch", "gap", box}))
+        if (auto failure = reject_unknown_fields(value, path, {"id", "stretch", "size", "gap", "frame", box}))
             return failure;
+        // A framed box draws one panel over its whole rectangle, so springs inside it stay within the frame.
+        bool framed = false;
+        if (auto failure = reject_unless(value, path, "frame", !overlay))
+            return failure;
+        if (value.isMember("frame")) {
+            if (auto failure = read_value(value["frame"], child_path(path, "frame"), framed))
+                return failure;
+            if (framed) {
+                if (!rect.frame)
+                    return Error{ErrorCode::Validation, "framed boxes cannot nest", child_path(path, "frame")};
+                if (auto failure = read_fields(value, path, rect, id_field))
+                    return failure;
+                rect.spacing = default_spacing(false, LayoutSource::None);
+                result.main.push_back(rect);
+                rect.id.clear();
+                rect.frame = false;
+            }
+        }
         float gap = 0.0F;
         if (auto failure = read_amount(value, "gap", path, gap))
             return failure;
@@ -269,38 +331,34 @@ ylt::expected<Layout, Error> compile_layout_json(std::string_view json, const Co
         const auto& children = value[box];
         if (!children.isArray())
             return Error{ErrorCode::Validation, "layout box must be an array", box_path};
+        // A child takes its fixed size, or its stretch's share of what the gaps and fixed sizes leave. Positions
+        // stay linear in the window size, so a fraction plus a fixed offset still describes each one exactly.
         std::vector<float> weights(children.size(), 1.0F);
+        std::vector<float> sizes(children.size(), 0.0F);
         double total = 0.0;
+        const auto axis = box == std::string_view("hbox") ? 0 : 1;
+        auto free = rect.size[axis];
+        free.pixels -= gap * static_cast<float>(children.empty() ? 0 : children.size() - 1);
         for (Json::ArrayIndex index = 0; index < children.size(); ++index) {
             // Malformed children are reported when they are compiled.
-            if (children[index].isObject())
+            if (children[index].isObject() && children[index].isMember("size")) {
+                read_amount(children[index], "size", path, sizes[index], true);
+                weights[index] = 0.0F;
+            } else if (children[index].isObject()) {
                 read_amount(children[index], "stretch", path, weights[index], true);
-            total += weights[index];
-        }
-        // Children share what the gaps leave of the main axis. Positions stay linear in the window size, so a
-        // fraction plus a fixed offset still describes each one exactly.
-        const bool horizontal = box == std::string_view("hbox");
-        const auto gaps = gap * static_cast<float>(children.empty() ? 0 : children.size() - 1);
-        double offset = 0.0;
-        for (Json::ArrayIndex index = 0; index < children.size(); ++index) {
-            const auto start = static_cast<float>(offset / total);
-            const auto share = static_cast<float>(weights[index] / total);
-            const auto before = (gap * static_cast<float>(index)) - (start * gaps);
-            LayoutGroup child = rect;
-            if (horizontal) {
-                child.x += start * rect.width;
-                child.x_offset += (start * rect.width_offset) + before;
-                child.width = rect.width * share;
-                child.width_offset = (rect.width_offset - gaps) * share;
-            } else {
-                child.y += start * rect.height;
-                child.y_offset += (start * rect.height_offset) + before;
-                child.height = rect.height * share;
-                child.height_offset = (rect.height_offset - gaps) * share;
             }
+            total += weights[index];
+            free.pixels -= sizes[index];
+        }
+        auto start = rect.position[axis];
+        for (Json::ArrayIndex index = 0; index < children.size(); ++index) {
+            LayoutGroup child = rect;
+            child.position[axis] = start;
+            child.size[axis] = weights[index] > 0.0F ? free * static_cast<float>(weights[index] / total)
+                                                     : LayoutLength{0.0F, sizes[index]};
+            start = start + child.size[axis] + LayoutLength{0.0F, gap};
             if (auto failure = self(self, children[index], child_path(box_path, std::to_string(index)), overlay, child))
                 return failure;
-            offset += weights[index];
         }
         return std::nullopt;
     };

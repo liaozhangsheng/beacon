@@ -3,6 +3,7 @@
 #include <beacon/core/model.hpp>
 #include <beacon/io/file.hpp>
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -76,20 +77,29 @@ struct LeaderboardSource {
     bool operator==(const LeaderboardSource&) const = default;
 };
 
+// A length that follows the window: a fraction of the window width or body height plus fixed source icon pixels.
+struct LayoutLength {
+    float fraction = 0.0F;
+    float pixels = 0.0F;
+
+    [[nodiscard]] float at(const float extent, const float scale) const {
+        return (fraction * extent) + (pixels * scale);
+    }
+    LayoutLength operator+(const LayoutLength& other) const {
+        return {fraction + other.fraction, pixels + other.pixels};
+    }
+    LayoutLength operator*(const float factor) const {
+        return {fraction * factor, pixels * factor};
+    }
+    bool operator==(const LayoutLength&) const = default;
+};
+
 struct LayoutGroup {
     std::string id;
-    // Placement as fractions of the window width and body height.
-    float x = 0.0F;
-    float y = 0.0F;
-    float width = 1.0F;
-    float height = 1.0F;
-    // Fixed corrections to the placement above that make room for box gaps, in source icon pixels.
-    float x_offset = 0.0F;
-    float y_offset = 0.0F;
-    float width_offset = 0.0F;
-    float height_offset = 0.0F;
-    // Space outside and inside the group's panel, in source icon pixels.
-    float margin = 0.0F;
+    // The panel's start and size along x and y, margins already taken off.
+    std::array<LayoutLength, 2> position{};
+    std::array<LayoutLength, 2> size{LayoutLength{1.0F, 0.0F}, LayoutLength{1.0F, 0.0F}};
+    // Space inside the group's panel, in source icon pixels.
     float padding = 0.0F;
     LayoutSource source = LayoutSource::None;
     // Rule IDs, or ID prefixes for LayoutSource::Prefix.
@@ -100,11 +110,14 @@ struct LayoutGroup {
     LayoutSpacing spacing{};
     // Overlay only: items roll through a carousel instead of sitting in a fixed strip.
     bool scroll = true;
+    // Main window only: false inside a framed box, whose own frame-only group draws the panel instead.
+    bool frame = true;
 
     bool operator==(const LayoutGroup&) const = default;
 };
 
-// Content panels in drawing order; boxes and springs are resolved during compilation.
+// Content panels in drawing order; boxes and springs are resolved during compilation. A framed box becomes an
+// empty panel listed before its contents.
 struct Layout {
     std::vector<LayoutGroup> main;
     std::vector<LayoutGroup> overlay;

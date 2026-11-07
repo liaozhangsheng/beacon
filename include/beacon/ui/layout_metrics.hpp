@@ -12,27 +12,27 @@ namespace beacon {
 // A group's spacing in pixels at scale.
 LayoutSpacing group_spacing(const LayoutGroup& group, float scale = 1.0F);
 
-struct LayoutMetrics {
+// A panel's rectangle in screen pixels, and the content area its padding leaves.
+struct PanelRect {
     float x = 0.0F;
     float y = 0.0F;
     float width = 0.0F;
-    float configured_height = 0.0F;
-
+    float height = 0.0F;
     float content_x = 0.0F;
+    float content_y = 0.0F;
     float content_width = 0.0F;
     float content_height = 0.0F;
-    float collection_header_height = 0.0F;
+};
+PanelRect panel_rect(const LayoutGroup& group, float origin_x, float origin_y, float window_width, float body_height,
+                     float scale = 1.0F);
 
-    float gap = 0.0F;
-    float row_gap = 0.0F;
+// The cells of a main window item panel, which fills as many rows as fit, column by column.
+struct ItemGrid {
+    std::size_t rows = 1;
     float cell_width = 0.0F;
     float cell_height = 0.0F;
-    std::size_t rows = 1;
 };
-
-LayoutMetrics calculate_layout_metrics(const LayoutGroup& group, bool overlay, std::size_t node_count,
-                                       float available_width, float body_height, float origin_x, float origin_y,
-                                       float scale = 1.0F);
+ItemGrid item_grid(const LayoutGroup& group, const PanelRect& panel, std::size_t count, float scale = 1.0F);
 std::size_t collection_rows(float content_height, float item_height, float stride);
 // The body height at which a group's share fits the given content height.
 float body_height_for_content(const LayoutGroup& group, float content_height, float scale = 1.0F);

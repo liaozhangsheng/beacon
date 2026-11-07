@@ -20,6 +20,7 @@
 #include <imgui.h>
 
 #include <array>
+#include <concepts>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -34,6 +35,49 @@ namespace beacon {
 inline constexpr ImVec4 error_text_color{1.0F, 85.0F / 255.0F, 85.0F / 255.0F, 1.0F};
 inline constexpr ImVec4 warning_text_color{1.0F, 170.0F / 255.0F, 0.0F, 1.0F};
 inline constexpr ImVec4 success_text_color{85.0F / 255.0F, 1.0F, 85.0F / 255.0F, 1.0F};
+
+// Runs its cleanup when the scope ends, so an ImGui push is never left without its pop on an early exit.
+template <std::invocable Cleanup> class [[nodiscard]] ScopeExit {
+public:
+    explicit ScopeExit(Cleanup cleanup) : cleanup_(std::move(cleanup)) {}
+    ScopeExit(const ScopeExit&) = delete;
+    ScopeExit& operator=(const ScopeExit&) = delete;
+    ~ScopeExit() {
+        cleanup_();
+    }
+
+private:
+    Cleanup cleanup_;
+};
+
+[[nodiscard]] inline auto scoped_clip(ImDrawList* draw, const ImVec2 min, const ImVec2 max) {
+    draw->PushClipRect(min, max, true);
+    return ScopeExit{[draw] {
+        draw->PopClipRect();
+    }};
+}
+// Inactive guards push and pop nothing, for a font that only some panels switch to.
+[[nodiscard]] inline auto scoped_font(const float size, const bool active = true) {
+    if (active)
+        ImGui::PushFont(nullptr, size);
+    return ScopeExit{[active] {
+        if (active)
+            ImGui::PopFont();
+    }};
+}
+[[nodiscard]] inline auto scoped_id(const int id) {
+    ImGui::PushID(id);
+    return ScopeExit{[] {
+        ImGui::PopID();
+    }};
+}
+// Item layers: frames, glows, icons, then text; merged in that order when the scope ends.
+[[nodiscard]] inline auto scoped_layers(ImDrawList* draw, ImDrawListSplitter& splitter) {
+    splitter.Split(draw, 4);
+    return ScopeExit{[draw, &splitter] {
+        splitter.Merge(draw);
+    }};
+}
 
 class WindowRenderer::Impl {
 public:
@@ -176,15 +220,14 @@ private:
 
     void draw_overlay_layout(const PublishedState& state, ImVec2 origin, ImVec2 available, float body_height,
                              float overlay_scroll_speed, bool scroll_right);
-    void draw_overlay_group(const PublishedState& state, std::size_t group_index, const LayoutMetrics& metrics,
+    void draw_overlay_group(const PublishedState& state, std::size_t group_index, const PanelRect& panel,
                             float minimum_group_height, float overlay_scroll_speed, bool scroll_right);
     void draw_main_layout(const PublishedState& state, ImVec2 origin, ImVec2 available, float body_height);
-    void draw_leaderboard_group(const LayoutGroup& group, std::size_t group_index, ImVec2 origin, ImVec2 available,
-                                float body_height);
-    // Draws each collection's parent and returns every member's cell position, indexed like the group's nodes.
-    // Positions indexed like the group's nodes; only placed members get one.
-    std::vector<ImVec2> draw_collections(const PublishedState& state, std::size_t group_index,
-                                         const LayoutMetrics& metrics, std::span<const PlacedItem> placed_items);
+    void draw_leaderboard_group(const LayoutGroup& group, std::size_t group_index, const PanelRect& panel);
+    // Draws each collection's parent and returns every member's cell position, indexed like the group's nodes;
+    // only placed members get one.
+    std::vector<ImVec2> draw_collections(const PublishedState& state, std::size_t group_index, const PanelRect& panel,
+                                         std::span<const PlacedItem> placed_items);
     void draw_responsive_layout(const PublishedState& state, float overlay_scroll_speed, bool scroll_right);
     void load_cjk_font();
 

@@ -14,54 +14,32 @@ LayoutSpacing group_spacing(const LayoutGroup& group, const float scale) {
             .collection = ui::from_icon(spacing.collection, scale)};
 }
 
-LayoutMetrics calculate_layout_metrics(const LayoutGroup& group, const bool overlay, const std::size_t node_count,
-                                       const float available_width, const float body_height, const float origin_x,
-                                       const float origin_y, const float scale) {
-    const bool collection = group.source == LayoutSource::Collections;
-    const bool collection_item = !overlay && collection;
-    LayoutMetrics result;
-    const auto from_icon = [scale](const float original_size) {
-        return ui::from_icon(original_size, scale);
-    };
-    const auto icon_size = ui::icon_size(scale);
-    const auto font_size = ui::font_size(scale);
-    const auto frame_size = ui::progress_frame_size(scale);
-    const auto margin = from_icon(group.margin);
-    const auto padding = from_icon(group.padding);
+PanelRect panel_rect(const LayoutGroup& group, const float origin_x, const float origin_y, const float window_width,
+                     const float body_height, const float scale) {
+    PanelRect panel{.x = origin_x + group.position[0].at(window_width, scale),
+                    .y = origin_y + group.position[1].at(body_height, scale),
+                    .width = std::max(1.0F, group.size[0].at(window_width, scale)),
+                    .height = std::max(1.0F, group.size[1].at(body_height, scale))};
+    const auto padding = ui::from_icon(group.padding, scale);
+    panel.content_x = panel.x + padding;
+    panel.content_y = panel.y + padding;
+    panel.content_width = std::max(1.0F, panel.width - (padding * 2.0F));
+    panel.content_height = std::max(1.0F, panel.height - (padding * 2.0F));
+    return panel;
+}
+
+ItemGrid item_grid(const LayoutGroup& group, const PanelRect& panel, const std::size_t count, const float scale) {
     const auto spacing = group_spacing(group, scale);
-    result.x = origin_x + (group.x * available_width) + from_icon(group.x_offset) + margin;
-    result.y = origin_y + (group.y * body_height) + from_icon(group.y_offset) + margin;
-    result.width = std::max(1.0F, (group.width * available_width) + from_icon(group.width_offset) - (margin * 2.0F));
-    result.configured_height =
-        std::max(1.0F, (group.height * body_height) + from_icon(group.height_offset) - (margin * 2.0F));
-    result.content_x = result.x + padding;
-    result.content_width = std::max(1.0F, result.width - (padding * 2.0F));
-    result.gap = spacing.item;
-    result.row_gap = spacing.row;
-    result.collection_header_height = from_icon(64.0F) + font_size;
-    result.content_height = std::max(1.0F, result.configured_height - (padding * 2.0F) -
-                                               (overlay           ? 0.0F
-                                                : collection_item ? result.collection_header_height
-                                                                  : 0.0F));
-    const auto item_width = overlay           ? (collection ? icon_size : frame_size + icon_size)
-                            : collection_item ? frame_size
-                                              : frame_size + icon_size;
-    const auto width_columns = std::max<std::size_t>(
-        1, static_cast<std::size_t>((result.content_width + result.gap) / (item_width + result.gap)));
-    result.rows = overlay ? 1
-                  : collection_item
-                      ? std::max<std::size_t>(1, (node_count + width_columns - 1) / width_columns)
-                      : std::max<std::size_t>(1, static_cast<std::size_t>((result.content_height + result.row_gap) /
-                                                                          (frame_size + spacing.label +
-                                                                           (font_size * 2.0F) + result.row_gap)));
-    const auto used_columns = overlay ? 1
-                              : collection_item
-                                  ? width_columns
-                                  : std::max<std::size_t>(1, (node_count + result.rows - 1) / result.rows);
-    result.cell_width = overlay ? item_width : (result.content_width - result.gap * (used_columns - 1)) / used_columns;
-    result.cell_height =
-        overlay ? frame_size : (result.content_height - result.row_gap * (result.rows - 1)) / result.rows;
-    return result;
+    // Each row holds a frame, the label gap and two text lines.
+    const auto row_height = ui::progress_frame_size(scale) + spacing.label + (ui::font_size(scale) * 2.0F);
+    const auto rows = std::max<std::size_t>(
+        1, static_cast<std::size_t>((panel.content_height + spacing.row) / (row_height + spacing.row)));
+    const auto columns = std::max<std::size_t>(1, (count + rows - 1) / rows);
+    return {.rows = rows,
+            .cell_width =
+                (panel.content_width - (spacing.item * static_cast<float>(columns - 1))) / static_cast<float>(columns),
+            .cell_height =
+                (panel.content_height - (spacing.row * static_cast<float>(rows - 1))) / static_cast<float>(rows)};
 }
 
 std::size_t collection_rows(const float content_height, const float item_height, const float stride) {
@@ -72,10 +50,10 @@ std::size_t collection_rows(const float content_height, const float item_height,
 }
 
 float body_height_for_content(const LayoutGroup& group, const float content_height, const float scale) {
-    if (group.height <= 0.0F)
+    const auto& height = group.size[1];
+    if (height.fraction <= 0.0F)
         return 0.0F;
-    return (content_height + (ui::from_icon(group.margin, scale) * 2.0F) - ui::from_icon(group.height_offset, scale)) /
-           group.height;
+    return (content_height - (height.pixels * scale)) / height.fraction;
 }
 
 float overlay_group_min_height(const LayoutGroup& group, const bool labelled, const bool stats, const float font_size,

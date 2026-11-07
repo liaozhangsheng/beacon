@@ -616,15 +616,14 @@ TEST_CASE("layout boxes divide their axis by stretch and omit springs") {
         REQUIRE(layout->main.size() == 2);
         const auto& first = layout->main[0];
         const auto& last = layout->main[1];
-        CHECK(first.x == 0);
-        CHECK(first.y == 0);
-        CHECK(first.width == Catch::Approx(horizontal ? 2.0F / 6 : 1));
-        CHECK(first.height == Catch::Approx(horizontal ? 1 : 2.0F / 6));
+        const auto axis = horizontal ? 0 : 1;
+        CHECK(first.position[axis].fraction == 0);
+        CHECK(first.size[axis].fraction == Catch::Approx(2.0F / 6));
+        CHECK(first.size[1 - axis].fraction == 1);
         CHECK(last.id == "last");
-        CHECK(last.x == Catch::Approx(horizontal ? 5.0F / 6 : 0));
-        CHECK(last.y == Catch::Approx(horizontal ? 0 : 5.0F / 6));
-        CHECK(last.width == Catch::Approx(horizontal ? 1.0F / 6 : 1));
-        CHECK(last.height == Catch::Approx(horizontal ? 1 : 1.0F / 6));
+        CHECK(last.position[axis].fraction == Catch::Approx(5.0F / 6));
+        CHECK(last.size[axis].fraction == Catch::Approx(1.0F / 6));
+        CHECK(last.size[1 - axis].fraction == 1);
     }
 }
 
@@ -640,19 +639,45 @@ TEST_CASE("layout box gaps separate children by a fixed distance") {
     for (const float width : {400.0F, 1000.0F}) {
         CAPTURE(width);
         const auto at = [&](const std::size_t index) {
-            return beacon::calculate_layout_metrics(layout->main[index], false, 0, width, 700.0F, 0, 0, 1.0F);
+            return beacon::panel_rect(layout->main[index], 0, 0, width, 700.0F);
         };
         const auto top = at(0);
         const auto left = at(1);
         const auto right = at(2);
-        CHECK(left.y - (top.y + top.configured_height) == Catch::Approx(2 * gap));
-        CHECK(left.y + left.configured_height == Catch::Approx(700.0F));
-        CHECK(top.configured_height * 2 == Catch::Approx(left.configured_height));
+        CHECK(left.y - (top.y + top.height) == Catch::Approx(2 * gap));
+        CHECK(left.y + left.height == Catch::Approx(700.0F));
+        CHECK(top.height * 2 == Catch::Approx(left.height));
         CHECK(left.x == 0);
         CHECK(right.x - (left.x + left.width) == Catch::Approx(gap));
         CHECK(right.x + right.width == Catch::Approx(width));
         CHECK(left.width * 3 == Catch::Approx(right.width));
     }
+}
+
+TEST_CASE("layout box children with a size keep it while stretched siblings share the rest") {
+    const auto compiled = beacon::compile_template_json(presented_template);
+    REQUIRE(compiled);
+    const auto layout = beacon::compile_layout_json(
+        R"({"main":{"gap":10,"hbox":[{"id":"side","size":120,"margin":5},{"spring":true,"size":30},{"id":"a"},)"
+        R"({"id":"b","stretch":3}]}})",
+        *compiled);
+    REQUIRE(layout);
+    REQUIRE(layout->main.size() == 3);
+    for (const float width : {400.0F, 1000.0F}) {
+        CAPTURE(width);
+        const auto side = beacon::panel_rect(layout->main[0], 0, 0, width, 300, 2);
+        const auto a = beacon::panel_rect(layout->main[1], 0, 0, width, 300, 2);
+        const auto b = beacon::panel_rect(layout->main[2], 0, 0, width, 300, 2);
+        CHECK(side.x == Catch::Approx(10));
+        CHECK(side.width == Catch::Approx(220));
+        CHECK(side.height == Catch::Approx(280));
+        CHECK(a.x == Catch::Approx(240 + 20 + 60 + 20));
+        CHECK(b.x - (a.x + a.width) == Catch::Approx(20));
+        CHECK(b.x + b.width == Catch::Approx(width));
+        CHECK(a.width * 3 == Catch::Approx(b.width));
+    }
+    CHECK_FALSE(beacon::compile_layout_json(R"({"main":{"hbox":[{"id":"a","size":1,"stretch":1}]}})", *compiled));
+    CHECK_FALSE(beacon::compile_layout_json(R"({"main":{"hbox":[{"id":"a","size":0}]}})", *compiled));
 }
 
 TEST_CASE("layout rejects invalid boxes springs weights and legacy placement") {
@@ -693,16 +718,16 @@ TEST_CASE("layout nests boxes without adding container panels") {
     REQUIRE(layout->main.size() == 2);
     const auto& left = layout->main[0];
     CHECK(left.id == "left");
-    CHECK(left.x == 0);
-    CHECK(left.y == 0.25F);
-    CHECK(left.width == 0.25F);
-    CHECK(left.height == 0.75F);
+    CHECK(left.position[0].fraction == 0);
+    CHECK(left.position[1].fraction == 0.25F);
+    CHECK(left.size[0].fraction == 0.25F);
+    CHECK(left.size[1].fraction == 0.75F);
     const auto& right = layout->main[1];
     CHECK(right.id == "right");
-    CHECK(right.x == 0.25F);
-    CHECK(right.y == 0.25F);
-    CHECK(right.width == 0.75F);
-    CHECK(right.height == 0.75F);
+    CHECK(right.position[0].fraction == 0.25F);
+    CHECK(right.position[1].fraction == 0.25F);
+    CHECK(right.size[0].fraction == 0.75F);
+    CHECK(right.size[1].fraction == 0.75F);
     beacon::PublishedState state{.compiled = std::make_shared<const beacon::CompiledTemplate>(*compiled),
                                  .localization = std::make_shared<const beacon::Localization>(),
                                  .layout = std::make_shared<const beacon::Layout>(*layout)};
@@ -712,6 +737,41 @@ TEST_CASE("layout nests boxes without adding container panels") {
     REQUIRE(view.main_groups.size() == 2);
     CHECK(view.main_groups[0] == std::vector{compiled->graph.index_by_id.at("shown")});
     CHECK(view.main_groups[1].empty());
+}
+
+TEST_CASE("layout framed boxes draw one panel around their children and springs") {
+    const auto compiled = beacon::compile_template_json(presented_template);
+    REQUIRE(compiled);
+    const auto layout = beacon::compile_layout_json(
+        R"({"main":{"hbox":[{"id":"plain"},{"id":"framed","frame":true,"vbox":[
+            {"id":"inner","nodes":["shown"]},{"spring":true}]}]}})",
+        *compiled);
+    REQUIRE(layout);
+    REQUIRE(layout->main.size() == 3);
+    const auto& plain = layout->main[0];
+    const auto& frame = layout->main[1];
+    const auto& inner = layout->main[2];
+    CHECK(plain.frame);
+    CHECK(frame.id == "framed");
+    CHECK(frame.frame);
+    CHECK(frame.source == beacon::LayoutSource::None);
+    CHECK(frame.position[0].fraction == 0.5F);
+    CHECK(frame.size[1].fraction == 1.0F);
+    CHECK(inner.id == "inner");
+    CHECK_FALSE(inner.frame);
+    CHECK(inner.position[0].fraction == 0.5F);
+    CHECK(inner.size[1].fraction == 0.5F);
+
+    for (const auto* json : {R"({"main":{"frame":1,"hbox":[]}})", R"({"overlay":{"frame":true,"hbox":[]}})",
+                             R"({"main":{"frame":true,"hbox":[{"frame":true,"vbox":[]}]}})",
+                             R"({"main":{"hbox":[{"frame":true,"nodes":["shown"]}]}})"}) {
+        CAPTURE(json);
+        CHECK_FALSE(beacon::compile_layout_json(json, *compiled));
+    }
+    const auto unframed = beacon::compile_layout_json(R"({"main":{"frame":false,"hbox":[{}]}})", *compiled);
+    REQUIRE(unframed);
+    REQUIRE(unframed->main.size() == 1);
+    CHECK(unframed->main.front().frame);
 }
 
 TEST_CASE("presentation resolves reusable layout nodes and fallback labels") {
@@ -800,17 +860,21 @@ TEST_CASE("progress summary includes collection goals but excludes statistic cou
 TEST_CASE("layout metrics derive collection geometry from the group and scale consistently") {
     for (const bool overlay : {false, true}) {
         for (const auto source : {beacon::LayoutSource::Nodes, beacon::LayoutSource::Collections}) {
-            const beacon::LayoutGroup group{
-                .margin = 2, .padding = 3, .source = source, .spacing = beacon::default_spacing(overlay, source)};
-            const auto normal = beacon::calculate_layout_metrics(group, overlay, 7, 300, 300, 10, 20);
-            const auto doubled = beacon::calculate_layout_metrics(group, overlay, 7, 600, 600, 20, 40, 2);
-            REQUIRE(doubled.rows == normal.rows);
+            const beacon::LayoutGroup group{.position = {beacon::LayoutLength{0, 2}, beacon::LayoutLength{0, 2}},
+                                            .size = {beacon::LayoutLength{1, -4}, beacon::LayoutLength{1, -4}},
+                                            .padding = 3,
+                                            .source = source,
+                                            .spacing = beacon::default_spacing(overlay, source)};
+            const auto normal = beacon::panel_rect(group, 10, 20, 300, 300);
+            const auto doubled = beacon::panel_rect(group, 20, 40, 600, 600, 2);
             CHECK(doubled.content_x == Catch::Approx(normal.content_x * 2));
             CHECK(doubled.y == Catch::Approx(normal.y * 2));
-            CHECK(doubled.cell_width == Catch::Approx(normal.cell_width * 2));
-            CHECK(doubled.cell_height == Catch::Approx(normal.cell_height * 2));
-            if (overlay)
-                CHECK(normal.rows == 1);
+            CHECK(doubled.content_height == Catch::Approx(normal.content_height * 2));
+            const auto normal_grid = beacon::item_grid(group, normal, 7);
+            const auto doubled_grid = beacon::item_grid(group, doubled, 7, 2);
+            REQUIRE(doubled_grid.rows == normal_grid.rows);
+            CHECK(doubled_grid.cell_width == Catch::Approx(normal_grid.cell_width * 2));
+            CHECK(doubled_grid.cell_height == Catch::Approx(normal_grid.cell_height * 2));
         }
     }
 }
@@ -830,12 +894,11 @@ TEST_CASE("overlay group heights count frames labels and statistic lines") {
     CHECK(beacon::overlay_group_min_height(nodes, true, true, 24, 2) ==
           Catch::Approx(2 * beacon::overlay_group_min_height(nodes, true, true, 12)));
     auto quarter = nodes;
-    quarter.height = 0.25F;
-    quarter.margin = 2;
+    quarter.size[1] = {0.25F, -4};
     const auto height = beacon::overlay_group_min_height(quarter, true, true, 12);
     CHECK(beacon::body_height_for_content(quarter, height) == Catch::Approx((height + 4) * 4));
     CHECK(beacon::body_height_for_content(quarter, height * 2, 2) == Catch::Approx((height + 4) * 8));
-    quarter.height = 0;
+    quarter.size[1].fraction = 0;
     CHECK(beacon::body_height_for_content(quarter, height) == 0);
 }
 
@@ -858,9 +921,6 @@ TEST_CASE("layout spacing overrides window defaults and is validated per group k
     CHECK(resolved.row == 10.0F);
     CHECK(resolved.label == 2.0F);
     CHECK(resolved.collection == 40.0F);
-    const auto metrics = beacon::calculate_layout_metrics(main->main.front(), false, 7, 300, 300, 0, 0);
-    CHECK(metrics.gap == 8.0F);
-    CHECK(metrics.row_gap == 5.0F);
 
     const auto partial = parse(R"({"label":7})", true);
     REQUIRE(partial);

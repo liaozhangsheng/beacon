@@ -241,8 +241,9 @@ templates/<name>/
 未知窗口、状态、属性、枚举值和非字符串属性值均会被拒绝。
 `layout.json` 的 `main`、`overlay` 各放一个布局对象，两者都可省略。`hbox` 从左到右排列，`vbox` 从上到下排列，
 可以互相嵌套。子块按正数 `stretch`（默认 1）分配父布局主方向的空间，另一方向铺满。
-`spring: true` 是透明弹簧，按同样的权重占空间但不绘制。容器的 `gap`（源图标像素，默认 0）在相邻子块之间留出固定间隔，子块分剩下的空间。容器只接受 `id`、`stretch`、`gap` 和 `hbox` 或 `vbox`；
-弹簧只接受 `spring: true`、`stretch`。内容块继续使用原有的 `margin`、`padding`、项目 `spacing` 和悬浮窗 `scroll`，
+`spring: true` 是透明弹簧，按同样的权重占空间但不绘制。容器的 `gap`（源图标像素，默认 0）在相邻子块之间留出固定间隔，子块分剩下的空间。子块也可以用固定的 `size`（源图标像素）代替 `stretch`，
+窗口缩放时保持这个尺寸，其余子块按 `stretch` 分剩下的空间。容器只接受 `id`、`stretch`、`size`、`gap`、`frame` 和 `hbox` 或 `vbox`；
+弹簧只接受 `spring: true`、`stretch`、`size`。内容块继续使用原有的 `margin`、`padding`、项目 `spacing` 和悬浮窗 `scroll`，
 块内图标和收集组仍然自动排列。
 
 ```json

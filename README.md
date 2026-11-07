@@ -255,9 +255,10 @@ Unknown windows, states, properties, enum values, and non-string property values
 panels left to right and `vbox` to arrange them top to bottom; boxes can be nested. Each child gets a share of the
 parent's main axis according to its positive `stretch` (default 1), and fills the other axis. A `spring: true`
 child reserves an empty share without drawing a panel. A box's `gap` (source icon pixels, default 0) leaves that
-fixed distance between neighbouring children; the children share what remains. Boxes accept only `id`, `stretch`,
-`gap`, and `hbox` or `vbox`;
-springs accept only `spring: true` and `stretch`. Content panels keep their `margin`, `padding`, item `spacing`,
+fixed distance between neighbouring children; the children share what remains. A child can give a fixed `size`
+(source icon pixels) along the main axis instead of a `stretch`; it keeps that size as the window resizes and its
+stretched siblings share the rest. Boxes accept only `id`, `stretch`, `size`, `gap`, `frame`, and `hbox` or `vbox`;
+springs accept only `spring: true`, `stretch` and `size`. Content panels keep their `margin`, `padding`, item `spacing`,
 and overlay `scroll` settings. Containers and springs do not change how icons or collections are arranged inside panels.
 
 ```json
