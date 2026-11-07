@@ -10,7 +10,7 @@ if(BUILD_TESTING)
 endif()
 
 project(beacon
-    VERSION 1.0.1
+    VERSION 1.1.0
     DESCRIPTION "Minecraft advancement tracker for speedruns"
     LANGUAGES CXX
 )
