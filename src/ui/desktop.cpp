@@ -576,7 +576,8 @@ private:
     std::shared_ptr<const PublishedState> fixed_state_;
     std::filesystem::path asset_root_;
     std::filesystem::path install_root_;
-    const std::vector<std::filesystem::path>& template_options_;
+    // Owned: callers may pass a temporary, such as the defaulted empty list.
+    std::vector<std::filesystem::path> template_options_;
 
     Settings current_settings_;
     Settings applied_settings_;
