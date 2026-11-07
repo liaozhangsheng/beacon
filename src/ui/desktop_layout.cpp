@@ -256,7 +256,7 @@ void WindowRenderer::Impl::draw_leaderboard_group(const LayoutGroup& group, cons
     const auto id = scoped_id(static_cast<int>(group_index));
     leaderboard_view_.draw({panel.content_x, panel.content_y},
                            {panel.content_x + panel.content_width, panel.content_y + panel.content_height},
-                           group.leaderboard, leaderboards_->get(group.leaderboard), glow_.texture, *assets_,
+                           group.leaderboard, leaderboards_->get(group.leaderboard), glow_texture(), *assets_,
                            context_.renderer(), ui_language_, frame_schedule_);
 }
 

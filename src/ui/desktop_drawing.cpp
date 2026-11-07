@@ -35,7 +35,8 @@ void WindowRenderer::Impl::update_progress_glows(const PublishedState& state) {
 
 void WindowRenderer::Impl::draw_glow(ImDrawList* draw, const ImVec2 frame_min, const float frame_size,
                                      const float brightness, const float phase, const float scale) const {
-    if (brightness <= 0.001F || glow_.texture == nullptr) {
+    auto* const glow = glow_texture();
+    if (brightness <= 0.001F || glow == nullptr) {
         return;
     }
     const float extent = frame_size * scale * 1.42F;
@@ -46,7 +47,7 @@ void WindowRenderer::Impl::draw_glow(ImDrawList* draw, const ImVec2 frame_min, c
         center.y - extent > clip_max.y)
         return;
     frame_schedule_.every(soft_animation_ms);
-    draw_rotating_glow(draw, glow_.texture, center, frame_size * scale, glow_.time, phase, brightness);
+    draw_rotating_glow(draw, glow, center, frame_size * scale, glow_.time, phase, brightness);
 }
 
 void WindowRenderer::Impl::draw_progress_glow(ImDrawList* draw, const std::uint32_t node, const ImVec2 frame_min,
@@ -54,6 +55,23 @@ void WindowRenderer::Impl::draw_progress_glow(ImDrawList* draw, const std::uint3
     const float brightness = node < glow_.brightness.size() ? glow_.brightness[node] : 0.0F;
     draw_glow(draw, frame_min, ui::progress_frame_for_icon(icon_size), brightness,
               static_cast<float>(node) * 2.39996323F);
+}
+
+SDL_Texture* WindowRenderer::Impl::glow_texture() const {
+    if (glow_texture_ == nullptr)
+        glow_texture_ = soft_glow_texture(context_.renderer());
+    return glow_texture_.get();
+}
+
+void WindowRenderer::Impl::draw_ambient_light(ImDrawList* draw, const ImVec2 min, const ImVec2 max) const {
+    // The hues drift together, one full turn every minute.
+    // Corners step 70 degrees apart along the diagonal, so the wash reads as one moving gradient rather than four
+    // hues averaging out to grey in the middle.
+    const float drift = static_cast<float>(glow_.time) * 6.0F;
+    constexpr ImU32 base = IM_COL32(255, 120, 60, 26);
+    draw->AddRectFilledMultiColor(min, max, rotate_hue(base, drift), rotate_hue(base, drift + 70.0F),
+                                  rotate_hue(base, drift + 140.0F), rotate_hue(base, drift + 70.0F));
+    frame_schedule_.every(soft_animation_ms);
 }
 
 void WindowRenderer::Impl::render_progress_view(const std::shared_ptr<const PublishedState>& state,
@@ -107,6 +125,11 @@ void WindowRenderer::Impl::render_progress_view(const std::shared_ptr<const Publ
             return;
         }
         draw_header(*state, make_header(*state));
+    } else {
+        const auto window_min = ImGui::GetWindowPos();
+        const auto window_size = ImGui::GetWindowSize();
+        draw_ambient_light(ImGui::GetWindowDrawList(), window_min,
+                           {window_min.x + window_size.x, window_min.y + window_size.y});
     }
     draw_responsive_layout(*state, scroll_speed, scroll_right);
 }

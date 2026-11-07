@@ -17,7 +17,7 @@ namespace beacon {
 class LeaderboardView {
 public:
     // Draws the board `source` names into [min, max], starting its download the first time. Podium runs glow with
-    // `glow`, the template's additive frame glow, when there is one.
+    // `glow`, the additive rotating glow, when there is one.
     void draw(ImVec2 min, ImVec2 max, const LeaderboardSource& source, LeaderboardLoader& loader, SDL_Texture* glow,
               UiAssets& assets, SDL_Renderer* renderer, std::string_view language, FrameSchedule& schedule);
 

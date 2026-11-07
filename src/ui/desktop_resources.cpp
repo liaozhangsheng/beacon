@@ -77,19 +77,12 @@ void WindowRenderer::Impl::prepare_template(const std::shared_ptr<const Publishe
         if (remote_avatar_texture_ == nullptr) {
             avatar_texture_ = nullptr;
         }
-        glow_.texture = nullptr;
         glow_.brightness.clear();
         std::vector<std::filesystem::path> atlas_paths;
         for (const auto& node : images) {
             for (const auto* path : {&node.icon, &node.frame_obtained, &node.frame_unobtained}) {
                 if (!path->empty())
                     atlas_paths.push_back(*path);
-            }
-            if (glow_.texture == nullptr && !node.frame_obtained.empty()) {
-                glow_.texture = assets_->texture(frame_glow_path(node.frame_obtained));
-                if (glow_.texture != nullptr) {
-                    SDL_SetTextureBlendMode(glow_.texture, SDL_BLENDMODE_ADD);
-                }
             }
         }
         build_atlas(atlas_paths);
@@ -208,7 +201,7 @@ void WindowRenderer::Impl::build_atlas(const std::vector<std::filesystem::path>&
     // ponytail: The atlas is now the sole owner of these pixels; release source
     // textures immediately instead of retaining a duplicate cache.
     for (const auto& source : sources) {
-        if (source.texture != glow_.texture && source.texture != avatar_texture_) {
+        if (source.texture != avatar_texture_) {
             assets_->discard(source.key);
         }
     }

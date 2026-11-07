@@ -141,9 +141,6 @@ struct NodeImages {
 };
 // Indexed by node, like CompiledTemplate::presentation_by_node.
 std::vector<NodeImages> node_images(const CompiledTemplate& compiled);
-// Each frame set has a glow texture beside its obtained frame.
-std::filesystem::path frame_glow_path(const std::filesystem::path& frame_obtained);
-
 using IconFiles = std::vector<std::pair<std::filesystem::path, FileStamp>>;
 IconFiles icon_file_stamps(const CompiledTemplate& compiled);
 

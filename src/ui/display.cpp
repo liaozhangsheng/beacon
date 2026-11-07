@@ -531,10 +531,6 @@ std::vector<NodeImages> node_images(const CompiledTemplate& compiled) {
     return images;
 }
 
-std::filesystem::path frame_glow_path(const std::filesystem::path& frame_obtained) {
-    return frame_obtained.parent_path() / "frame_glow.png";
-}
-
 IconFiles icon_file_stamps(const CompiledTemplate& compiled) {
     std::vector<std::filesystem::path> paths;
     for (const auto& images : node_images(compiled)) {
@@ -542,8 +538,6 @@ IconFiles icon_file_stamps(const CompiledTemplate& compiled) {
             if (!path->empty())
                 paths.push_back(*path);
         }
-        if (!images.frame_obtained.empty())
-            paths.push_back(frame_glow_path(images.frame_obtained));
     }
     std::sort(paths.begin(), paths.end());
     paths.erase(std::unique(paths.begin(), paths.end()), paths.end());

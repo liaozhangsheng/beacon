@@ -121,6 +121,9 @@ private:
     void draw_glow(ImDrawList* draw, ImVec2 frame_min, float frame_size, float brightness, float phase,
                    float scale = 1.5F) const;
     void draw_progress_glow(ImDrawList* draw, std::uint32_t node, ImVec2 frame_min, float icon_size) const;
+    [[nodiscard]] SDL_Texture* glow_texture() const;
+    // A slow, faint wash of shifting color over the main window, behind every panel.
+    void draw_ambient_light(ImDrawList* draw, ImVec2 min, ImVec2 max) const;
 
     void render_progress_view(const std::shared_ptr<const PublishedState>& state,
                               const std::optional<Error>& runtime_error, float scroll_speed, bool scroll_right);
@@ -248,7 +251,6 @@ private:
     }
 
     struct Glow {
-        SDL_Texture* texture = nullptr;
         double time = 0.0;
         // Per node, easing toward 1 once the node is done.
         std::vector<float> brightness;
@@ -288,6 +290,7 @@ private:
     SDL_Texture* avatar_texture_ = nullptr;
 
     Glow glow_;
+    mutable SdlTexturePtr glow_texture_;
     CompletionAnimator completion_;
     CompletionFireworks fireworks_;
     bool completion_view_ = false;

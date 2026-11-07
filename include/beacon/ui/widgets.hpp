@@ -105,6 +105,11 @@ void draw_nine_slice(ImDrawList* draw, SDL_Texture* texture, ImVec2 min, ImVec2 
                      ImU32 tint = IM_COL32_WHITE);
 // Recessed panel in the style of an inventory slot: dark top-left edge, light bottom-right edge.
 void draw_inset_panel(ImDrawList* draw, ImVec2 min, ImVec2 max, float unit);
+// A soft glow shaped like a rounded square: a white core warming to amber as it fades out like a gaussian, drawn
+// additively. Turning it, as draw_rotating_glow does, makes its corners sweep slowly around the frame.
+SdlTexturePtr soft_glow_texture(SDL_Renderer* renderer);
+// `color` hue-shifted by `degrees`, keeping its saturation and value.
+ImU32 rotate_hue(ImU32 color, float degrees);
 // Missing template icons use a purple-and-black checkerboard without an external texture.
 void draw_missing_icon(ImDrawList* draw, ImVec2 position, float size, ImU32 tint = IM_COL32_WHITE);
 

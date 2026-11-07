@@ -6,6 +6,7 @@
 #include <SDL3_image/SDL_image.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <format>
@@ -224,6 +225,60 @@ void draw_inset_panel(ImDrawList* draw, const ImVec2 min, const ImVec2 max, cons
     draw->AddRectFilled({a.x, a.y + edge}, {a.x + edge, b.y - edge}, IM_COL32(0, 0, 0, 140));
     draw->AddRectFilled({a.x + edge, b.y - edge}, b, IM_COL32(255, 255, 255, 40));
     draw->AddRectFilled({b.x - edge, a.y + edge}, {b.x, b.y - edge}, IM_COL32(255, 255, 255, 40));
+}
+
+SdlTexturePtr soft_glow_texture(SDL_Renderer* renderer) {
+    constexpr int size = 128;
+    // Superellipse exponent: 2 is a circle; higher pushes the light out toward the corners.
+    constexpr float squareness = 2.6F;
+    // Gaussian width per channel, as a share of the half size: blue fades first and red last, so the white core
+    // warms to amber toward its edge.
+    constexpr std::array<float, 3> spread{0.40F, 0.31F, 0.19F};
+    constexpr float peak = 189.0F;
+    auto* const surface = SDL_CreateSurface(size, size, SDL_PIXELFORMAT_RGBA32);
+    if (surface == nullptr)
+        return nullptr;
+    SdlTexturePtr texture;
+    if (SDL_LockSurface(surface)) {
+        for (int y = 0; y < size; ++y) {
+            auto* const row = static_cast<std::uint8_t*>(surface->pixels) + (y * surface->pitch);
+            for (int x = 0; x < size; ++x) {
+                const float dx = std::abs(((static_cast<float>(x) + 0.5F) / (size * 0.5F)) - 1.0F);
+                const float dy = std::abs(((static_cast<float>(y) + 0.5F) / (size * 0.5F)) - 1.0F);
+                const float distance = std::pow(std::pow(dx, squareness) + std::pow(dy, squareness), 1.0F / squareness);
+                // Faded to nothing before the texture's edge, so no seam shows while it turns.
+                const float edge = std::clamp((1.0F - distance) * 8.0F, 0.0F, 1.0F);
+                for (std::size_t channel = 0; channel < spread.size(); ++channel) {
+                    const float falloff = distance / spread[channel];
+                    row[(x * 4) + channel] =
+                        static_cast<std::uint8_t>(std::lround(std::exp(-falloff * falloff) * edge * peak));
+                }
+                row[(x * 4) + 3] = 255;
+            }
+        }
+        SDL_UnlockSurface(surface);
+        texture.reset(SDL_CreateTextureFromSurface(renderer, surface));
+    }
+    SDL_DestroySurface(surface);
+    if (texture != nullptr) {
+        SDL_SetTextureBlendMode(texture.get(), SDL_BLENDMODE_ADD);
+        SDL_SetTextureScaleMode(texture.get(), SDL_SCALEMODE_LINEAR);
+    }
+    return texture;
+}
+
+ImU32 rotate_hue(const ImU32 color, const float degrees) {
+    const auto rgba = ImGui::ColorConvertU32ToFloat4(color);
+    float hue = 0.0F;
+    float saturation = 0.0F;
+    float value = 0.0F;
+    ImGui::ColorConvertRGBtoHSV(rgba.x, rgba.y, rgba.z, hue, saturation, value);
+    hue = std::fmod(hue + (degrees / 360.0F), 1.0F);
+    if (hue < 0.0F)
+        hue += 1.0F;
+    ImVec4 rotated{0.0F, 0.0F, 0.0F, rgba.w};
+    ImGui::ColorConvertHSVtoRGB(hue, saturation, value, rotated.x, rotated.y, rotated.z);
+    return ImGui::ColorConvertFloat4ToU32(rotated);
 }
 
 void minecraft_tooltip(const char* text) {
