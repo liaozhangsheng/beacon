@@ -119,12 +119,14 @@ struct RowMetrics {
     float gap = std::max(2.0F, std::round(unit * 0.75F));
     // A whole number of screen pixels per skin pixel, tall enough for the two text lines beside it.
     float head_size = 8.0F * std::max(3.0F, std::round(unit * 3.0F / 8.0F));
+    float frame_pixel = head_size / 32.0F;
+    float frame = frame_pixel * 3.0F;
     float badge_height = ImGui::GetTextLineHeight() + (pixel * 6.0F);
     float badge_min_width = pixel * 20.0F;
     // The head sits under the middle of the narrowest badge, so heads line up whatever the label.
     float head_x = pad + (badge_min_width * 0.5F);
     float head_y = pad + (badge_height * 0.5F);
-    float text_x = head_x + head_size + gap;
+    float text_x = head_x + head_size + frame + gap;
     // As much space under the head as above it.
     float height = head_y + head_size + head_y;
 };
@@ -158,22 +160,43 @@ void draw_run(const LeaderboardRun& run, SDL_Texture* head, SDL_Texture* glow, U
     const float phase = static_cast<float>(run.rank) * 2.39996323F;
 
     draw_nine_slice(draw, assets.widget("advancement.png"), row_min, row_max, toast_slice, m.pixel);
-    if (hovered) {
-        draw->AddRectFilled({row_min.x + m.pixel, row_min.y + m.pixel}, {row_max.x - m.pixel, row_max.y - m.pixel},
-                            IM_COL32(255, 255, 255, ImGui::IsItemActive() ? 12 : 28));
-        draw->AddRect(row_min, row_max, IM_COL32_WHITE, 0.0F, ImDrawFlags_None, m.pixel);
+    const ImVec2 inner_min{row_min.x + (m.pixel * 2.0F), row_min.y + (m.pixel * 2.0F)};
+    const ImVec2 inner_max{row_max.x - (m.pixel * 2.0F), row_max.y - (m.pixel * 2.0F)};
+    // Podium rows fade in from their metal on the left.
+    if (podium) {
+        const ImU32 tint = (style.metal & ~IM_COL32_A_MASK) | IM_COL32(0, 0, 0, 40);
+        const ImU32 clear = style.metal & ~IM_COL32_A_MASK;
+        draw->AddRectFilledMultiColor(inner_min, {inner_min.x + ((inner_max.x - inner_min.x) * 0.6F), inner_max.y},
+                                      tint, clear, clear, tint);
     }
-    draw->PushClipRect({row_min.x + m.pixel, row_min.y + m.pixel}, {row_max.x - m.pixel, row_max.y - m.pixel}, true);
+    if (hovered)
+        draw->AddRectFilled(inner_min, inner_max, IM_COL32(255, 255, 255, ImGui::IsItemActive() ? 10 : 22));
+    draw->PushClipRect(inner_min, inner_max, true);
+    if (podium) {
+        // A breathing halo in the placing's metal, stacked rings fading outwards, under the rotating glow.
+        const float pulse = 0.75F + (0.25F * static_cast<float>(std::sin((time * 2.4) + phase)));
+        const ImU32 metal = style.metal & ~IM_COL32_A_MASK;
+        constexpr int rings = 8;
+        for (int i = 0; i < rings; ++i) {
+            const float t = static_cast<float>(i) / static_cast<float>(rings - 1);
+            const float radius = m.head_size * (1.15F - (0.5F * t));
+            draw->AddCircleFilled(head_center, radius, metal | IM_COL32(0, 0, 0, static_cast<int>(22.0F * pulse)));
+        }
+    }
     // Podium heads glow like the player's own head once the run is complete, and badges like obtained frames.
     if (podium && glow != nullptr) {
-        draw_rotating_glow(draw, glow, head_center, m.head_size * 2.1F, time, phase);
+        // Two layers turning against each other, so the glow reads past the frame.
+        draw_rotating_glow(draw, glow, head_center, m.head_size * 1.5F, time, phase, 1.4F);
+        draw_rotating_glow(draw, glow, head_center, m.head_size * 1.2F, -time, phase + 0.8F, 1.4F);
         draw_rotating_glow(draw, glow, {(badge_min.x + badge_max.x) * 0.5F, (badge_min.y + badge_max.y) * 0.5F},
                            m.badge_height * 1.5F, time, phase + 1.0F);
     }
     if (head == nullptr)
         head = assets.image("default-avatar.png");
-    draw->AddRectFilled({head_min.x - (m.pixel * 2.0F), head_min.y - (m.pixel * 2.0F)},
-                        {head_max.x + (m.pixel * 2.0F), head_max.y + (m.pixel * 2.0F)}, IM_COL32(200, 200, 200, 128));
+    draw->AddRectFilled({head_min.x - m.frame, head_min.y - m.frame}, {head_max.x + m.frame, head_max.y + m.frame},
+                        podium ? style.metal : IM_COL32(78, 81, 86, 255));
+    draw->AddRectFilled({head_min.x - m.frame_pixel, head_min.y - m.frame_pixel},
+                        {head_max.x + m.frame_pixel, head_max.y + m.frame_pixel}, IM_COL32(30, 30, 34, 255));
     if (head != nullptr)
         draw->AddImage(head, head_min, head_max);
     draw_badge(draw, badge_min, badge_size, m.pixel, style, podium ? assets.image(style.block) : nullptr, label);
