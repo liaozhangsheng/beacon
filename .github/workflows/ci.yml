@@ -71,7 +71,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes \
-            catch2 clang-format libarchive-dev libfreetype-dev libssl-dev ninja-build pkg-config \
+            catch2 libarchive-dev libfreetype-dev libssl-dev ninja-build pkg-config \
             libasound2-dev libpulse-dev libfribidi-dev libjack-dev libsndio-dev \
             libaudio-dev \
             libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
@@ -79,6 +79,8 @@ jobs:
             libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev \
             libdbus-1-dev libibus-1.0-dev libudev-dev libthai-dev libusb-1.0-0-dev \
             libpipewire-0.3-dev libwayland-dev libdecor-0-dev
+          # Match the clang-format the code is formatted with; distro versions lay some constructs out differently.
+          pipx install clang-format==22.1.5
 
       - name: Build SDL3
         if: runner.os == 'Linux'
