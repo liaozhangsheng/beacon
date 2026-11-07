@@ -60,11 +60,11 @@ std::optional<SourceCandidate> inspect_source(const WorldLocation& world, std::s
     if (!stats_stamp.exists)
         return std::nullopt;
     const auto advancements_stamp = file_stamp(root / "advancements" / (uuid + ".json"));
-    return SourceCandidate{.world = world,
-                           .player = {.uuid = std::move(uuid)},
-                           .layout = layout,
-                           .stats = stats,
-                           .activity = std::max(stats_stamp.mtime, advancements_stamp.mtime)};
+    // A missing file's zero mtime is not older than real ones: libstdc++'s file clock counts back from 2174.
+    const auto activity =
+        advancements_stamp.exists ? std::max(stats_stamp.mtime, advancements_stamp.mtime) : stats_stamp.mtime;
+    return SourceCandidate{
+        .world = world, .player = {.uuid = std::move(uuid)}, .layout = layout, .stats = stats, .activity = activity};
 }
 
 ylt::expected<std::vector<SourceCandidate>, Error> scan_world_layout(const WorldLocation& world, SaveLayout layout) {
