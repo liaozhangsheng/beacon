@@ -174,13 +174,16 @@ void draw_run(const LeaderboardRun& run, SDL_Texture* head, SDL_Texture* glow, U
     draw->PushClipRect(inner_min, inner_max, true);
     if (podium) {
         // A breathing halo in the placing's metal, stacked rings fading outwards, under the rotating glow.
-        const float pulse = 0.75F + (0.25F * static_cast<float>(std::sin((time * 2.4) + phase)));
+        const float breath = 0.5F + (0.5F * static_cast<float>(std::sin((time * 2.4) + phase)));
+        const float pulse = 0.5F + (0.5F * breath);
+        // Its reach past the head breathes too, drawing in close at the low point.
+        const float reach = 0.4F * (0.4F + (0.6F * breath));
         const ImU32 metal = style.metal & ~IM_COL32_A_MASK;
         constexpr int rings = 8;
         for (int i = 0; i < rings; ++i) {
             const float t = static_cast<float>(i) / static_cast<float>(rings - 1);
-            // Out to just past the frame, short of the name and date beside the head.
-            const float radius = m.head_size * (0.95F - (0.4F * t));
+            // Out to just past the frame at full breath, short of the name and date beside the head.
+            const float radius = m.head_size * (0.55F + (reach * (1.0F - t)));
             draw->AddCircleFilled(head_center, radius, metal | IM_COL32(0, 0, 0, static_cast<int>(22.0F * pulse)));
         }
     }
