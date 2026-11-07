@@ -70,13 +70,39 @@ SDL_Texture* WindowRenderer::Impl::neutral_glow_texture() const {
 }
 
 void WindowRenderer::Impl::draw_ambient_light(ImDrawList* draw, const ImVec2 min, const ImVec2 max) const {
-    // The hues drift together, one full turn every minute.
-    // Corners step 70 degrees apart along the diagonal, so the wash reads as one moving gradient rather than four
-    // hues averaging out to grey in the middle.
-    const float drift = static_cast<float>(glow_.time) * 6.0F;
+    // The hues drift together, one full turn every minute, and sweep 140 degrees along the diagonal.
+    // The rectangle is drawn as a fine grid with each vertex hue-rotated on its own: interpolating RGB between
+    // far-apart hues over one quad dulls the middle and leaves a visible crease along the triangle seam.
+    constexpr int cells = 16;
+    constexpr float sweep = 140.0F;
     constexpr ImU32 base = IM_COL32(255, 120, 60, 26);
-    draw->AddRectFilledMultiColor(min, max, rotate_hue(base, drift), rotate_hue(base, drift + 70.0F),
-                                  rotate_hue(base, drift + 140.0F), rotate_hue(base, drift + 70.0F));
+    const float drift = static_cast<float>(glow_.time) * 6.0F;
+    const ImVec2 uv = ImGui::GetFontTexUvWhitePixel();
+    constexpr int row = cells + 1;
+    draw->PrimReserve(cells * cells * 6, row * row);
+    const auto first = static_cast<ImDrawIdx>(draw->_VtxCurrentIdx);
+    for (int y = 0; y <= cells; ++y) {
+        const float v = static_cast<float>(y) / cells;
+        for (int x = 0; x <= cells; ++x) {
+            const float u = static_cast<float>(x) / cells;
+            draw->PrimWriteVtx({min.x + ((max.x - min.x) * u), min.y + ((max.y - min.y) * v)}, uv,
+                               rotate_hue(base, drift + (sweep * 0.5F * (u + v))));
+        }
+    }
+    for (int y = 0; y < cells; ++y) {
+        for (int x = 0; x < cells; ++x) {
+            const auto a = static_cast<ImDrawIdx>(first + (y * row) + x);
+            const auto b = static_cast<ImDrawIdx>(a + 1);
+            const auto c = static_cast<ImDrawIdx>(a + row);
+            const auto d = static_cast<ImDrawIdx>(c + 1);
+            draw->PrimWriteIdx(a);
+            draw->PrimWriteIdx(b);
+            draw->PrimWriteIdx(d);
+            draw->PrimWriteIdx(a);
+            draw->PrimWriteIdx(d);
+            draw->PrimWriteIdx(c);
+        }
+    }
     frame_schedule_.every(soft_animation_ms);
 }
 
