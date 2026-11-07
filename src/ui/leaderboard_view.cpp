@@ -344,12 +344,17 @@ void LeaderboardView::draw(const ImVec2 min, const ImVec2 max, const Leaderboard
     if (ImGui::BeginChild("##leaderboard", {max.x - list_min.x, std::max(1.0F, max.y - list_min.y)},
                           ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground)) {
         const double time = ImGui::GetTime();
-        for (std::size_t i = 0; i < board->runs.size(); ++i) {
-            const auto& run = board->runs[i];
-            const auto head = heads_.find(run.runner);
-            ImGui::PushID(static_cast<int>(i));
-            draw_run(run, head == heads_.end() ? nullptr : head->second.get(), glow, assets, time);
-            ImGui::PopID();
+        // Rows share one height, so only those in view are drawn; a board can hold hundreds of runs.
+        ImGuiListClipper clipper;
+        clipper.Begin(static_cast<int>(board->runs.size()), RowMetrics{}.height + ImGui::GetStyle().ItemSpacing.y);
+        while (clipper.Step()) {
+            for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
+                const auto& run = board->runs[static_cast<std::size_t>(i)];
+                const auto head = heads_.find(run.runner);
+                ImGui::PushID(i);
+                draw_run(run, head == heads_.end() ? nullptr : head->second.get(), glow, assets, time);
+                ImGui::PopID();
+            }
         }
     }
     ImGui::EndChild();
