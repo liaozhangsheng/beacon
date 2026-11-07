@@ -1,6 +1,7 @@
 #include <beacon/ui/progress.hpp>
 
 #include <algorithm>
+#include <initializer_list>
 #include <iterator>
 
 namespace beacon {
@@ -194,6 +195,15 @@ std::vector<std::uint32_t> item_variants(const std::uint32_t node, const Compile
 bool shows_progress(const std::uint32_t node, const CompiledTemplate& compiled) {
     const auto& rule = compiled.graph.nodes[node];
     return rule.op == RuleOp::Fact && rule.fact_key.starts_with("stat/");
+}
+
+Presentation::Unit progress_unit(const std::uint32_t item, const std::uint32_t shown,
+                                 const CompiledTemplate& compiled) {
+    for (const auto node : {shown, item}) {
+        if (const auto& view = compiled.presentation_by_node[node]; view && view->unit != Presentation::Unit::None)
+            return view->unit;
+    }
+    return Presentation::Unit::None;
 }
 
 std::optional<std::uint32_t> item_manual_node(const std::uint32_t node, const bool increment,

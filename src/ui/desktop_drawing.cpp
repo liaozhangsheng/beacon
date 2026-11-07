@@ -302,7 +302,8 @@ void WindowRenderer::Impl::draw_item(const PublishedState& state, const LayoutGr
         auto line_count = draw_progress_text(draw, label, item.cell_x + (item.cell_width * 0.5F), label_y, foreground,
                                              title_wrap_width);
         if (progress) {
-            const auto progress = format_rule_progress(state.snapshot.results[shown.value]);
+            const auto progress = format_rule_progress(state.snapshot.results[shown.value],
+                                                       progress_unit(index, shown.value, *state.compiled));
             draw_progress_text(draw, progress, item.cell_x + (item.cell_width * 0.5F),
                                label_y + (ImGui::GetFontSize() * line_count), foreground);
             ++line_count;

@@ -153,8 +153,8 @@ std::optional<Error> validate_rule_shape(const Json::Value& value, const std::st
         if (!view.isObject()) {
             return Error{ErrorCode::Validation, "expected an object", view_path};
         }
-        if (auto failure = reject_unknown_fields(view, view_path,
-                                                 {"name_key", "icon", "enchanted", "type", "show", "state_style"})) {
+        if (auto failure = reject_unknown_fields(
+                view, view_path, {"name_key", "icon", "enchanted", "type", "show", "unit", "state_style"})) {
             return failure;
         }
         if (!view.isMember("name_key")) {
@@ -180,6 +180,12 @@ std::optional<Error> validate_rule_shape(const Json::Value& value, const std::st
             (!view["show"].isString() || (view["show"].asString() != "self" && view["show"].asString() != "stages" &&
                                           view["show"].asString() != "cycle"))) {
             return Error{ErrorCode::Validation, "show must be self, stages, or cycle", child_path(view_path, "show")};
+        }
+        if (view.isMember("unit") &&
+            (!view["unit"].isString() || (view["unit"].asString() != "distance" && view["unit"].asString() != "time" &&
+                                          view["unit"].asString() != "damage"))) {
+            return Error{ErrorCode::Validation, "unit must be distance, time, or damage",
+                         child_path(view_path, "unit")};
         }
     }
 
@@ -429,6 +435,17 @@ struct Compiler {
             } else if (presentation->show == Presentation::Show::Cycle && op != RuleOp::All && op != RuleOp::Any &&
                        op != RuleOp::Count) {
                 diagnostics.add("show cycle requires an all, any, or count rule", show_path);
+            }
+            if (view.isMember("unit")) {
+                const auto unit = view["unit"].asString();
+                presentation->unit = unit == "distance" ? Presentation::Unit::Distance
+                                     : unit == "time"   ? Presentation::Unit::Time
+                                                        : Presentation::Unit::Damage;
+                // Only counts shown as numbers have a unit: statistics and the stages that display them.
+                const bool statistic = op == RuleOp::Fact && compiled.graph.nodes[index].fact_key.starts_with("stat/");
+                if (!statistic && presentation->show != Presentation::Show::Stages)
+                    diagnostics.add("unit requires a stat/ fact or a staged rule",
+                                    child_path(child_path(path, "view"), "unit"));
             }
         }
         return index;

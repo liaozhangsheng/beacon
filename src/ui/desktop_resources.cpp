@@ -247,7 +247,16 @@ void WindowRenderer::Impl::load_cjk_font() {
         ImGuiFreeTypeLoaderFlags_Bold | ImGuiFreeTypeLoaderFlags_Monochrome | ImGuiFreeTypeLoaderFlags_MonoHinting;
     const auto unifont = asset_root_ / "assets/fonts/Unifont.ttf";
     if (std::filesystem::exists(unifont)) {
-        add_font(unifont, config, ImGui::GetIO().Fonts->GetGlyphRangesChineseSimplifiedCommon());
+        // Chinese plus the heart that damage statistics display.
+        static const ImVector<ImWchar> ranges = [] {
+            ImFontGlyphRangesBuilder builder;
+            builder.AddRanges(ImGui::GetIO().Fonts->GetGlyphRangesChineseSimplifiedCommon());
+            builder.AddChar(0x2665);
+            ImVector<ImWchar> built;
+            builder.BuildRanges(&built);
+            return built;
+        }();
+        add_font(unifont, config, ranges.Data);
     }
 }
 

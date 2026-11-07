@@ -67,6 +67,8 @@ ItemDisplay item_display(std::uint32_t node, const CompiledTemplate& compiled, s
 std::vector<std::uint32_t> item_variants(std::uint32_t node, const CompiledTemplate& compiled);
 // Statistics show their count, or count and target, under the label.
 bool shows_progress(std::uint32_t node, const CompiledTemplate& compiled);
+// The unit of the count an item shows: the shown rule's own, else the item's (so stages can share one).
+Presentation::Unit progress_unit(std::uint32_t item, std::uint32_t shown, const CompiledTemplate& compiled);
 // The leaf a manual click adjusts. Increments advance the active stage or mark a pending cycled child;
 // decrements take back the active stage's progress, or reopen the previous stage when it has none, or
 // unmark a completed cycled child. Empty when there is nothing to change.

@@ -195,6 +195,29 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
 }
 ```
 
+### 统计单位：`view.unit`
+
+很多统计的原始数字不直观，例如鞘翅滑翔距离以厘米计。在 `view` 里写 `unit`，Beacon 会换算后显示：
+
+```json
+{
+  "id": "counter/elytra",
+  "fact": "stat/minecraft:custom/minecraft:aviate_one_cm",
+  "view": {"name_key": "counter.elytra", "unit": "distance"}
+}
+```
+
+| `unit` | 适用统计 | 原始单位 | 显示 |
+| --- | --- | --- | --- |
+| `distance` | 以 `_one_cm` 结尾的距离统计（`walk_one_cm`、`sprint_one_cm`、`aviate_one_cm`、`swim_one_cm`、`boat_one_cm` 等） | 厘米 | 按大小选单位：`85 cm`、`850 m`、`12.3 km` |
+| `time` | `play_time`、`time_since_death`、`time_since_rest`、`sneak_time`、`total_world_time` 等时间统计 | tick（每秒 20） | 不足一小时 `12:34`，否则 `1:02:03` |
+| `damage` | `damage_dealt`、`damage_taken`、`damage_blocked_by_shield` 等伤害统计 | 0.1 点生命值 | 心数，如 `12.5 ♥`（一颗心 = 2 点生命值） |
+
+- `target` 仍按**原始单位**写：飞 100 公里写 `"target": 10000000`，玩 1 小时写 `"target": 72000`，造成 20 颗心伤害写 `"target": 400`。
+- 有目标时，数值和目标用同一个单位，按目标的大小选，例如 `0.9/100.0 km`、`0:12:34/1:00:00`。数值向下截断，没达到目标前不会显示成已达到。
+- `unit` 只能写在 `stat/` 统计上，或写在分阶段显示（`stages`）的规则上；后者让所有阶段共用这个单位，某个阶段自己写了 `unit` 则用它自己的。
+- `unit` 只影响显示，不改变判定、手动加减（仍按原始单位加减 1）或通关规则。
+
 ### 手动打勾的任务
 
 不写判定方式即可；不要写 `"fact": ""`、`"manual": true` 或编造的 Fact：
@@ -265,6 +288,7 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
 | `enchanted` | `true` 时在图标上叠加附魔紫光 | 无光效 |
 | `state_style` | 分别设置主窗口与悬浮窗的状态样式，见下文 | 使用对应窗口和分组的默认样式 |
 | `show` | `self`、`stages` 或 `cycle`，见“分阶段显示与轮换显示” | `prefix` 为 `stages`，其余为 `self` |
+| `unit` | `distance`、`time` 或 `damage`，把统计换算成易读的单位，见“统计单位” | 显示原始数字 |
 
 组合规则的子项也可以有自己的 `view`（不需要 `id`），用作收集组里每个成员的名称和图标：
 

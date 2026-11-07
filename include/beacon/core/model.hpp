@@ -95,6 +95,8 @@ struct Presentation {
     enum class FrameType : std::uint8_t { None, Task, Goal, Challenge };
     // What an item shows: itself, its current stage, or its children in turn.
     enum class Show : std::uint8_t { Self, Stages, Cycle };
+    // How a statistic's raw count reads: centimetres, ticks, or tenths of a health point.
+    enum class Unit : std::uint8_t { None, Distance, Time, Damage };
 
     std::string localization_key;
     std::string icon_path;
@@ -102,6 +104,7 @@ struct Presentation {
     bool enchanted = false;
     FrameType frame_type = FrameType::None;
     Show show = Show::Self;
+    Unit unit = Unit::None;
     // Main window (0) and overlay (1), with independent property overrides.
     std::array<StateStyles, 2> state_style;
     std::string frame_obtained_path;

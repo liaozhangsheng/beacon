@@ -356,6 +356,31 @@ TEST_CASE("view show must suit its rule") {
     CHECK_FALSE(compile(R"({"id":"g","fact":"a","view":{"name_key":"g","show":"all"}})"));
 }
 
+TEST_CASE("view unit applies to statistics and the stages that show them") {
+    const auto compile = [](const std::string& goal) {
+        return beacon::compile_template_json(
+            R"({"name_key":"t","minecraft":{"min_version":1,"max_version":1},"goals":[)" + goal +
+            R"(],"completion_rule":"g"})");
+    };
+    const auto compiled = compile(R"({"id":"g","prefix":[
+        {"fact":"stat/minecraft:custom/minecraft:aviate_one_cm","target":100000,"view":{"name_key":"s1"}},
+        {"fact":"stat/minecraft:custom/minecraft:play_time","target":72000,"view":{"name_key":"s2","unit":"time"}}
+      ],"view":{"name_key":"g","unit":"distance"}})");
+    REQUIRE(compiled);
+    const auto parent = compiled->graph.index_by_id.at("g");
+    const auto& stages = compiled->graph.nodes[parent].children;
+    CHECK(beacon::progress_unit(parent, stages[0], *compiled) == beacon::Presentation::Unit::Distance);
+    CHECK(beacon::progress_unit(parent, stages[1], *compiled) == beacon::Presentation::Unit::Time);
+    CHECK(beacon::progress_unit(parent, parent, *compiled) == beacon::Presentation::Unit::Distance);
+
+    CHECK(compile(
+        R"({"id":"g","fact":"stat/minecraft:custom/minecraft:damage_dealt","view":{"name_key":"g","unit":"damage"}})"));
+    CHECK_FALSE(compile(R"({"id":"g","fact":"stat/a","view":{"name_key":"g","unit":"cm"}})"));
+    CHECK_FALSE(compile(R"({"id":"g","fact":"stat/a","view":{"name_key":"g","unit":1}})"));
+    CHECK_FALSE(compile(R"({"id":"g","fact":"adv/a","view":{"name_key":"g","unit":"time"}})"));
+    CHECK_FALSE(compile(R"({"id":"g","any":[{"fact":"stat/a"}],"view":{"name_key":"g","unit":"time"}})"));
+}
+
 TEST_CASE("overlay groups reserve a progress line when any item can show a statistic") {
     const auto compiled = beacon::compile_template_json(R"({
       "name_key":"stages", "minecraft":{"min_version":1,"max_version":1},
@@ -971,6 +996,22 @@ TEST_CASE("progress text formats game time and rule progress") {
     CHECK(beacon::format_igt(123456) == "01:42:52.80");
     CHECK(beacon::format_rule_progress({.value = 3, .target = 0}) == "3");
     CHECK(beacon::format_rule_progress({.value = 3, .target = 8}) == "3/8");
+    CHECK(beacon::format_rule_progress({.value = -2, .target = 0}) == "0");
+
+    using Unit = beacon::Presentation::Unit;
+    // Distance scales by the target, else the value, and truncates.
+    CHECK(beacon::format_rule_progress({.value = 85, .target = 0}, Unit::Distance) == "85 cm");
+    CHECK(beacon::format_rule_progress({.value = 85'099, .target = 0}, Unit::Distance) == "850 m");
+    CHECK(beacon::format_rule_progress({.value = 1'234'567, .target = 0}, Unit::Distance) == "12.3 km");
+    CHECK(beacon::format_rule_progress({.value = 99'999, .target = 10'000'000}, Unit::Distance) == "0.9/100.0 km");
+    CHECK(beacon::format_rule_progress({.value = 150, .target = 5'000}, Unit::Distance) == "1/50 m");
+    // Time switches to hours from the reference value up.
+    CHECK(beacon::format_rule_progress({.value = 1'259, .target = 0}, Unit::Time) == "1:02");
+    CHECK(beacon::format_rule_progress({.value = 15'080, .target = 72'000}, Unit::Time) == "0:12:34/1:00:00");
+    CHECK(beacon::format_rule_progress({.value = 123'456, .target = 0}, Unit::Time) == "1:42:52");
+    // Damage is tenths of a health point, shown in hearts.
+    CHECK(beacon::format_rule_progress({.value = 251, .target = 0}, Unit::Damage) == "12.5 \u2665");
+    CHECK(beacon::format_rule_progress({.value = 30, .target = 400}, Unit::Damage) == "1.5/20.0 \u2665");
     CHECK(beacon::format_elapsed(59) == "59s");
     CHECK(beacon::format_elapsed(3661) == "1h 01m 01s");
     CHECK(beacon::format_percentage(0.325F) == "32.5%");
