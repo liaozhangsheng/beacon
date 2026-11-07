@@ -17,7 +17,7 @@ target_compile_definitions(beacon_test PRIVATE BEACON_TEST_ROOT="${PROJECT_SOURC
 beacon_warnings(beacon_test)
 
 include(Catch)
-catch_discover_tests(beacon_test)
+catch_discover_tests(beacon_test PROPERTIES SKIP_RETURN_CODE 4)
 
 if(TARGET beacon_update)
     add_executable(beacon_update_test update_engine_test.cpp update_lock_test.cpp update_download_test.cpp
@@ -25,7 +25,7 @@ if(TARGET beacon_update)
     target_link_libraries(beacon_update_test PRIVATE beacon_update beacon_http
         OpenSSL::Crypto LibArchive::LibArchive Catch2::Catch2WithMain)
     beacon_warnings(beacon_update_test)
-    catch_discover_tests(beacon_update_test)
+    catch_discover_tests(beacon_update_test PROPERTIES SKIP_RETURN_CODE 4)
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
     add_test(NAME beacon_update_package COMMAND ${Python3_EXECUTABLE}
         ${PROJECT_SOURCE_DIR}/test/update_package_test.py)
@@ -82,7 +82,7 @@ if(TARGET beacon)
     target_link_libraries(beacon_ui_test PRIVATE beacon_desktop Catch2::Catch2WithMain)
     target_compile_definitions(beacon_ui_test PRIVATE BEACON_TEST_ROOT="${PROJECT_SOURCE_DIR}")
     beacon_warnings(beacon_ui_test)
-    catch_discover_tests(beacon_ui_test)
+    catch_discover_tests(beacon_ui_test PROPERTIES SKIP_RETURN_CODE 4)
 
     add_test(NAME beacon_desktop_smoke COMMAND beacon --smoke-test)
 

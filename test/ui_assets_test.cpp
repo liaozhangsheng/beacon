@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 
+#include <chrono>
 #include <cstring>
 #include <fstream>
 #include <memory>
@@ -254,6 +255,8 @@ TEST_CASE("reloading a replaced GIF invalidates shared decoding while another wi
     data[control + 5] = 0;
     const auto replacement = temporary.path / "replacement.gif";
     std::ofstream(replacement, std::ios::binary | std::ios::trunc).write(data.data(), data.size());
+    // A real edit lands later; written back to back, both files can share a coarse filesystem timestamp.
+    std::filesystem::last_write_time(replacement, std::filesystem::last_write_time(path) + std::chrono::seconds(1));
     std::filesystem::rename(path, temporary.path / "old.gif");
     std::filesystem::rename(replacement, path);
     beacon::UiAssets reloaded_window(renderer.get(), temporary.path);
