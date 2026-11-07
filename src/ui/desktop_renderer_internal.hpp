@@ -122,6 +122,8 @@ private:
                    float scale = 1.5F) const;
     void draw_progress_glow(ImDrawList* draw, std::uint32_t node, ImVec2 frame_min, float icon_size) const;
     [[nodiscard]] SDL_Texture* glow_texture() const;
+    // The glow without its warm falloff, for lights tinted to a color.
+    [[nodiscard]] SDL_Texture* neutral_glow_texture() const;
     // A slow, faint wash of shifting color over the main window, behind every panel.
     void draw_ambient_light(ImDrawList* draw, ImVec2 min, ImVec2 max) const;
 
@@ -291,6 +293,7 @@ private:
 
     Glow glow_;
     mutable SdlTexturePtr glow_texture_;
+    mutable SdlTexturePtr neutral_glow_texture_;
     CompletionAnimator completion_;
     CompletionFireworks fireworks_;
     bool completion_view_ = false;

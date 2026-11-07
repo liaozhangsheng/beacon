@@ -174,7 +174,7 @@ float snap_to_pixel(const float value) {
 }
 
 void draw_rotating_glow(ImDrawList* draw, SDL_Texture* glow, const ImVec2 center, const float half_size,
-                        const double time, const float phase, const float brightness) {
+                        const double time, const float phase, const float brightness, const ImU32 tint) {
     const double angle = (time * 0.25) + phase;
     const float pulse = 0.6F + (0.55F * (0.5F + 0.5F * static_cast<float>(std::sin((time * 2.4) + phase))));
     const ImVec2 right{static_cast<float>(std::cos(angle)) * half_size,
@@ -184,7 +184,8 @@ void draw_rotating_glow(ImDrawList* draw, SDL_Texture* glow, const ImVec2 center
                        {center.x + right.x - down.x, center.y + right.y - down.y},
                        {center.x + right.x + down.x, center.y + right.y + down.y},
                        {center.x - right.x + down.x, center.y - right.y + down.y}, {0, 0}, {1, 0}, {1, 1}, {0, 1},
-                       IM_COL32(255, 255, 255, static_cast<int>(std::min(220.0F * brightness * pulse, 255.0F))));
+                       (tint & ~IM_COL32_A_MASK) |
+                           IM_COL32(0, 0, 0, static_cast<int>(std::min(220.0F * brightness * pulse, 255.0F))));
 }
 
 void draw_nine_slice(ImDrawList* draw, SDL_Texture* texture, const ImVec2 min, const ImVec2 max, const NineSlice slice,
@@ -227,13 +228,13 @@ void draw_inset_panel(ImDrawList* draw, const ImVec2 min, const ImVec2 max, cons
     draw->AddRectFilled({b.x - edge, a.y + edge}, {b.x, b.y - edge}, IM_COL32(255, 255, 255, 40));
 }
 
-SdlTexturePtr soft_glow_texture(SDL_Renderer* renderer) {
+SdlTexturePtr soft_glow_texture(SDL_Renderer* renderer, const bool neutral) {
     constexpr int size = 128;
     // Superellipse exponent: 2 is a circle; higher pushes the light out toward the corners.
     constexpr float squareness = 2.6F;
     // Gaussian width per channel, as a share of the half size: blue fades first and red last, so the white core
     // warms to amber toward its edge.
-    constexpr std::array<float, 3> spread{0.40F, 0.31F, 0.19F};
+    const auto spread = neutral ? std::array{0.34F, 0.34F, 0.34F} : std::array{0.40F, 0.31F, 0.19F};
     constexpr float peak = 189.0F;
     auto* const surface = SDL_CreateSurface(size, size, SDL_PIXELFORMAT_RGBA32);
     if (surface == nullptr)

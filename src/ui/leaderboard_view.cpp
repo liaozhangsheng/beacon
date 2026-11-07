@@ -179,17 +179,18 @@ void draw_run(const LeaderboardRun& run, SDL_Texture* head, SDL_Texture* glow, U
         constexpr int rings = 8;
         for (int i = 0; i < rings; ++i) {
             const float t = static_cast<float>(i) / static_cast<float>(rings - 1);
-            const float radius = m.head_size * (1.15F - (0.5F * t));
+            // Out to just past the frame, short of the name and date beside the head.
+            const float radius = m.head_size * (0.95F - (0.4F * t));
             draw->AddCircleFilled(head_center, radius, metal | IM_COL32(0, 0, 0, static_cast<int>(22.0F * pulse)));
         }
     }
-    // Podium heads glow like the player's own head once the run is complete, and badges like obtained frames.
+    // Podium heads and badges glow in their placing's metal. The head's glow fades out before the text beside it.
     if (podium && glow != nullptr) {
         // Two layers turning against each other, so the glow reads past the frame.
-        draw_rotating_glow(draw, glow, head_center, m.head_size * 1.5F, time, phase, 1.4F);
-        draw_rotating_glow(draw, glow, head_center, m.head_size * 1.2F, -time, phase + 0.8F, 1.4F);
+        draw_rotating_glow(draw, glow, head_center, m.head_size * 1.35F, time, phase, 1.7F, style.light);
+        draw_rotating_glow(draw, glow, head_center, m.head_size * 1.1F, -time, phase + 0.8F, 1.7F, style.light);
         draw_rotating_glow(draw, glow, {(badge_min.x + badge_max.x) * 0.5F, (badge_min.y + badge_max.y) * 0.5F},
-                           m.badge_height * 1.5F, time, phase + 1.0F);
+                           m.badge_height * 1.5F, time, phase + 1.0F, 1.0F, style.light);
     }
     if (head == nullptr)
         head = assets.image("default-avatar.png");

@@ -63,6 +63,12 @@ SDL_Texture* WindowRenderer::Impl::glow_texture() const {
     return glow_texture_.get();
 }
 
+SDL_Texture* WindowRenderer::Impl::neutral_glow_texture() const {
+    if (neutral_glow_texture_ == nullptr)
+        neutral_glow_texture_ = soft_glow_texture(context_.renderer(), true);
+    return neutral_glow_texture_.get();
+}
+
 void WindowRenderer::Impl::draw_ambient_light(ImDrawList* draw, const ImVec2 min, const ImVec2 max) const {
     // The hues drift together, one full turn every minute.
     // Corners step 70 degrees apart along the diagonal, so the wash reads as one moving gradient rather than four

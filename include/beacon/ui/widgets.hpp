@@ -98,16 +98,18 @@ inline constexpr NineSlice frame_slice{1.0F, 1.0F, 1.0F, 1.0F};
 float snap_to_pixel(float value);
 // The obtained-advancement glow: the additive `glow` turning slowly around center and breathing, reaching half_size
 // from center to each side.
+// `tint` colors the light.
 void draw_rotating_glow(ImDrawList* draw, SDL_Texture* glow, ImVec2 center, float half_size, double time, float phase,
-                        float brightness = 1.0F);
+                        float brightness = 1.0F, ImU32 tint = IM_COL32_WHITE);
 // Draws texture into [min, max] with borders scaled by unit (logical size of one texel).
 void draw_nine_slice(ImDrawList* draw, SDL_Texture* texture, ImVec2 min, ImVec2 max, NineSlice slice, float unit,
                      ImU32 tint = IM_COL32_WHITE);
 // Recessed panel in the style of an inventory slot: dark top-left edge, light bottom-right edge.
 void draw_inset_panel(ImDrawList* draw, ImVec2 min, ImVec2 max, float unit);
 // A soft glow shaped like a rounded square: a white core warming to amber as it fades out like a gaussian, drawn
-// additively. Turning it, as draw_rotating_glow does, makes its corners sweep slowly around the frame.
-SdlTexturePtr soft_glow_texture(SDL_Renderer* renderer);
+// additively. Turning it, as draw_rotating_glow does, makes its corners sweep slowly around the frame. A neutral glow
+// stays white throughout, so a tint sets its color.
+SdlTexturePtr soft_glow_texture(SDL_Renderer* renderer, bool neutral = false);
 // `color` hue-shifted by `degrees`, keeping its saturation and value.
 ImU32 rotate_hue(ImU32 color, float degrees);
 // Missing template icons use a purple-and-black checkerboard without an external texture.
