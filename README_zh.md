@@ -8,10 +8,11 @@
 Beacon 是一个面向 Minecraft 速通的进度追踪器。它读取本地存档中的进度（Advancements）和统计数据，结合模板中的自定义规则，在主窗口和可选悬浮窗中实时展示目标的完成情况。你可以通过模板包配置自己的速通路线。
 
 <p align="center">
-  <img src="docs/overlay-zh.gif" alt="使用内置 1.16.1 模板的 Beacon 悬浮窗：未完成的进度和收集项滚动轮播，统计固定显示">
+  <img src="docs/overlay-en.gif" alt="使用内置 1.16.1 模板的 Beacon 悬浮窗：未完成的进度和收集项滚动轮播，统计固定显示">
+  <br><sub>50 fps · 5 秒</sub>
 </p>
 <p align="center">
-  <img src="docs/mainwindow.png" alt="使用内置 1.16.1 模板的 Beacon 主窗口：按分类排列的进度、收集清单、统计和状态栏" width="720">
+  <img src="docs/mainwindow.png" alt="使用内置 1.16.1 模板的 Beacon 主窗口：按分类排列的进度、收集清单、统计、排行榜和状态栏" width="720">
 </p>
 
 ## 功能概览
@@ -193,93 +194,11 @@ templates/<name>/
 └── assets/         # 此模板使用的可选资源
 ```
 
-推荐将模板专用资源放在 `assets/` 下，也可以使用模板内部的其他目录。`view.icon` 填写相对于 `template.json` 所在目录的精确文件路径，例如 `"assets/apple.png"`。Beacon 不查询全局资源名，也不会自动补充扩展名。省略图标、路径为空、文件缺失、图片无法读取（包括损坏的 GIF）、非法路径或符号链接越界时，统一显示紫黑棋盘格 missingno，不影响模板加载。程序不会加载模板目录外的文件作为图标。GIF 和带动画的 PNG（APNG）图标会播放动画。复制整个模板目录即可一并分享其中的资源。
+程序包只包含界面资源和字体。模板专用图片应放在模板目录中，方便随模板分享。图标路径、校验规则和完整格式见内置的 [`beacon-custom-template` skill](.agents/skills/beacon-custom-template/SKILL.md)。
 
-程序包只包含界面所需资源和字体。完整格式、校验规则和示例请参阅内置的 [`beacon-custom-template` skill](.agents/skills/beacon-custom-template/SKILL.md)。
+`lang.json` 提供默认文本。设置中的“模板语言”选择 `langs/` 下的翻译，缺失条目回退到 `lang.json`；“界面语言”控制 Beacon 自身文字。新增模板后需重启。修改已有模板后，重启或切换到其他模板再切回即可重新加载。
 
-`lang.json` 提供模板的默认文本。设置中的“模板语言”可选择 `langs/` 下的翻译，缺失条目回退到 `lang.json`；“界面语言”单独控制 Beacon 自身的文字。新增模板后需重启程序。修改已有模板后，应重启程序，或先切换到其他模板再切回；直接选择当前模板不会触发重新加载。
-
-统计计数器可用 `prefix` 配置有序的多个阶段。每个直接子项使用一个 `stat/` 事实、正整数 `target` 和自己的 `view`，
-布局在分组的 `nodes` 中引用父节点。同一个位置显示首个未完成阶段的图标、名称和数量，全部完成后保留最后阶段并高亮；
-主窗口的手动加一增加当前阶段的计数，全部完成后不再增加；手动减一减少当前阶段的计数，当前计数为 0 时重新打开上一阶段。计数器在悬浮窗中保持固定位置。普通计数器可与多阶段计数器放在同一组。
-各阶段使用存档中的累计统计，消耗物品不会减少计数，也无需单独持久化阶段状态。
-重复捡起同一物品也会增加拾取统计，因此这些计数不代表当前持有量。各阶段必须依次完成。
-
-每条规则在 `template.json` 的 `view.state_style` 中分别配置主窗口与悬浮窗的状态样式：
-
-```json
-"state_style": {
-  "main": {
-    "pending": {"emphasis": "highlight"},
-    "done": {"emphasis": "muted", "decoration": "strikethrough"}
-  },
-  "overlay": {
-    "done": {"visibility": "visible"}
-  }
-}
-```
-
-窗口、状态（`pending` 未完成、`done` 完成）和每个属性都可省略。`main` 与 `overlay` 独立，
-条目不继承父规则、`ref` 引用对象或当前阶段、轮换子项的样式。
-`emphasis` 支持 `highlight`（高亮）和 `muted`（变暗），影响图标与文字。主窗口收集组子项未完成时默认变暗，其余默认高亮。
-`visibility` 支持 `visible`（显示）、`blank`（留空位）、`hidden`（移除并让后面的项目补位）。
-悬浮窗完成时默认 `hidden`，其余默认 `visible`。`done` 中的可见性和明暗决定动画结束后的最终效果。
-`overlay.done.animation` 支持 `cover`（自下而上遮盖）和 `none`（直接应用最终样式），仅允许写在 `overlay.done`。
-最终为 `visible` 的条目始终不播放退场动画，即使写了 `"animation": "cover"`，也立即应用完成样式。
-最终为 `blank` 或 `hidden` 的条目省略动画字段时默认播放遮盖动画。
-动画沿用现有的 0.6 秒等待、1 秒遮盖；例如完成后播放遮盖，再移除：
-
-```json
-"overlay": {
-  "done": {"animation": "cover", "visibility": "hidden"}
-}
-```
-
-改为 `"visibility": "blank"` 会在动画结束后留空位；设为 `"animation": "none"` 则立即应用最终效果。
-只有布局实际显示且启用动画的条目会播放并等待动画；撤销完成会中止动画。主窗口立即应用状态样式，留空或隐藏的项目无法点击撤销完成。
-`decoration` 在 `main` 中支持 `none`（默认）和 `strikethrough`（删除线），仅主窗口文字在图标右侧的收集组子项生效；`overlay` 不接受该属性。
-未知窗口、状态、属性、枚举值和非字符串属性值均会被拒绝。
-`layout.json` 的 `main`、`overlay` 各放一个布局对象，两者都可省略。`hbox` 从左到右排列，`vbox` 从上到下排列，
-可以互相嵌套。子块按正数 `stretch`（默认 1）分配父布局主方向的空间，另一方向铺满。
-`spring: true` 是透明弹簧，按同样的权重占空间但不绘制。容器的 `gap`（源图标像素，默认 0）在相邻子块之间留出固定间隔，子块分剩下的空间。子块也可以用固定的 `size`（源图标像素）代替 `stretch`，
-窗口缩放时保持这个尺寸，其余子块按 `stretch` 分剩下的空间。容器只接受 `id`、`stretch`、`size`、`gap`、`frame` 和 `hbox` 或 `vbox`；
-弹簧只接受 `spring: true`、`stretch`、`size`。内容块继续使用原有的 `margin`、`padding`、项目 `spacing` 和悬浮窗 `scroll`，
-块内图标和收集组仍然自动排列。
-
-```json
-{
-  "main": {
-    "vbox": [
-      {"stretch": 5, "hbox": [
-        {"stretch": 2, "prefix": ["goal/story_"]},
-        {"spring": true},
-        {"prefix": ["goal/nether_"]}
-      ]},
-      {"stretch": 4, "collections": ["goal/adventure_kill_all_mobs"]}
-    ]
-  }
-}
-```
-
-上面两行高度为 5:4，第一行宽度为 2:1:1（中间弹簧留空）。空容器不绘制，空对象是空面板。
-不支持旧窗口数组和 `x`、`y`、`width`、`height`、`children` 字段，已有模板需要改写。
-
-`main` 中用 `"leaderboard"` 代替 `nodes` 的分组会显示公开 Google 表格中的一个榜单，例如
-[26.x](https://docs.google.com/spreadsheets/d/1v7tpe9jJp1cENpwtwJp4Hrn6c1RVniQI4vyyllQwU-A) 或
-[1.16.1 及其他版本](https://docs.google.com/spreadsheets/d/107ijqjELTQQ29KW4phUmtvYFTX9-pfHsjb18TKoWACk)社区排行榜，
-位置和大小与其他分组一样设置：
-
-```json
-{"id": "Leaderboard", "stretch": 6, "padding": 6,
- "leaderboard": {"sheet": "1v7tpe9jJp1cENpwtwJp4Hrn6c1RVniQI4vyyllQwU-A", "gid": 1283472797, "board": "26.2 - 26.3"}}
-```
-
-`sheet` 是表格网址中的 ID，`gid` 是工作表网址中 `#gid=` 后的数字（省略时为 0）。工作表中榜单并排排列，每个榜单的标题在表头行上方，
-表头从 `#` 开始并包含 `Runner` 和 `IGT` 列（`Date`、`Link`、`Status` 可选，`Rejected` 的记录不显示）。`board` 按标题选择榜单，
-省略时取工作表中的第一个榜单；`title` 替换顶部显示的文字，默认为榜单标题。
-
-点击记录会打开对应的视频或 speedrun.com 页面。前 50 名会联网加载头像，其余只显示已缓存的头像。表格和玩家头像会被缓存，离线时仍显示上次下载的榜单。
-排行榜分组不支持 `exclude`、`spacing`，也不能放在 `overlay` 中。
+统计规则可用 `prefix` 配置累计计数阶段；`view.unit` 可将距离、时间和伤害统计换算成易读格式，`target` 仍填写原始单位。主窗口布局也可以嵌入公开 Google 表格中的社区榜单。
 
 ## Minecraft 商标声明
 

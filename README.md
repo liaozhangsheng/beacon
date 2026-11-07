@@ -13,9 +13,10 @@ Beacon reads Minecraft save data and turns advancements, statistics, and custom 
 
 <p align="center">
   <img src="docs/overlay-en.gif" alt="The Beacon overlay with the bundled 1.16.1 template: unfinished advancements and collection entries scroll past while statistics stay fixed">
+  <br><sub>50 fps · 5 seconds</sub>
 </p>
 <p align="center">
-  <img src="docs/mainwindow.png" alt="The Beacon main window with the bundled 1.16.1 template: advancements by category, collection checklists, statistics, and the status bar" width="720">
+  <img src="docs/mainwindow.png" alt="The Beacon main window with the bundled 1.16.1 template: advancements by category, collection checklists, statistics, the leaderboard, and the status bar" width="720">
 </p>
 
 ## Highlights
@@ -197,106 +198,13 @@ templates/<name>/
 └── assets/         # optional resources used by this template
 ```
 
-`assets/` is the recommended location for template-specific resources, but any directory inside the template is allowed. `view.icon` gives the exact file path relative to the directory containing `template.json`, for example `"assets/apple.png"`. Beacon does not look up global resource names or add file extensions. Missing, empty, or unreadable icons (including corrupt GIFs), invalid paths, and symlinks that escape the template directory all display a purple-and-black missingno checkerboard without preventing the template from loading. Files outside the template directory are never loaded as icons. GIF and animated PNG (APNG) icons play their animation. Copying the template directory copies its resources too.
+The program bundle contains only app UI resources and fonts. Keep template-specific images in the template directory so they can be shared with it.
+The bundled [`beacon-custom-template` skill](.agents/skills/beacon-custom-template/SKILL.md) covers icon paths, validation, and the full schema.
 
-The program bundle contains only app UI resources and fonts. Use the bundled [`beacon-custom-template` skill](.agents/skills/beacon-custom-template/SKILL.md) for the complete schema, validation rules, and examples.
+`lang.json` provides the default text. The **Template language** setting selects a translation from `langs/`, with missing entries falling back to `lang.json`; **Interface language** controls Beacon's labels. Restart after adding a template. To reload an edit, restart or switch to another template and back.
 
-`lang.json` provides the template's default text. Choose a translation from `langs/` with the **Template language** setting; missing entries fall back to `lang.json`. **Interface language** controls Beacon's own labels separately. Restart Beacon after adding templates. To reload an edited template, restart Beacon or switch to another template and back; selecting the already active template does not reload it.
-
-Statistic counters can use `prefix` to define an ordered sequence of stages. Each direct child uses a `stat/` fact, a positive integer `target`,
-and its own `view`; the layout references the parent through a group's `nodes`. The same slot shows the first unfinished
-stage's icon, label, and count, then keeps the final stage highlighted when all stages are complete. In the main window,
-a manual increment adds one to the displayed stage's count (and is ignored once all stages are complete); a manual decrement reduces that count,
-or reopens the previous stage when the displayed count is zero. The counter keeps a fixed slot in the overlay.
-Plain counters and staged counters can share a group.
-These counters use cumulative save statistics, so consuming items does not reduce their counts; stages need no separate persistent state.
-Picking up the same item again increases pickup statistics again, so these counts do not show how many items the player currently holds. Stages must be completed in order.
-
-Each rule's `view.state_style` in `template.json` configures its appearance separately for the main window and overlay:
-
-```json
-"state_style": {
-  "main": {
-    "pending": {"emphasis": "highlight"},
-    "done": {"emphasis": "muted", "decoration": "strikethrough"}
-  },
-  "overlay": {
-    "done": {"visibility": "visible"}
-  }
-}
-```
-
-Both windows, states (`pending`, `done`), and individual properties are optional. `main` and `overlay` are independent;
-styles do not inherit from parents, referenced rules, or the stage/cycle child currently displayed.
-`emphasis` accepts `highlight` or `muted` and affects icons and text. Main-window collection entries default to
-`muted` while pending; all other entries default to `highlight`.
-`visibility` accepts `visible`, `blank` (keep an empty slot), or `hidden` (remove the slot so later items move up).
-Completed overlay items default to `hidden`; all other states default to `visible`. The visibility and emphasis in `done`
-determine the final appearance after the animation.
-`overlay.done.animation` accepts `cover` (a bottom-to-top cover) or `none` (apply the final style immediately), and is
-rejected in other windows or states. Visible items always skip exit animations and apply their done style immediately, even with `"animation": "cover"`.
-When the animation is omitted, blank or hidden items use `cover`.
-The existing timing is a 0.6-second delay and a 1-second cover. For example, play the cover, then remove the item:
-
-```json
-"overlay": {
-  "done": {"animation": "cover", "visibility": "hidden"}
-}
-```
-
-Use `"visibility": "blank"` to keep an empty slot afterward; `"animation": "none"`
-applies that final effect immediately. Only displayed overlay nodes with an enabled animation play and wait for it;
-undoing completion cancels the animation. Main-window changes take effect immediately; blank or hidden items cannot
-be clicked to undo completion.
-`decoration` accepts `none` (default) or `strikethrough` under `main`, and takes effect only for collection entries
-with text beside their icons. It is rejected under `overlay`.
-Unknown windows, states, properties, enum values, and non-string property values are rejected.
-`layout.json` uses one object per window (`main` and `overlay`, both optional). Use `hbox` to arrange
-panels left to right and `vbox` to arrange them top to bottom; boxes can be nested. Each child gets a share of the
-parent's main axis according to its positive `stretch` (default 1), and fills the other axis. A `spring: true`
-child reserves an empty share without drawing a panel. A box's `gap` (source icon pixels, default 0) leaves that
-fixed distance between neighbouring children; the children share what remains. A child can give a fixed `size`
-(source icon pixels) along the main axis instead of a `stretch`; it keeps that size as the window resizes and its
-stretched siblings share the rest. Boxes accept only `id`, `stretch`, `size`, `gap`, `frame`, and `hbox` or `vbox`;
-springs accept only `spring: true`, `stretch` and `size`. Content panels keep their `margin`, `padding`, item `spacing`,
-and overlay `scroll` settings. Containers and springs do not change how icons or collections are arranged inside panels.
-
-```json
-{
-  "main": {
-    "vbox": [
-      {"stretch": 5, "hbox": [
-        {"stretch": 2, "prefix": ["goal/story_"]},
-        {"spring": true},
-        {"prefix": ["goal/nether_"]}
-      ]},
-      {"stretch": 4, "collections": ["goal/adventure_kill_all_mobs"]}
-    ]
-  }
-}
-```
-
-The rows above have height shares of 5:4; the first row has width shares of 2:1:1, including its empty spring.
-Empty boxes draw nothing; an empty object is a bare panel. The old window arrays and `x`, `y`, `width`, `height`,
-and `children` fields are rejected. Existing templates must be rewritten to this format.
-
-A `main` group with `"leaderboard"` in place of `nodes` shows a board from a public Google Sheet, such as the
-[26.x](https://docs.google.com/spreadsheets/d/1v7tpe9jJp1cENpwtwJp4Hrn6c1RVniQI4vyyllQwU-A) or
-[1.16.1 and other versions](https://docs.google.com/spreadsheets/d/107ijqjELTQQ29KW4phUmtvYFTX9-pfHsjb18TKoWACk) community
-leaderboards, and is placed like any other group:
-
-```json
-{"id": "Leaderboard", "stretch": 6, "padding": 6,
- "leaderboard": {"sheet": "1v7tpe9jJp1cENpwtwJp4Hrn6c1RVniQI4vyyllQwU-A", "gid": 1283472797, "board": "26.2 - 26.3"}}
-```
-
-`sheet` is the ID in the sheet's URL and `gid` the tab's (`#gid=` in the URL; 0 when omitted). A tab lists boards side by
-side, each with its title above a header row that starts at `#` and has `Runner` and `IGT` columns (`Date`, `Link` and
-`Status` are optional; `Rejected` runs are left out). `board` picks a board by that title, or the tab's first board when
-omitted, and `title` replaces the header's text, which is otherwise the board's title.
-
-Clicking a run opens its video or speedrun.com page. Heads load for the top 50 runs, plus any already cached. The sheet
-and players' heads are cached, so the last downloaded board still shows offline. Leaderboard groups take no `exclude` or `spacing`, and cannot be used in `overlay`.
+Statistic rules can use `prefix` for cumulative stages; `view.unit` formats distance, time, and damage statistics while targets stay in raw units.
+Main-window layouts can also show a community leaderboard from a public Google Sheet.
 
 ## Minecraft trademark
 
