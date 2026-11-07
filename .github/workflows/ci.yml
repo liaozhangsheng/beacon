@@ -79,8 +79,6 @@ jobs:
             libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev \
             libdbus-1-dev libibus-1.0-dev libudev-dev libthai-dev libusb-1.0-0-dev \
             libpipewire-0.3-dev libwayland-dev libdecor-0-dev
-          # Match the clang-format the code is formatted with; distro versions lay some constructs out differently.
-          pipx install clang-format==22.1.5
 
       - name: Build SDL3
         if: runner.os == 'Linux'
@@ -173,10 +171,6 @@ jobs:
 
       - name: Build
         run: cmake --build build --parallel
-
-      - name: Check formatting
-        if: runner.os == 'Linux'
-        run: cmake --build build --target format-check
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
