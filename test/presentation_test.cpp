@@ -629,6 +629,54 @@ TEST_CASE("overlay scrolling follows the layout scroll field") {
     CHECK_FALSE(parse(R"(,"scroll":false)", true));
 }
 
+TEST_CASE("layout groups follow the align field in both windows") {
+    const auto compiled = beacon::compile_template_json(presented_template);
+    REQUIRE(compiled);
+    for (const auto* window : {"main", "overlay"}) {
+        CAPTURE(window);
+        const auto parse = [&](const std::string& group) {
+            return beacon::compile_layout_json(std::string{R"({")"} + window + R"(":)" + group + "}", *compiled);
+        };
+        const auto omitted = parse(R"({"nodes":["hidden"]})");
+        REQUIRE(omitted);
+        const auto& groups = std::string_view{window} == "main" ? omitted->main : omitted->overlay;
+        CHECK_FALSE(groups.front().align);
+        for (const auto& [name, align] :
+             {std::pair{"top", beacon::LayoutAlign::Top}, std::pair{"center", beacon::LayoutAlign::Center},
+              std::pair{"bottom", beacon::LayoutAlign::Bottom}}) {
+            const auto layout = parse(std::string{R"({"collections":["hidden"],"align":")"} + name + R"("})");
+            REQUIRE(layout);
+            CHECK((std::string_view{window} == "main" ? layout->main : layout->overlay).front().align == align);
+        }
+        CHECK_FALSE(parse(R"({"nodes":["hidden"],"align":"middle"})"));
+        CHECK_FALSE(parse(R"({"nodes":["hidden"],"align":1})"));
+        CHECK_FALSE(parse(R"({"align":"top"})"));
+    }
+    // Leaderboards fill their panel, so they take no alignment.
+    REQUIRE(beacon::compile_layout_json(R"({"main":{"leaderboard":{"sheet":"b"}}})", *compiled));
+    CHECK_FALSE(beacon::compile_layout_json(R"({"main":{"leaderboard":{"sheet":"b"},"align":"top"}})", *compiled));
+}
+
+TEST_CASE("aligned item grids keep natural rows and place the block") {
+    beacon::LayoutGroup group{.source = beacon::LayoutSource::Nodes,
+                              .spacing = beacon::default_spacing(false, beacon::LayoutSource::Nodes)};
+    const beacon::PanelRect panel{.width = 100, .height = 430, .content_width = 100, .content_height = 430};
+    const auto spread = beacon::item_grid(group, panel, 2);
+    CHECK(spread.top == 0);
+    CHECK(spread.cell_height * static_cast<float>(spread.rows) == Catch::Approx(430));
+    group.align = beacon::LayoutAlign::Top;
+    const auto top = beacon::item_grid(group, panel, 2);
+    CHECK(top.rows == spread.rows);
+    CHECK(top.top == 0);
+    CHECK(top.cell_height < spread.cell_height);
+    const float block = (top.cell_height * 2) + group.spacing.row;
+    group.align = beacon::LayoutAlign::Center;
+    CHECK(beacon::item_grid(group, panel, 2).top == Catch::Approx((430 - block) / 2));
+    group.align = beacon::LayoutAlign::Bottom;
+    CHECK(beacon::item_grid(group, panel, 2).top == Catch::Approx(430 - block));
+    CHECK(beacon::aligned_offset(beacon::LayoutAlign::Bottom, -5) == 0);
+}
+
 TEST_CASE("layout boxes divide their axis by stretch and omit springs") {
     const auto compiled = beacon::compile_template_json(presented_template);
     REQUIRE(compiled);
@@ -910,17 +958,18 @@ TEST_CASE("overlay group heights count frames labels and statistic lines") {
     };
     const auto nodes = group(beacon::LayoutSource::Nodes);
     const auto collections = group(beacon::LayoutSource::Collections);
-    const auto bare = beacon::overlay_group_min_height(nodes, false, false, 12);
-    const auto labelled = beacon::overlay_group_min_height(nodes, true, false, 12);
-    // Collections draw icons only; labels and statistic lines each add height to node groups.
-    CHECK(beacon::overlay_group_min_height(collections, true, true, 12) < bare);
+    const auto bare = beacon::overlay_group_min_height(nodes, 0, false, 12);
+    const auto labelled = beacon::overlay_group_min_height(nodes, 1, false, 12);
+    // Collections draw icons only; each wrapped label line and the statistic line add height to node groups.
+    CHECK(beacon::overlay_group_min_height(collections, 2, true, 12) < bare);
     CHECK(labelled == Catch::Approx(bare + 12));
-    CHECK(beacon::overlay_group_min_height(nodes, true, true, 12) > labelled);
-    CHECK(beacon::overlay_group_min_height(nodes, true, true, 24, 2) ==
-          Catch::Approx(2 * beacon::overlay_group_min_height(nodes, true, true, 12)));
+    CHECK(beacon::overlay_group_min_height(nodes, 3, false, 12) == Catch::Approx(bare + 36));
+    CHECK(beacon::overlay_group_min_height(nodes, 1, true, 12) > labelled);
+    CHECK(beacon::overlay_group_min_height(nodes, 1, true, 24, 2) ==
+          Catch::Approx(2 * beacon::overlay_group_min_height(nodes, 1, true, 12)));
     auto quarter = nodes;
     quarter.size[1] = {0.25F, -4};
-    const auto height = beacon::overlay_group_min_height(quarter, true, true, 12);
+    const auto height = beacon::overlay_group_min_height(quarter, 1, true, 12);
     CHECK(beacon::body_height_for_content(quarter, height) == Catch::Approx((height + 4) * 4));
     CHECK(beacon::body_height_for_content(quarter, height * 2, 2) == Catch::Approx((height + 4) * 8));
     quarter.size[1].fraction = 0;

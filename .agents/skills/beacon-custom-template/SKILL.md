@@ -429,6 +429,7 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
 | `exclude` | 从选中的项里排除的规则 ID | `[]` |
 | `spacing` | 组内间距 | 见“间距” |
 | `scroll` | 仅悬浮窗：是否滚动轮播 | `true` |
+| `align` | 块比内容高时，内容在竖直方向放在 `top`、`center` 或 `bottom`；排行榜不支持 | 见“对齐” |
 
 `stretch` 和 `size` 必须大于 0，且同一个块只能写其中一个；数值必须有限且不超过 1,000,000，其余数值不能是负数。写错字段或把字段写在不支持的地方时，模板加载失败，错误信息会给出 `layout.json/main/hbox/1/stretch` 这样的位置。
 
@@ -494,6 +495,7 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
 
 悬浮窗只有一行。分组默认按设置中的方向和速度滚动轮播；写 `"scroll": false` 时项目从左到右固定排成一行，适合统计等不想跟着滚走的内容。
 `scroll` 只决定动不动；完成后是否显示由规则的 `view.state_style.overlay.done.visibility` 决定。
+标题按图标宽度换行并完整显示，分组按其中最长标题的行数留高，窗口最小高度也随之撑开。行比内容高时多出的空间按 `align` 分配，见“对齐”。
 悬浮窗默认在完成动画播完后移除完成的项，可用 `view.state_style.overlay.done.animation` 选择动画。需要常驻的统计在自己的 `view` 中写 `"state_style": {"overlay": {"done": {"visibility": "visible"}}}`，布局只负责固定排列：
 
 ```json
@@ -513,6 +515,20 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
 
 ```json
 {"id": "Route", "margin": 4, "padding": 8, "collections": ["goal/route"], "spacing": {"item": 24, "row": 10}}
+```
+
+### 对齐
+
+`align` 决定块比内容高时内容在竖直方向的位置，主窗口和悬浮窗的项目、前缀和收集组都能写，排行榜和空面板不支持：
+
+| 分组 | 不写 `align` | 写 `top` / `center` / `bottom` |
+| --- | --- | --- |
+| 主窗口项目（`nodes`、`prefix`） | 放得下的行平均铺满整块，行间留白随窗口变大 | 每行保持自然高度，整块贴顶、居中或贴底 |
+| 主窗口收集组 | 居中 | 贴顶、居中或贴底，同块内各收集组标题保持对齐 |
+| 悬浮窗分组 | 居中 | 贴顶、居中或贴底 |
+
+```json
+{"id": "Advancements", "prefix": ["goal/"], "align": "top", "stretch": 2}
 ```
 
 ### 排行榜
@@ -740,7 +756,7 @@ print("\n".join(problems) if problems else "未发现问题")
 | --- | --- |
 | 设置里找不到模板 / `no templates found` | 是否放在安装目录的 `templates/<名称>/template.json`，有没有误放进 `versions/` 或多套了一层目录；新模板是否重启了 Beacon |
 | `invalid template JSON` / `invalid resource JSON` | JSON 语法、重复字段 |
-| `unknown field` | 是否写了不支持的字段，或把 `target`、`state_style`、`scroll`、`spacing` 写错了位置 |
+| `unknown field` | 是否写了不支持的字段，或把 `target`、`state_style`、`scroll`、`spacing` 写错了位置，或给排行榜、空面板写了 `align` |
 | `duplicate rule ID` / `missing Ref target` | ID 是否唯一，引用拼写是否一致 |
 | `dependency cycle` | `ref` 是否直接或间接引用了自己 |
 | `completion_rule does not name an explicit rule ID` | `completion_rule` 是否填了 Fact、文字 key 或没有 `id` 的规则 |

@@ -331,24 +331,19 @@ void draw_subpixel_text(ImDrawList* draw, const ImVec2 position, const ImU32 col
     add_exact_text(draw, font, font_size, position, color, begin, end);
 }
 
-std::size_t draw_progress_text(ImDrawList* draw, const std::string& text, const float center_x, const float y,
-                               const ImU32 color, const float wrap_width) {
-    std::size_t lines = 0;
-    const auto draw_line = [&](const char* begin, const char* end) {
-        const auto size = ImGui::CalcTextSize(begin, end);
-        draw_subpixel_text(draw, {center_x - size.x * 0.5F, y + ImGui::GetFontSize() * static_cast<float>(lines)},
-                           color, begin, end);
-        ++lines;
-    };
+namespace {
+
+// Calls line(begin, end) for each line of text wrapped at wrap_width; a width of zero keeps one line.
+template <typename Line> void for_each_wrapped_line(const std::string& text, const float wrap_width, Line&& line) {
     const auto* begin = text.data();
     const auto* const end = begin + text.size();
     if (wrap_width <= 0.0F) {
-        draw_line(begin, end);
-        return lines;
+        line(begin, end);
+        return;
     }
     while (begin < end) {
         if (*begin == '\n') {
-            draw_line(begin, begin);
+            line(begin, begin);
             ++begin;
             continue;
         }
@@ -358,7 +353,7 @@ std::size_t draw_progress_text(ImDrawList* draw, const std::string& text, const 
             while (line_end < end && (static_cast<unsigned char>(*line_end) & 0xC0) == 0x80)
                 ++line_end;
         }
-        draw_line(begin, line_end > begin && line_end[-1] == '\r' ? line_end - 1 : line_end);
+        line(begin, line_end > begin && line_end[-1] == '\r' ? line_end - 1 : line_end);
         begin = line_end;
         while (begin < end && (*begin == ' ' || *begin == '\t'))
             ++begin;
@@ -366,7 +361,28 @@ std::size_t draw_progress_text(ImDrawList* draw, const std::string& text, const 
             ++begin;
     }
     if (text.empty() || text.back() == '\n')
-        draw_line(end, end);
+        line(end, end);
+}
+
+}  // namespace
+
+std::size_t progress_text_lines(const std::string& text, const float wrap_width) {
+    std::size_t lines = 0;
+    for_each_wrapped_line(text, wrap_width, [&](const char*, const char*) {
+        ++lines;
+    });
+    return lines;
+}
+
+std::size_t draw_progress_text(ImDrawList* draw, const std::string& text, const float center_x, const float y,
+                               const ImU32 color, const float wrap_width) {
+    std::size_t lines = 0;
+    for_each_wrapped_line(text, wrap_width, [&](const char* begin, const char* end) {
+        const auto size = ImGui::CalcTextSize(begin, end);
+        draw_subpixel_text(draw, {center_x - size.x * 0.5F, y + ImGui::GetFontSize() * static_cast<float>(lines)},
+                           color, begin, end);
+        ++lines;
+    });
     return lines;
 }
 

@@ -221,9 +221,10 @@ ylt::expected<Layout, Error> compile_layout_json(std::string_view json, const Co
     // A content panel; its rectangle comes from the boxes around it.
     const auto read_panel = [&](const Json::Value& value, const std::string& path, const bool overlay,
                                 LayoutGroup& group) -> std::optional<Error> {
-        if (auto failure = reject_unknown_fields(value, path,
-                                                 {"id", "stretch", "size", "margin", "padding", "nodes", "prefix",
-                                                  "collections", "leaderboard", "exclude", "spacing", "scroll"}))
+        if (auto failure =
+                reject_unknown_fields(value, path,
+                                      {"id", "stretch", "size", "margin", "padding", "nodes", "prefix", "collections",
+                                       "leaderboard", "exclude", "spacing", "scroll", "align"}))
             return failure;
         float margin = 0.0F;
         if (auto failure = read_fields(value, path, group, id_field, Field<G, float>{"padding", &G::padding}))
@@ -257,7 +258,7 @@ ylt::expected<Layout, Error> compile_layout_json(std::string_view json, const Co
                 return failure;
         }
         const bool items = group.source != LayoutSource::None && group.source != LayoutSource::Leaderboard;
-        for (const auto* field : {"exclude", "spacing"}) {
+        for (const auto* field : {"exclude", "spacing", "align"}) {
             if (value.isMember(field) && !items)
                 return Error{ErrorCode::Validation, std::string(field) + " requires nodes, prefix or collections",
                              child_path(path, field)};
@@ -274,6 +275,18 @@ ylt::expected<Layout, Error> compile_layout_json(std::string_view json, const Co
         }
         if (auto failure = reject_unless(value, path, "scroll", overlay))
             return failure;
+        if (value.isMember("align")) {
+            const auto& align = value["align"];
+            const auto setting = align.isString() ? align.asString() : std::string{};
+            if (setting == "top")
+                group.align = LayoutAlign::Top;
+            else if (setting == "center")
+                group.align = LayoutAlign::Center;
+            else if (setting == "bottom")
+                group.align = LayoutAlign::Bottom;
+            else
+                return Error{ErrorCode::Validation, "align must be top, center or bottom", child_path(path, "align")};
+        }
         return read_fields(value, path, group, Field<G, bool>{"scroll", &G::scroll});
     };
     // Boxes give fixed-size children their size and divide the rest by stretch; springs keep their share empty.

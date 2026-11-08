@@ -28,6 +28,19 @@ PanelRect panel_rect(const LayoutGroup& group, const float origin_x, const float
     return panel;
 }
 
+float aligned_offset(const LayoutAlign align, const float slack) {
+    const float room = std::max(0.0F, slack);
+    switch (align) {
+        case LayoutAlign::Top:
+            return 0.0F;
+        case LayoutAlign::Bottom:
+            return room;
+        case LayoutAlign::Center:
+            break;
+    }
+    return room * 0.5F;
+}
+
 ItemGrid item_grid(const LayoutGroup& group, const PanelRect& panel, const std::size_t count, const float scale) {
     const auto spacing = group_spacing(group, scale);
     // Each row holds a frame, the label gap and two text lines.
@@ -35,11 +48,20 @@ ItemGrid item_grid(const LayoutGroup& group, const PanelRect& panel, const std::
     const auto rows = std::max<std::size_t>(
         1, static_cast<std::size_t>((panel.content_height + spacing.row) / (row_height + spacing.row)));
     const auto columns = std::max<std::size_t>(1, (count + rows - 1) / rows);
+    const float cell_width =
+        (panel.content_width - (spacing.item * static_cast<float>(columns - 1))) / static_cast<float>(columns);
+    if (!group.align)
+        return {.rows = rows,
+                .cell_width = cell_width,
+                .cell_height =
+                    (panel.content_height - (spacing.row * static_cast<float>(rows - 1))) / static_cast<float>(rows)};
+    const auto used_rows = std::clamp<std::size_t>(count, 1, rows);
+    const float block =
+        (row_height * static_cast<float>(used_rows)) + (spacing.row * static_cast<float>(used_rows - 1));
     return {.rows = rows,
-            .cell_width =
-                (panel.content_width - (spacing.item * static_cast<float>(columns - 1))) / static_cast<float>(columns),
-            .cell_height =
-                (panel.content_height - (spacing.row * static_cast<float>(rows - 1))) / static_cast<float>(rows)};
+            .cell_width = cell_width,
+            .cell_height = row_height,
+            .top = aligned_offset(*group.align, panel.content_height - block)};
 }
 
 std::size_t collection_rows(const float content_height, const float item_height, const float stride) {
@@ -56,8 +78,8 @@ float body_height_for_content(const LayoutGroup& group, const float content_heig
     return (content_height - (height.pixels * scale)) / height.fraction;
 }
 
-float overlay_group_min_height(const LayoutGroup& group, const bool labelled, const bool stats, const float font_size,
-                               const float scale) {
+float overlay_group_min_height(const LayoutGroup& group, const std::size_t label_lines, const bool stats,
+                               const float font_size, const float scale) {
     const auto from_icon = [scale](const float original_size) {
         return ui::from_icon(original_size, scale);
     };
@@ -67,7 +89,7 @@ float overlay_group_min_height(const LayoutGroup& group, const bool labelled, co
     // Collections draw bare icons in one row without labels.
     return padding * 2.0F + (group.source == LayoutSource::Collections
                                  ? frame_size
-                                 : frame_size + label_gap + (labelled ? font_size : 0.0F) +
+                                 : frame_size + label_gap + (font_size * static_cast<float>(label_lines)) +
                                        (stats ? font_size + from_icon(1.0F) : 0.0F));
 }
 

@@ -133,6 +133,8 @@ void draw_subpixel_text(ImDrawList* draw, ImVec2 position, ImU32 color, const ch
 // Draw each wrapped line centered and return its line count for positioning the next row.
 std::size_t draw_progress_text(ImDrawList* draw, const std::string& text, float center_x, float y, ImU32 color,
                                float wrap_width = 0.0F);
+// The number of lines draw_progress_text draws for text at the current font.
+std::size_t progress_text_lines(const std::string& text, float wrap_width = 0.0F);
 // The first line crosses the icon and label; subsequent lines follow the centered label text.
 void draw_item_strikethrough(ImDrawList* draw, ImVec2 icon_min, float icon_size, ImVec2 label_min,
                              const std::string& label, ImU32 color, float thickness);

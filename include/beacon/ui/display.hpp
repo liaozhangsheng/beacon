@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -94,6 +95,9 @@ struct LayoutLength {
     bool operator==(const LayoutLength&) const = default;
 };
 
+// Where a group's items sit vertically when its panel is taller than they need.
+enum class LayoutAlign : std::uint8_t { Top, Center, Bottom };
+
 struct LayoutGroup {
     std::string id;
     // The panel's start and size along x and y, margins already taken off.
@@ -110,6 +114,8 @@ struct LayoutGroup {
     LayoutSpacing spacing{};
     // Overlay only: items roll through a carousel instead of sitting in a fixed strip.
     bool scroll = true;
+    // Unset, overlay rows and main collections center, and main item grids spread their rows over the panel.
+    std::optional<LayoutAlign> align;
     // Main window only: false inside a framed box, whose own frame-only group draws the panel instead.
     bool frame = true;
 

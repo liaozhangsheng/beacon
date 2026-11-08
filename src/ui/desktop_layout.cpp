@@ -21,13 +21,24 @@ void WindowRenderer::Impl::draw_overlay_layout(const PublishedState& state, cons
                                                const bool scroll_right) {
     const auto& groups = state.layout->overlay;
     float required_body_height = 1.0F;
+    // Labels wrap at the item's frame-and-icon width, so a row reserves room for its longest title in full.
+    const float label_wrap_width = ui::progress_frame_for_icon(icon_size()) + icon_size();
     for (std::size_t group_index = 0; group_index < groups.size(); ++group_index) {
-        const auto panel = panel_rect(groups[group_index], origin.x, origin.y, available.x, body_height, scale_);
-        const auto content_height =
-            overlay_group_min_height(groups[group_index], !view_.overlay_groups[group_index].empty(),
-                                     view_.overlay_progress[group_index], ImGui::GetFontSize(), scale_);
-        required_body_height =
-            std::max(required_body_height, body_height_for_content(groups[group_index], content_height, scale_));
+        const auto& group = groups[group_index];
+        const auto panel = panel_rect(group, origin.x, origin.y, available.x, body_height, scale_);
+        std::size_t label_lines = 0;
+        if (group.source != LayoutSource::Collections) {
+            for (const auto node : view_.overlay_groups[group_index]) {
+                for (const auto variant : item_variants(node, *state.compiled)) {
+                    if (variant < view_.labels.size())
+                        label_lines =
+                            std::max(label_lines, progress_text_lines(view_.labels[variant], label_wrap_width));
+                }
+            }
+        }
+        const auto content_height = overlay_group_min_height(group, label_lines, view_.overlay_progress[group_index],
+                                                             ImGui::GetFontSize(), scale_);
+        required_body_height = std::max(required_body_height, body_height_for_content(group, content_height, scale_));
         draw_overlay_group(state, group_index, panel, content_height, overlay_scroll_speed, scroll_right);
     }
     int window_height = 0;
@@ -69,7 +80,8 @@ void WindowRenderer::Impl::draw_overlay_group(const PublishedState& state, const
                                   : fixed_strip(place_items(nodes, placed, collection_group_starts), item_width,
                                                 row_gap, collection_group_gap);
     const auto& items = scrollable ? carousel->items : strip;
-    const float content_top = panel.content_y + std::max(0.0F, (panel.height - minimum_group_height) * 0.5F);
+    const float content_top = panel.content_y + aligned_offset(group.align.value_or(LayoutAlign::Center),
+                                                               panel.height - minimum_group_height);
     const auto clip = scoped_clip(draw, {panel.x, panel.y}, {panel.x + panel.width, panel.y + panel.height});
     ImDrawListSplitter splitter;
     const auto layers = scoped_layers(draw, splitter);
@@ -118,7 +130,7 @@ std::vector<ImVec2> WindowRenderer::Impl::draw_collections(const PublishedState&
     std::vector<ImVec2> positions(nodes.size());
     const auto& collections = view_.main_collections[group_index];
     // Columns fill top to bottom, so a grid's height follows from its member count alone. Every collection in the
-    // panel shares the tallest grid's offset, which centers them vertically while keeping their headers level.
+    // panel shares the tallest grid's offset, which aligns them (centered by default) while keeping headers level.
     const float parent_icon_size = icon_size();
     const float parent_cell_size = ui::progress_frame_for_icon(parent_icon_size);
     float grid_height = parent_cell_size + spacing.label + (ImGui::GetFontSize() * 2.0F);
@@ -132,7 +144,8 @@ std::vector<ImVec2> WindowRenderer::Impl::draw_collections(const PublishedState&
         grid_height =
             std::max(grid_height, (static_cast<float>(rows - 1) * collection_vertical_step) + collection_item_height);
     }
-    const float grid_top = panel.content_y + std::max(0.0F, (collection_height - grid_height) * 0.5F);
+    const float grid_top =
+        panel.content_y + aligned_offset(group.align.value_or(LayoutAlign::Center), collection_height - grid_height);
     const float shared_width =
         std::max(0.0F, panel.content_width -
                            (spacing.collection * static_cast<float>(std::max<std::size_t>(1, collections.size()) - 1)));
@@ -226,9 +239,10 @@ void WindowRenderer::Impl::draw_main_layout(const PublishedState& state, const I
         for (std::size_t slot = 0; slot < placed.size(); ++slot) {
             const auto column = static_cast<float>(slot / grid.rows);
             const auto row = static_cast<float>(slot % grid.rows);
-            const auto cell = collection_item ? collection_positions[placed[slot].index]
-                                              : ImVec2{panel.content_x + (column * (grid.cell_width + spacing.item)),
-                                                       panel.content_y + (row * (grid.cell_height + spacing.row))};
+            const auto cell = collection_item
+                                  ? collection_positions[placed[slot].index]
+                                  : ImVec2{panel.content_x + (column * (grid.cell_width + spacing.item)),
+                                           panel.content_y + grid.top + (row * (grid.cell_height + spacing.row))};
             draw_item(state, group, draw, placed[slot].node,
                       {.cell_x = cell.x,
                        .cell_y = cell.y,

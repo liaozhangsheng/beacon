@@ -26,18 +26,24 @@ struct PanelRect {
 PanelRect panel_rect(const LayoutGroup& group, float origin_x, float origin_y, float window_width, float body_height,
                      float scale = 1.0F);
 
-// The cells of a main window item panel, which fills as many rows as fit, column by column.
+// How far down content of the given height starts in a space that leaves slack, for the alignment.
+float aligned_offset(LayoutAlign align, float slack);
+
+// The cells of a main window item panel, which fills as many rows as fit, column by column. Unaligned, the rows
+// spread over the panel; aligned, they keep their natural height and the block sits where align says.
 struct ItemGrid {
     std::size_t rows = 1;
     float cell_width = 0.0F;
     float cell_height = 0.0F;
+    // The first row's offset below the content top.
+    float top = 0.0F;
 };
 ItemGrid item_grid(const LayoutGroup& group, const PanelRect& panel, std::size_t count, float scale = 1.0F);
 std::size_t collection_rows(float content_height, float item_height, float stride);
 // The body height at which a group's share fits the given content height.
 float body_height_for_content(const LayoutGroup& group, float content_height, float scale = 1.0F);
-// The height an overlay group needs for its frames, labels and statistic line before stretching.
-float overlay_group_min_height(const LayoutGroup& group, bool labelled, bool stats, float font_size,
+// The height an overlay group needs for its frames, its tallest wrapped label and statistic line before stretching.
+float overlay_group_min_height(const LayoutGroup& group, std::size_t label_lines, bool stats, float font_size,
                                float scale = 1.0F);
 
 struct CollectionGrid {
