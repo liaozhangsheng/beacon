@@ -60,6 +60,7 @@ void WindowRenderer::Impl::process_event(const SDL_Event& event) {
 
 void WindowRenderer::Impl::prepare(const std::shared_ptr<const PublishedState>& state,
                                    const std::shared_ptr<const PlayerCard>& player_card) {
+    context_.activate_renderer();
     prepare_profile(player_card);
     prepare_template(state);
     prepare_layout(state);
@@ -70,6 +71,7 @@ void WindowRenderer::Impl::render(const std::shared_ptr<const PublishedState>& s
                                   std::optional<Error>* settings_error,
                                   const std::vector<std::filesystem::path>* template_options, bool* apply_settings,
                                   Runtime* runtime, UpdateNotice* update_notice, LeaderboardLoaders* leaderboards) {
+    context_.activate_renderer();
     context_.make_current();
     if (settings != nullptr) {
         if (ui_language_ != settings->ui_language) {

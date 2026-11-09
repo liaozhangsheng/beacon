@@ -71,6 +71,9 @@ WindowContext::WindowContext(const std::string& title, const WindowSettings& set
     renderer_ = SDL_CreateRenderer(window_, nullptr);
     if (renderer_ == nullptr)
         return;
+    // An OpenGL renderer leaves its context current on creation.
+    if (SDL_GL_GetCurrentWindow() == window_)
+        gl_context_ = SDL_GL_GetCurrentContext();
     // Only the overlay paces the shared UI thread; the tracker has a timer.
     SDL_SetRenderVSync(renderer_, overlay ? 1 : 0);
     context_ = ImGui::CreateContext();
@@ -116,6 +119,15 @@ SDL_WindowID WindowContext::id() const {
 void WindowContext::make_current() const {
     if (context_ != nullptr)
         ImGui::SetCurrentContext(context_);
+}
+
+void WindowContext::activate_renderer() const {
+    // SDL's GL renderers switch contexts only when flushing, but some calls (SDL_SetTextureScaleMode, which the
+    // ImGui backend issues per draw command) touch GL immediately. Without this they would hit the other window's
+    // context and corrupt its cached state, which showed up as flicker on Linux.
+    if (gl_context_ != nullptr && SDL_GL_GetCurrentContext() != gl_context_ &&
+        !SDL_GL_MakeCurrent(window_, gl_context_))
+        SDL_Log("Could not activate GL context: %s", SDL_GetError());
 }
 
 void WindowContext::set_scale(const float scale) {

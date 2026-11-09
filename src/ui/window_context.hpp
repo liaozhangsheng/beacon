@@ -29,6 +29,8 @@ public:
     }
     void process_event(const SDL_Event& event);
     void make_current() const;
+    // Makes this window's GL context current, if its renderer uses one. Call before building a frame.
+    void activate_renderer() const;
     void set_scale(float scale);
     // Enforces a height floor without shrinking a taller window or limiting its width.
     void ensure_minimum_height(int height);
@@ -40,6 +42,7 @@ private:
 
     SDL_Window* window_ = nullptr;
     SDL_Renderer* renderer_ = nullptr;
+    SDL_GLContext gl_context_ = nullptr;
     ImGuiContext* context_ = nullptr;
     bool ready_ = false;
     bool platform_ready_ = false;
