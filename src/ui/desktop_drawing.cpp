@@ -106,12 +106,11 @@ void WindowRenderer::Impl::draw_ambient_light(ImDrawList* draw, const ImVec2 min
     frame_schedule_.every(soft_animation_ms);
 }
 
-void WindowRenderer::Impl::render_progress_view(const std::shared_ptr<const PublishedState>& state,
-                                                const std::optional<Error>& runtime_error, const float scroll_speed,
-                                                const bool scroll_right) {
+void WindowRenderer::Impl::update_status_message(const PublishedState* state,
+                                                 const std::optional<Error>& runtime_error) {
     status_.message.clear();
     status_.color = warning_text_color;
-    if (!overlay_ && SDL_GetTicks() < status_.feedback_until) {
+    if (SDL_GetTicks() < status_.feedback_until) {
         status_.message = status_.feedback;
         status_.color = status_.feedback_color;
     } else if (runtime_error) {
@@ -120,40 +119,40 @@ void WindowRenderer::Impl::render_progress_view(const std::shared_ptr<const Publ
         status_.message = update_notice_->error;
         status_.color = error_text_color;
     }
-    if (!state) {
-        const auto origin = ImGui::GetCursorScreenPos();
-        const auto available = ImGui::GetContentRegionAvail();
-        if (!overlay_) {
-            if (status_.message.empty())
-                status_.message = text("未找到 Minecraft 存档", "No Minecraft save found");
-            draw_main_footer(nullptr, origin, available);
-        } else {
-            draw_status_footer(origin, available);
-        }
+    if (!status_.message.empty())
         return;
-    }
-    if (status_.message.empty() && state->error && state->error->code != ErrorCode::NoSave) {
+    if (!state) {
+        status_.message = text("未找到 Minecraft 存档", "No Minecraft save found");
+    } else if (state->error && state->error->code != ErrorCode::NoSave) {
         status_.message = state->error->message + ": " + state->error->context;
         status_.color = error_text_color;
-    }
-    if (status_.message.empty() && state->data_status == DataStatus::Stale) {
+    } else if (state->data_status == DataStatus::Stale) {
         status_.message =
             text("进度已过期，正在显示上次成功读取的数据", "Progress is stale; showing the last successful read");
-    } else if (status_.message.empty() && !state->has_data() && !overlay_) {
+    } else if (!state->has_data()) {
         status_.message = text("未找到 Minecraft 存档", "No Minecraft save found");
-    }
-    if (status_.message.empty() && !state->warnings.empty()) {
+    } else if (!state->warnings.empty()) {
         const auto& warning = state->warnings.front();
         status_.message = std::string(text("存档扫描警告 (", "Save scan warnings (")) +
                           std::to_string(state->warnings.size()) + "): " + warning.message + ": " + warning.context;
+    }
+}
+
+void WindowRenderer::Impl::render_progress_view(const std::shared_ptr<const PublishedState>& state,
+                                                const std::optional<Error>& runtime_error, const float scroll_speed,
+                                                const bool scroll_right) {
+    // Only the main window shows status messages; the overlay stays clean for streaming.
+    if (!overlay_)
+        update_status_message(state.get(), runtime_error);
+    if (!state) {
+        if (!overlay_)
+            draw_main_footer(nullptr, ImGui::GetCursorScreenPos(), ImGui::GetContentRegionAvail());
+        return;
     }
     update_progress_glows(*state);
     if (overlay_) {
         if (completion_view_) {
             draw_completion_view(*state);
-            const auto origin = ImGui::GetCursorScreenPos();
-            const auto available = ImGui::GetContentRegionAvail();
-            draw_status_footer(origin, available);
             return;
         }
         draw_header(*state, make_header(*state));

@@ -44,7 +44,6 @@ void WindowRenderer::Impl::draw_overlay_layout(const PublishedState& state, cons
     int window_height = 0;
     SDL_GetWindowSize(context_.window(), nullptr, &window_height);
     overlay_min_height_ = std::max(0.0F, static_cast<float>(window_height) - body_height) + required_body_height;
-    draw_status_footer(origin, available);
 }
 
 void WindowRenderer::Impl::draw_overlay_group(const PublishedState& state, const std::size_t group_index,
@@ -278,8 +277,7 @@ void WindowRenderer::Impl::draw_responsive_layout(const PublishedState& state, c
                                                   const bool scroll_right) {
     const auto origin = ImGui::GetCursorScreenPos();
     const auto available = ImGui::GetContentRegionAvail();
-    const float status_height = status_footer_height();
-    const float footer_height = status_height + (overlay_ ? 0.0F : from_icon(40.0F));
+    const float footer_height = overlay_ ? 0.0F : from_icon(40.0F);
     const float body_height = std::max(1.0F, available.y - footer_height);
     if (overlay_) {
         draw_overlay_layout(state, origin, available, body_height, overlay_scroll_speed, scroll_right);

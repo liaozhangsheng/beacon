@@ -127,6 +127,7 @@ private:
     // A slow, faint wash of shifting color over the main window, behind every panel.
     void draw_ambient_light(ImDrawList* draw, ImVec2 min, ImVec2 max) const;
 
+    void update_status_message(const PublishedState* state, const std::optional<Error>& runtime_error);
     void render_progress_view(const std::shared_ptr<const PublishedState>& state,
                               const std::optional<Error>& runtime_error, float scroll_speed, bool scroll_right);
     void set_completion_view(bool complete);
@@ -171,8 +172,6 @@ private:
     // One row: buttons, then the status message, then the right-aligned header.
     void draw_main_footer(const PublishedState* state, ImVec2 origin, ImVec2 available);
     void restart_run();
-    [[nodiscard]] float status_footer_height() const;
-    void draw_status_footer(ImVec2 origin, ImVec2 available) const;
     [[nodiscard]] float update_button_width() const;
 
     struct AtlasRegion {

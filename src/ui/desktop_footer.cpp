@@ -33,11 +33,6 @@ void WindowRenderer::Impl::restart_run() {
     interactive_until_ = std::max(interactive_until_, status_.feedback_until + 50);
 }
 
-float WindowRenderer::Impl::status_footer_height() const {
-    // The main window shows messages inside its control row.
-    return overlay_ && !status_.message.empty() ? ImGui::GetTextLineHeight() + from_icon(8.0F) : 0.0F;
-}
-
 float WindowRenderer::Impl::draw_main_controls(const ImVec2 origin, const float center_y) {
     const float button_height = ImGui::GetFrameHeight() + from_icon(8.0F);
     ImGui::SetCursorScreenPos({origin.x + from_icon(8.0F), center_y - (button_height * 0.5F)});
@@ -105,19 +100,6 @@ void WindowRenderer::Impl::draw_main_footer(const PublishedState* state, const I
         draw_header(*state, *fitted, right);
         ImGui::PopClipRect();
     }
-}
-
-void WindowRenderer::Impl::draw_status_footer(const ImVec2 origin, const ImVec2 available) const {
-    if (status_.message.empty()) {
-        return;
-    }
-    const float height = status_footer_height();
-    const float footer_top = origin.y + available.y - height;
-    auto* const draw = ImGui::GetWindowDrawList();
-    draw->PushClipRect({origin.x, footer_top}, {origin.x + available.x, footer_top + height}, true);
-    draw_shadowed_text(draw, {origin.x + from_icon(8.0F), footer_top + ((height - ImGui::GetTextLineHeight()) * 0.5F)},
-                       ImGui::GetColorU32(status_.color), status_.message.c_str());
-    draw->PopClipRect();
 }
 
 float WindowRenderer::Impl::update_button_width() const {
