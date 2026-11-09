@@ -87,7 +87,7 @@ jobs:
           sdl_source="$RUNNER_TEMP/SDL"
           sdl_build="$RUNNER_TEMP/SDL-build"
           sdl_prefix="$RUNNER_TEMP/SDL-prefix"
-          git clone --depth 1 --branch release-3.2.6 https://github.com/libsdl-org/SDL.git "$sdl_source"
+          git clone --depth 1 --branch release-3.4.20 https://github.com/libsdl-org/SDL.git "$sdl_source"
           cmake -S "$sdl_source" -B "$sdl_build" -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_LIBDIR=lib \

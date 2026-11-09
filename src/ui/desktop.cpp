@@ -39,6 +39,10 @@ namespace {
 class SdlSession {
 public:
     SdlSession() {
+        // Lets X11 window managers wait for a frame at the new size during a resize instead of stretching the old
+        // one. Windows must present promptly after resizing, or the resize stalls; process_event redraws them at
+        // once. Literal name: the macro only exists from SDL 3.4.10.
+        SDL_SetHint("SDL_VIDEO_X11_ENABLE_XSYNC_EXT", "1");
         const bool already_initialized = SDL_WasInit(SDL_INIT_VIDEO) != 0;
         ready_ = already_initialized || SDL_Init(SDL_INIT_VIDEO);
         owns_sdl_ = ready_ && !already_initialized;
@@ -311,7 +315,12 @@ public:
         if (event.type == SDL_EVENT_WINDOW_RESIZED)
             remember_window_size(event.window.windowID, frame_started);
         if (auto* window = SDL_GetWindowFromEvent(&event)) {
-            const auto deadline = frame_started + std::chrono::milliseconds(33);
+            // X11 compositors show the last frame until a new one arrives, stretched or cropped to the new size, so
+            // redraw resized and exposed windows at once.
+            const bool repaint = event.type == SDL_EVENT_WINDOW_RESIZED ||
+                                 event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED ||
+                                 event.type == SDL_EVENT_WINDOW_EXPOSED;
+            const auto deadline = frame_started + std::chrono::milliseconds(repaint ? 0 : 33);
             if (SDL_GetWindowID(window) == tracker_.id())
                 next_tracker_frame_ = std::min(next_tracker_frame_, deadline);
             if (SDL_GetWindowID(window) == overlay_.id())
