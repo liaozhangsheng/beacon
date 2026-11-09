@@ -495,6 +495,7 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
 
 悬浮窗只有一行。分组默认按设置中的方向和速度滚动轮播；写 `"scroll": false` 时项目从左到右固定排成一行，适合统计等不想跟着滚走的内容。
 `scroll` 只决定动不动；完成后是否显示由规则的 `view.state_style.overlay.done.visibility` 决定。
+滚动的分组每轮回到第一项时多留一段 `spacing.loop` 的空白，用来看出一轮在哪里结束，见“间距”。
 标题按图标宽度换行并完整显示，分组按其中最长标题的行数留高，窗口最小高度也随之撑开。行比内容高时多出的空间按 `align` 分配，见“对齐”。
 悬浮窗默认在完成动画播完后移除完成的项，可用 `view.state_style.overlay.done.animation` 选择动画。需要常驻的统计在自己的 `view` 中写 `"state_style": {"overlay": {"done": {"visibility": "visible"}}}`，布局只负责固定排列：
 
@@ -512,6 +513,7 @@ Beacon 只读取保存下来的进度和统计，不运行数据包。做不到�
 | `row` | 行距 | 0 | 6 | 不支持 |
 | `label` | 图标到下方文字的距离 | 4 | 3 | 2 |
 | `collection` | 相邻收集组的距离 | 不支持 | 0 | 48（仅 `collections`） |
+| `loop` | 滚动一轮回到第一项时的空白 | 不支持 | 不支持 | `collections` 为 96，其余 48；仅 `"scroll": true` 的分组。`collections` 在接缝处取它和 `collection` 中较大的一个 |
 
 ```json
 {"id": "Route", "margin": 4, "padding": 8, "collections": ["goal/route"], "spacing": {"item": 24, "row": 10}}
@@ -766,6 +768,7 @@ print("\n".join(problems) if problems else "未发现问题")
 | 顶部总数不对 | 所有 `goal/` 开头的规则都会计数，包括没显示的和组合规则的子项 |
 | 不切换阶段或不轮换 | `view.show` 是否写成了 `self`，轮换是否写了 `"show": "cycle"` |
 | 统计在悬浮窗里跟着滚走 | 统计所在分组是否写了 `"scroll": false` |
+| `loop spacing requires scroll` | 写了 `"scroll": false` 的分组不会循环，删掉它的 `spacing.loop` |
 | 悬浮窗里的统计达到目标后消失 | 悬浮窗默认移除完成的项；给该规则的 `view` 写 `"state_style": {"overlay": {"done": {"visibility": "visible"}}}` |
 | 紫黑棋盘格图标 | 文件是否存在，扩展名和大小写是否完全一致，图片能否打开 |
 | 没有附魔光效 | 实际显示的那一项是否写了 `"enchanted": true`，图标是否能正常显示 |

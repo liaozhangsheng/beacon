@@ -1001,12 +1001,21 @@ TEST_CASE("layout spacing overrides window defaults and is validated per group k
     const auto& overlay_group = partial->overlay.front();
     // Fields left out keep the defaults for the group's window and source.
     CHECK(overlay_group.spacing ==
-          beacon::LayoutSpacing{.item = 0.0F, .row = 0.0F, .label = 7.0F, .collection = 48.0F});
+          beacon::LayoutSpacing{.item = 0.0F, .row = 0.0F, .label = 7.0F, .collection = 48.0F, .loop = 48.0F});
+    CHECK(beacon::default_spacing(true, beacon::LayoutSource::Collections).loop == 96.0F);
+    const auto looped = parse(R"({"loop":12})", true, "collections");
+    REQUIRE(looped);
+    CHECK(looped->overlay.front().spacing.loop == 12.0F);
+    CHECK(beacon::group_spacing(looped->overlay.front(), 2).loop == 24.0F);
     CHECK(beacon::group_spacing(overlay_group).label == 7.0F);
     REQUIRE(parse("{}", true));
 
     CHECK_FALSE(parse(R"({"row":4})", true));
     CHECK_FALSE(parse(R"({"collection":4})", false));
+    CHECK_FALSE(parse(R"({"loop":4})", false));
+    CHECK_FALSE(parse(R"({"loop":-1})", true));
+    CHECK_FALSE(beacon::compile_layout_json(R"({"overlay":{"nodes":["hidden"],"scroll":false,"spacing":{"loop":4}}})",
+                                            *compiled));
     CHECK_FALSE(parse(R"({"item":-1})", false));
 }
 
@@ -1074,7 +1083,7 @@ TEST_CASE("carousel keeps active items moving and hides completed slots") {
         [](const auto) {
             return true;
         },
-        100.0F, 20.0F, 5.0F, {}, 10.0F, 10.0F, 0.1F);
+        100.0F, 20.0F, {}, {.item = 5.0F, .group = 10.0F}, 10.0F, 0.1F);
     REQUIRE(carousel.items.size() >= 2);
     REQUIRE(carousel.items.front().node == 1);
     beacon::update_carousel(
@@ -1082,7 +1091,7 @@ TEST_CASE("carousel keeps active items moving and hides completed slots") {
         [](const auto node) {
             return node == 1;
         },
-        100.0F, 20.0F, 5.0F, {}, 10.0F, 10.0F, 0.1F);
+        100.0F, 20.0F, {}, {.item = 5.0F, .group = 10.0F}, 10.0F, 0.1F);
     REQUIRE(std::ranges::none_of(carousel.items, [](const auto item) {
         return item.node == 2 && item.visible;
     }));
@@ -1122,7 +1131,7 @@ TEST_CASE("carousel keeps the gap before a collection whose first member left") 
     const auto placed = [](const auto node) {
         return node != 2;
     };
-    beacon::update_carousel(carousel, nodes, placed, 200, 20, 5, starts, 10, 0, 0);
+    beacon::update_carousel(carousel, nodes, placed, 200, 20, starts, {.item = 5, .group = 10}, 0, 0);
     REQUIRE(carousel.items.size() >= 4);
     CHECK(carousel.items[0].x == 0);
     CHECK(carousel.items[1].x == 25);
@@ -1131,6 +1140,37 @@ TEST_CASE("carousel keeps the gap before a collection whose first member left") 
     // Wrapping back to the first collection starts a group again.
     CHECK(carousel.items[3].node == 0);
     CHECK(carousel.items[3].x == 95);
+}
+
+TEST_CASE("carousel marks each wrap back to the first item with the loop gap") {
+    const std::vector<std::uint32_t> nodes{0, 1};
+    const auto placed = [](const auto) {
+        return true;
+    };
+    for (const bool scroll_right : {false, true}) {
+        CAPTURE(scroll_right);
+        beacon::CarouselState carousel;
+        beacon::update_carousel(carousel, nodes, placed, 200, 20, {}, {.item = 5, .loop = 30}, 0, 0, scroll_right);
+        REQUIRE(carousel.items.size() >= 5);
+        const float direction = scroll_right ? -1 : 1;
+        const float first = carousel.items[0].x;
+        CHECK(carousel.items[1].x == first + (direction * 25));
+        CHECK(carousel.items[2].node == 0);
+        CHECK(carousel.items[2].x == first + (direction * 80));
+        CHECK(carousel.items[3].x == first + (direction * 105));
+        CHECK(carousel.items[4].x == first + (direction * 160));
+    }
+
+    // Collections wrap with the wider of the loop and collection gaps.
+    const std::vector<std::uint32_t> starts{0, 1};
+    beacon::CarouselState narrow;
+    beacon::update_carousel(narrow, nodes, placed, 200, 20, starts, {.item = 5, .group = 10, .loop = 4}, 0, 0);
+    CHECK(narrow.items[1].x == 35);
+    CHECK(narrow.items[2].x == 70);
+    beacon::CarouselState wide;
+    beacon::update_carousel(wide, nodes, placed, 200, 20, starts, {.item = 5, .group = 10, .loop = 40}, 0, 0);
+    CHECK(wide.items[1].x == 35);
+    CHECK(wide.items[2].x == 100);
 }
 
 TEST_CASE("carousel keeps refill order when a completed item shifts source indices") {
@@ -1142,9 +1182,9 @@ TEST_CASE("carousel keeps refill order when a completed item shifts source indic
         const auto pending = [&](const auto node) {
             return !results[node].done;
         };
-        beacon::update_carousel(carousel, nodes, pending, 100, 20, 5, {}, 0, 80, 0.1F, scroll_right);
+        beacon::update_carousel(carousel, nodes, pending, 100, 20, {}, {.item = 5}, 80, 0.1F, scroll_right);
         results[0].done = true;
-        beacon::update_carousel(carousel, nodes, pending, 100, 20, 5, {}, 0, 80, 0.1F, scroll_right);
+        beacon::update_carousel(carousel, nodes, pending, 100, 20, {}, {.item = 5}, 80, 0.1F, scroll_right);
         REQUIRE(carousel.items.size() == expected.size() + 1);
         CHECK_FALSE(carousel.items.front().visible);
         for (std::size_t index = 0; index < expected.size(); ++index)
@@ -1161,24 +1201,24 @@ TEST_CASE("carousel preserves completed trailing slots until they scroll offscre
         const auto pending = [&](const auto node) {
             return !results[node].done;
         };
-        beacon::update_carousel(carousel, nodes, pending, 100, 20, 5, {}, 0, 80, 0, scroll_right);
+        beacon::update_carousel(carousel, nodes, pending, 100, 20, {}, {.item = 5}, 80, 0, scroll_right);
         const auto initial = carousel.items;
         REQUIRE(initial.size() == 4);
         results[2].done = results[3].done = true;
-        beacon::update_carousel(carousel, nodes, pending, 100, 20, 5, {}, 0, 80, 0, scroll_right);
+        beacon::update_carousel(carousel, nodes, pending, 100, 20, {}, {.item = 5}, 80, 0, scroll_right);
         REQUIRE(carousel.items.size() == initial.size());
         for (std::size_t index = 0; index < initial.size(); ++index) {
             CHECK(carousel.items[index].node == initial[index].node);
             CHECK(carousel.items[index].x == initial[index].x);
             CHECK(carousel.items[index].visible == (index < 2));
         }
-        beacon::update_carousel(carousel, nodes, pending, 100, 20, 5, {}, 0, 80, 0.1F, scroll_right);
+        beacon::update_carousel(carousel, nodes, pending, 100, 20, {}, {.item = 5}, 80, 0.1F, scroll_right);
         REQUIRE(carousel.items.size() == initial.size() + 1);
         CHECK(carousel.items.back().node == 4);
         const float movement = scroll_right ? 8 : -8;
         CHECK(carousel.items.back().x == Catch::Approx((scroll_right ? -20 : 100) + movement));
         for (int frame = 0; frame < 20; ++frame)
-            beacon::update_carousel(carousel, nodes, pending, 100, 20, 5, {}, 0, 80, 0.1F, scroll_right);
+            beacon::update_carousel(carousel, nodes, pending, 100, 20, {}, {.item = 5}, 80, 0.1F, scroll_right);
         CHECK(std::ranges::none_of(carousel.items, [](const auto& item) {
             return item.node == 2 || item.node == 3;
         }));
@@ -1203,15 +1243,15 @@ TEST_CASE("carousel directions stay mirrored through group gaps completion and r
         if (frame == 60)
             for (auto& result : results)
                 result.done = false;
-        beacon::update_carousel(left, nodes, pending, 100, 20, 5, group_starts, 10, 80, 0.1F);
-        beacon::update_carousel(right, nodes, pending, 100, 20, 5, group_starts, 10, 80, 0.1F, true);
+        beacon::update_carousel(left, nodes, pending, 100, 20, group_starts, {.item = 5, .group = 10}, 80, 0.1F);
+        beacon::update_carousel(right, nodes, pending, 100, 20, group_starts, {.item = 5, .group = 10}, 80, 0.1F, true);
         REQUIRE(left.items.size() == right.items.size());
         for (std::size_t index = 0; index < left.items.size(); ++index) {
             REQUIRE(left.items[index].node == right.items[index].node);
             REQUIRE(right.items[index].x == Catch::Approx(80.0F - left.items[index].x));
         }
     }
-    beacon::update_carousel(left, nodes, pending, 100, 20, 5, group_starts, 10, 80, 0.1F, true);
+    beacon::update_carousel(left, nodes, pending, 100, 20, group_starts, {.item = 5, .group = 10}, 80, 0.1F, true);
     REQUIRE(left.items.front().x == 80);
     REQUIRE(left.items.front().node == 0);
 }

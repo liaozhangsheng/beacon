@@ -5,8 +5,8 @@
 namespace beacon {
 
 void advance_carousel(CarouselState& carousel, const std::span<const std::uint32_t> nodes, const float content_width,
-                      const float cell_width, const float gap, const float group_gap, const float speed,
-                      const float delta_seconds, const bool scroll_right) {
+                      const float cell_width, const CarouselGaps gaps, const float speed, const float delta_seconds,
+                      const bool scroll_right) {
     if (carousel.initialized && carousel.direction_right != scroll_right) {
         carousel.items.clear();
         carousel.next = 0;
@@ -32,7 +32,7 @@ void advance_carousel(CarouselState& carousel, const std::span<const std::uint32
         return scroll_right ? item.x > content_width : item.x + cell_width < 0.0F;
     });
     const float direction = scroll_right ? -1.0F : 1.0F;
-    const float stride = direction * (cell_width + gap);
+    const float stride = direction * (cell_width + gaps.item);
     float next_x = scroll_right ? content_width - cell_width : 0.0F;
     if (carousel.initialized)
         next_x = scroll_right ? -cell_width : content_width;
@@ -41,8 +41,10 @@ void advance_carousel(CarouselState& carousel, const std::span<const std::uint32
     while (!carousel.source.empty() &&
            (carousel.items.empty() || (scroll_right ? next_x + cell_width > 0.0F : next_x < content_width))) {
         const auto& item = carousel.source[carousel.next];
-        if (!carousel.items.empty() && item.group_start)
-            next_x += direction * group_gap;
+        if (!carousel.items.empty()) {
+            const float group_gap = item.group_start ? gaps.group : 0.0F;
+            next_x += direction * (carousel.next == 0 ? std::max(gaps.loop, group_gap) : group_gap);
+        }
         carousel.items.push_back({item.node, next_x});
         next_x += stride;
         carousel.next = (carousel.next + 1) % carousel.source.size();

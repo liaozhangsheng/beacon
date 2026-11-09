@@ -53,18 +53,26 @@ struct CarouselState {
     bool direction_right = false;
 };
 
+struct CarouselGaps {
+    // Between neighbouring items.
+    float item = 0.0F;
+    // Added before an item that starts a group.
+    float group = 0.0F;
+    // Added where the row wraps back to its first item, in place of a smaller group gap.
+    float loop = 0.0F;
+};
+
 // Moves the carousel on, once carousel.source holds this frame's placed items.
 void advance_carousel(CarouselState& carousel, std::span<const std::uint32_t> nodes, float content_width,
-                      float cell_width, float gap, float group_gap, float speed, float delta_seconds,
-                      bool scroll_right);
+                      float cell_width, CarouselGaps gaps, float speed, float delta_seconds, bool scroll_right);
 
 template <std::predicate<std::uint32_t> Placed>
 void update_carousel(CarouselState& carousel, const std::span<const std::uint32_t> nodes, Placed&& placed,
-                     const float content_width, const float cell_width, const float gap,
-                     const std::span<const std::uint32_t> group_starts, const float group_gap, const float speed,
+                     const float content_width, const float cell_width,
+                     const std::span<const std::uint32_t> group_starts, const CarouselGaps gaps, const float speed,
                      const float delta_seconds, const bool scroll_right = false) {
     carousel.source = place_items(nodes, placed, group_starts);
-    advance_carousel(carousel, nodes, content_width, cell_width, gap, group_gap, speed, delta_seconds, scroll_right);
+    advance_carousel(carousel, nodes, content_width, cell_width, gaps, speed, delta_seconds, scroll_right);
 }
 
 // A fixed row packs the placed items from the left.

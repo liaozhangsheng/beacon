@@ -55,6 +55,8 @@ struct LayoutSpacing {
     float label = 0.0F;
     // Gap between the collections of a collections group.
     float collection = 0.0F;
+    // Gap where a scrolling group wraps back to its first item; overlay only, since only it scrolls.
+    float loop = 0.0F;
 
     bool operator==(const LayoutSpacing&) const = default;
 };

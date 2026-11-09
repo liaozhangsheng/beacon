@@ -11,7 +11,8 @@ LayoutSpacing group_spacing(const LayoutGroup& group, const float scale) {
     return {.item = ui::from_icon(spacing.item, scale),
             .row = ui::from_icon(spacing.row, scale),
             .label = ui::from_icon(spacing.label, scale),
-            .collection = ui::from_icon(spacing.collection, scale)};
+            .collection = ui::from_icon(spacing.collection, scale),
+            .loop = ui::from_icon(spacing.loop, scale)};
 }
 
 PanelRect panel_rect(const LayoutGroup& group, const float origin_x, const float origin_y, const float window_width,

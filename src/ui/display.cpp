@@ -95,16 +95,19 @@ std::optional<Error> read_spacing(const Json::Value& value, LayoutSpacing& spaci
                                   const LayoutSource source, const std::string& path) {
     if (!value.isObject())
         return Error{ErrorCode::Validation, "spacing must be an object", path};
-    // Rows only exist in the main window, and collection gaps only between collections.
-    if (auto failure = reject_unknown_fields(value, path, {"item", "row", "label", "collection"}))
+    // Rows only exist in the main window, loops only in the overlay, and collection gaps only between collections.
+    if (auto failure = reject_unknown_fields(value, path, {"item", "row", "label", "collection", "loop"}))
         return failure;
     if (auto failure = reject_unless(value, path, "row", !overlay))
+        return failure;
+    if (auto failure = reject_unless(value, path, "loop", overlay))
         return failure;
     if (auto failure = reject_unless(value, path, "collection", source == LayoutSource::Collections))
         return failure;
     using S = LayoutSpacing;
     return read_fields(value, path, spacing, Field<S, float>{"item", &S::item}, Field<S, float>{"row", &S::row},
-                       Field<S, float>{"label", &S::label}, Field<S, float>{"collection", &S::collection});
+                       Field<S, float>{"label", &S::label}, Field<S, float>{"collection", &S::collection},
+                       Field<S, float>{"loop", &S::loop});
 }
 
 ylt::expected<std::unordered_map<std::string, std::string>, Error> localization_map(std::string_view json,
@@ -161,10 +164,14 @@ ylt::expected<Localization, Error> compile_localization_json(std::string_view de
 
 LayoutSpacing default_spacing(const bool overlay, const LayoutSource source) {
     const bool collections = source == LayoutSource::Collections;
-    // Overlay collection icons sit one icon apart and their collections 48 apart; main collection entries
-    // use 16-wide columns and a 32 row step for their 26-tall frames; labels hug their frames.
+    // Overlay collection icons sit one icon apart and their collections 48 apart, with twice that where the
+    // row wraps so the seam stands out; main collection entries use 16-wide columns and a 32 row step for
+    // their 26-tall frames; labels hug their frames.
     if (overlay)
-        return {.item = collections ? ui::source_icon_size : 0.0F, .label = 2.0F, .collection = 48.0F};
+        return {.item = collections ? ui::source_icon_size : 0.0F,
+                .label = 2.0F,
+                .collection = 48.0F,
+                .loop = collections ? 96.0F : 48.0F};
     return collections ? LayoutSpacing{.item = 16.0F, .row = 6.0F, .label = 3.0F} : LayoutSpacing{.label = 4.0F};
 }
 
@@ -287,7 +294,12 @@ ylt::expected<Layout, Error> compile_layout_json(std::string_view json, const Co
             else
                 return Error{ErrorCode::Validation, "align must be top, center or bottom", child_path(path, "align")};
         }
-        return read_fields(value, path, group, Field<G, bool>{"scroll", &G::scroll});
+        if (auto failure = read_fields(value, path, group, Field<G, bool>{"scroll", &G::scroll}))
+            return failure;
+        if (!group.scroll && value.isMember("spacing") && value["spacing"].isMember("loop"))
+            return Error{ErrorCode::Validation, "loop spacing requires scroll",
+                         child_path(child_path(path, "spacing"), "loop")};
+        return std::nullopt;
     };
     // Boxes give fixed-size children their size and divide the rest by stretch; springs keep their share empty.
     // Only panels, and the empty panel behind a framed box, reach the renderer.

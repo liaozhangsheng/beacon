@@ -68,9 +68,10 @@ void WindowRenderer::Impl::draw_overlay_group(const PublishedState& state, const
     CarouselState* carousel = nullptr;
     if (scrollable) {
         carousel = &overlay_carousels_[group_index];
-        update_carousel(*carousel, nodes, placed, panel.content_width, item_width, row_gap, collection_group_starts,
-                        collection_group_gap, overlay_scroll_speed * (compact_collections ? 1.5F : 1.0F),
-                        ImGui::GetIO().DeltaTime, scroll_right);
+        update_carousel(*carousel, nodes, placed, panel.content_width, item_width, collection_group_starts,
+                        {.item = row_gap, .group = collection_group_gap, .loop = spacing.loop},
+                        overlay_scroll_speed * (compact_collections ? 1.5F : 1.0F), ImGui::GetIO().DeltaTime,
+                        scroll_right);
     }
     if (carousel && !carousel->items.empty() && overlay_scroll_speed != 0.0F) {
         frame_schedule_.every(animation_frame_ms());
