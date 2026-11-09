@@ -75,7 +75,8 @@ WindowContext::WindowContext(const std::string& title, const WindowSettings& set
     if (SDL_GL_GetCurrentWindow() == window_)
         gl_context_ = SDL_GL_GetCurrentContext();
     // Only the overlay paces the shared UI thread; the tracker has a timer.
-    SDL_SetRenderVSync(renderer_, overlay ? 1 : 0);
+    vsync_ = overlay;
+    SDL_SetRenderVSync(renderer_, vsync_ ? 1 : 0);
     context_ = ImGui::CreateContext();
     ImGui::SetCurrentContext(context_);
     ImGui::GetIO().IniFilename = nullptr;
@@ -121,7 +122,11 @@ void WindowContext::make_current() const {
         ImGui::SetCurrentContext(context_);
 }
 
-void WindowContext::activate_renderer() const {
+void WindowContext::activate_renderer() {
+    if (resize_vsync_until_ != 0 && SDL_GetTicks() >= resize_vsync_until_) {
+        resize_vsync_until_ = 0;
+        SDL_SetRenderVSync(renderer_, 1);
+    }
     // SDL's GL renderers switch contexts only when flushing, but some calls (SDL_SetTextureScaleMode, which the
     // ImGui backend issues per draw command) touch GL immediately. Without this they would hit the other window's
     // context and corrupt its cached state, which showed up as flicker on Linux.
@@ -163,6 +168,16 @@ void WindowContext::process_event(const SDL_Event& event) {
             SDL_CaptureMouse(false);
         }
     }
+#if defined(__linux__)
+    if (vsync_ && event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED && event.window.windowID == id()) {
+        // After a vsync'd present, the next frame's first GL call waits for a free buffer. A resize during that
+        // wait gives the frame a buffer of the new size while it lays out and sets its viewport for the old one,
+        // so the content jumps. Present without waiting until resizing stops.
+        if (resize_vsync_until_ == 0)
+            SDL_SetRenderVSync(renderer_, 0);
+        resize_vsync_until_ = SDL_GetTicks() + 250;
+    }
+#endif
     if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.windowID == id()) {
         mouse_buttons_ |= SDL_BUTTON_MASK(event.button.button);
         SDL_CaptureMouse(true);

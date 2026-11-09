@@ -30,7 +30,7 @@ public:
     void process_event(const SDL_Event& event);
     void make_current() const;
     // Makes this window's GL context current, if its renderer uses one. Call before building a frame.
-    void activate_renderer() const;
+    void activate_renderer();
     void set_scale(float scale);
     // Enforces a height floor without shrinking a taller window or limiting its width.
     void ensure_minimum_height(int height);
@@ -47,6 +47,10 @@ private:
     bool ready_ = false;
     bool platform_ready_ = false;
     bool renderer_ready_ = false;
+
+    bool vsync_ = false;
+    // While resizing, vsync stays off until this tick; zero when not resizing.
+    Uint64 resize_vsync_until_ = 0;
 
     bool dragging_ = false;
     SDL_MouseButtonFlags mouse_buttons_ = 0;
