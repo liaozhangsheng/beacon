@@ -56,6 +56,7 @@ private:
         std::uint64_t scan = 0;
     };
     ylt::expected<VersionProfile, Error> profile(const std::filesystem::path& stats, SaveLayout layout);
+    ylt::expected<VersionProfile, Error> profile_once(const std::filesystem::path& stats, SaveLayout layout);
     std::unordered_map<std::filesystem::path, Entry> profiles_;
     std::uint64_t scan_ = 0;
 };
@@ -67,6 +68,8 @@ public:
     void clear();
 
 private:
+    ylt::expected<std::optional<ModernStats>, Error> read_once(const MinecraftPaths& paths);
+
     MinecraftPaths paths_;
     std::optional<std::string> stats_data_;
     ModernStats stats_;

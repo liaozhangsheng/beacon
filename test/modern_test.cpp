@@ -15,6 +15,7 @@
 #include <fstream>
 #include <iterator>
 #include <string>
+#include <thread>
 
 namespace {
 
@@ -641,7 +642,54 @@ TEST_CASE("active source skips a newer world whose player data is unusable") {
     REQUIRE(source->world.path == old_world);
 }
 
-TEST_CASE("active source falls back when the current stats become invalid") {
+TEST_CASE("reads wait out a stats file the game is still rewriting") {
+    const beacon::test::TemporaryDirectory temporary;
+    const auto game_root = temporary.path / ".minecraft";
+    const auto old_world = game_root / "saves/old";
+    const auto current_world = game_root / "saves/current";
+    for (const auto& world : {old_world, current_world}) {
+        std::filesystem::create_directories(world / "stats");
+        std::filesystem::copy_file(fixture("world/stats/player-one.json"), world / "stats/player-one.json");
+    }
+    const auto stats = current_world / "stats/player-one.json";
+    const auto now = std::filesystem::file_time_type::clock::now();
+    std::filesystem::last_write_time(old_world / "stats/player-one.json", now - std::chrono::hours(1));
+    std::filesystem::last_write_time(stats, now);
+    const auto complete = read_text(stats);
+    const auto compiled = beacon::compile_template_json(read_text(fixture("template.json")));
+    REQUIRE(compiled);
+    beacon::SourceDiscovery discovery;
+    const auto current = discovery.scan(game_root, nullptr, &*compiled);
+    REQUIRE(current);
+    REQUIRE(current->world.path == current_world);
+    const auto paths = beacon::player_data_paths(current->world, current->player, current->profile);
+    REQUIRE(paths);
+    beacon::MinecraftReader reader;
+    REQUIRE(reader.read(*paths));
+
+    const auto torn_write = [&] {
+        write_text(stats, complete.substr(0, complete.size() / 2));
+        return std::jthread([&] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            write_text(stats, complete);
+        });
+    };
+    {
+        auto writer = torn_write();
+        const auto rescanned = discovery.scan(game_root, &*current, &*compiled);
+        REQUIRE(rescanned);
+        REQUIRE(rescanned->world.path == current_world);
+    }
+    reader.clear();
+    {
+        auto writer = torn_write();
+        const auto read = reader.read(*paths);
+        REQUIRE(read);
+        REQUIRE(*read);
+    }
+}
+
+TEST_CASE("active source keeps unreadable current stats and leaves incompatible ones") {
     const beacon::test::TemporaryDirectory temporary;
     const auto& root = temporary.path;
     const auto game_root = root / ".minecraft";
@@ -662,10 +710,22 @@ TEST_CASE("active source falls back when the current stats become invalid") {
     REQUIRE(current);
     REQUIRE(current->world.path == current_world);
 
-    write_text(current_world / "stats/player-one.json", "not json");
-    const auto fallback = discovery.scan(game_root, &*current, &*compiled);
-    REQUIRE(fallback);
-    REQUIRE(fallback->world.path == old_world);
+    const auto stats = current_world / "stats/player-one.json";
+    SECTION("unreadable stats keep the world being played") {
+        write_text(stats, "not json");
+        const auto kept = discovery.scan(game_root, &*current, &*compiled);
+        REQUIRE(kept);
+        REQUIRE(kept->world.path == current_world);
+        REQUIRE(kept->profile.data_version == current->profile.data_version);
+    }
+    SECTION("an incompatible version falls back") {
+        auto incompatible = read_text(stats);
+        incompatible.replace(incompatible.find("4189"), 4, "9999");
+        write_text(stats, incompatible);
+        const auto fallback = discovery.scan(game_root, &*current, &*compiled);
+        REQUIRE(fallback);
+        REQUIRE(fallback->world.path == old_world);
+    }
 }
 
 TEST_CASE("game directory follows the newest save and switches when another save changes") {

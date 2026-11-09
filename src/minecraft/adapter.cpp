@@ -4,9 +4,11 @@
 #include <json/json.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <iomanip>
 #include <sstream>
+#include <thread>
 #include <unordered_set>
 #include <utility>
 
@@ -15,6 +17,17 @@ namespace {
 
 ylt::expected<std::string, Error> read_minecraft_file(const std::filesystem::path& path) {
     return read_bounded_file(path, "Minecraft JSON");
+}
+
+// Minecraft rewrites stats and advancements in place, so a read can catch a half-written file.
+template <typename Attempt> auto retry_torn_read(Attempt attempt) {
+    constexpr int retries = 2;
+    for (int retry = 0;; ++retry) {
+        auto result = attempt();
+        if (result || retry == retries)
+            return result;
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
 }
 
 std::filesystem::path save_root(const WorldLocation& world, const SaveLayout layout) {
@@ -200,6 +213,13 @@ bool valid_player_id(std::string_view value) {
 }
 
 ylt::expected<VersionProfile, Error> SourceDiscovery::profile(const std::filesystem::path& stats, SaveLayout layout) {
+    return retry_torn_read([&] {
+        return profile_once(stats, layout);
+    });
+}
+
+ylt::expected<VersionProfile, Error> SourceDiscovery::profile_once(const std::filesystem::path& stats,
+                                                                   SaveLayout layout) {
     auto data = read_minecraft_file(stats);
     if (!data)
         return ylt::unexpected<Error>{std::move(data.error())};
@@ -232,8 +252,6 @@ ylt::expected<ActiveMinecraftSource, Error> SourceDiscovery::scan(const std::fil
         return ylt::unexpected<Error>{file_error(ErrorCode::Io, "cannot scan Minecraft saves directory", saves)};
     std::optional<SourceCandidate> selected;
     std::optional<VersionProfile> selected_profile;
-    std::optional<SourceCandidate> current_fallback;
-    std::optional<VersionProfile> current_fallback_profile;
     std::vector<SourceCandidate> candidates;
     if (current) {
         if (auto candidate = inspect_source(current->world, current->player.uuid, current->profile.layout)) {
@@ -242,9 +260,9 @@ ylt::expected<ActiveMinecraftSource, Error> SourceDiscovery::scan(const std::fil
                 selected = std::move(*candidate);
                 selected_profile = *detected;
             } else if (!detected) {
-                // Preserve the last source only when no valid fallback is available.
-                current_fallback = std::move(*candidate);
-                current_fallback_profile = current->profile;
+                // Unreadable stats still belong to the world being played; only a newer world replaces it.
+                selected = std::move(*candidate);
+                selected_profile = current->profile;
             }
         }
     }
@@ -277,8 +295,6 @@ ylt::expected<ActiveMinecraftSource, Error> SourceDiscovery::scan(const std::fil
         return newer(left, right);
     });
     for (const auto& candidate : candidates) {
-        if (current_fallback && candidate.stats == current_fallback->stats)
-            continue;
         if (selected && !newer(candidate, *selected))
             break;
         auto detected = profile(candidate.stats, candidate.layout);
@@ -290,10 +306,6 @@ ylt::expected<ActiveMinecraftSource, Error> SourceDiscovery::scan(const std::fil
             continue;
         selected = candidate;
         selected_profile = std::move(*detected);
-    }
-    if (!selected && current_fallback) {
-        selected = std::move(*current_fallback);
-        selected_profile = std::move(*current_fallback_profile);
     }
     std::erase_if(profiles_, [this](const auto& entry) {
         return entry.second.scan != scan_;
@@ -339,6 +351,12 @@ void MinecraftReader::clear() {
 }
 
 ylt::expected<std::optional<ModernStats>, Error> MinecraftReader::read(const MinecraftPaths& paths) {
+    return retry_torn_read([&] {
+        return read_once(paths);
+    });
+}
+
+ylt::expected<std::optional<ModernStats>, Error> MinecraftReader::read_once(const MinecraftPaths& paths) {
     if (paths_.stats != paths.stats || paths_.advancements != paths.advancements) {
         clear();
         paths_ = paths;
