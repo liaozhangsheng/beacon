@@ -170,6 +170,7 @@
       },
       {
         "id": "Advancements",
+        "align": "top",
         "prefix": [
           "goal/"
         ],
@@ -177,6 +178,7 @@
       },
       {
         "id": "Stats",
+        "align": "top",
         "nodes": [
           "counter/gold_blocks",
           "counter/ancient_debris",
