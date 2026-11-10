@@ -1,3 +1,8 @@
+> [!TIP]
+> **Recommended: [Advancely](https://github.com/LNXSeus/Advancely)** — a highly customizable Minecraft progress tracker that goes beyond advancements.
+>
+> **Beacon's development drew on LNXSeus's Advancely as a reference. Thank you to the author for sharing the project.**
+
 <div align="center">
   <img src="assets/app-icon.png" alt="Beacon" width="96">
   <h1>Beacon</h1>

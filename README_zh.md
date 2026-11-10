@@ -1,3 +1,8 @@
+> [!TIP]
+> **推荐：[Advancely](https://github.com/LNXSeus/Advancely)** — 一个可高度自定义的 Minecraft 进度追踪工具，追踪范围不止于进度（Advancements）。
+>
+> **Beacon 的开发参考了 LNXSeus 的 Advancely 项目，感谢原作者的分享。**
+
 <div align="center">
   <img src="assets/app-icon.png" alt="Beacon" width="96">
   <h1>Beacon 中文文档</h1>
